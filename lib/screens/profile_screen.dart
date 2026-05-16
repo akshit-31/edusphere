@@ -232,10 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.menu_rounded, color: AppColors.textDark),
-          onPressed: () {}, // Drawer placeholder
-        ),
+        automaticallyImplyLeading: false,
         title: Text('My Profile', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: AppColors.textDark)),
         centerTitle: true,
         actions: [
@@ -396,19 +393,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       SizedBox(width: 8.w),
                       Icon(Icons.edit_outlined, color: Colors.white, size: 16.sp),
                     ]),
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => showToast(context, 'Uploading documents...'),
-                  child: Container(
-                    width: 50.w, height: 50.h,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
-                      shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                    ),
-                    child: Icon(Icons.file_upload_outlined, color: Colors.white, size: 24.sp),
                   ),
                 ),
               ],

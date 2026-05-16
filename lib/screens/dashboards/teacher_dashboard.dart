@@ -21,10 +21,33 @@ import '../features/notification_preferences_screen.dart';
 import '../features/leave_application_screen.dart';
 import '../features/cocurricular_screen.dart';
 import '../features/study_materials_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class TeacherDashboard extends StatelessWidget {
+class TeacherDashboard extends StatefulWidget {
   final RoleTheme theme;
   const TeacherDashboard({super.key, required this.theme});
+
+  @override
+  State<TeacherDashboard> createState() => _TeacherDashboardState();
+}
+
+class _TeacherDashboardState extends State<TeacherDashboard> {
+  String teacherName = 'Emma Johnson';
+  String teacherDesignation = 'Senior Mathematics Teacher';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeacherData();
+  }
+
+  Future<void> _loadTeacherData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      teacherName = prefs.getString('teacher_name') ?? 'Emma Johnson';
+      teacherDesignation = prefs.getString('teacher_design') ?? 'Senior Mathematics Teacher';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +102,7 @@ class TeacherDashboard extends StatelessWidget {
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('Send Notices',           'Announcements',       '📢', const Color(0xFFD97706), const NoticesScreen()),
-                _mod('Message Students/Parents','2 unread messages',  '💬', const Color(0xFF8B5CF6), MessagesScreen(theme: theme)),
+                _mod('Message Students/Parents','2 unread messages',  '💬', const Color(0xFF8B5CF6), MessagesScreen(theme: widget.theme)),
                 _mod('Discussion Forum',       'Engage with students','🗣️', Color(0xFF0EA5E9), const DiscussionForumScreen()),
               ]),
               SizedBox(height: 20.h),
@@ -88,7 +111,7 @@ class TeacherDashboard extends StatelessWidget {
               SectionTitle(title: '👤 Profile & Account'),
               SizedBox(height: 12.h),
               _buildSection(context, [
-                _mod('My Profile',  'Manage details',      '👤', const Color(0xFF3B82F6), ProfileScreen(role: 'teacher', theme: theme)),
+                _mod('My Profile',  'Manage details',      '👤', const Color(0xFF3B82F6), ProfileScreen(role: 'teacher', theme: widget.theme)),
                 _mod('Change Password',        'Update security',     '🔑', const Color(0xFFF59E0B), const ChangePasswordScreen()),
                 _mod('Notification Prefs',     'Manage alerts',       '🔔', Color(0xFF8B5CF6), const NotificationPreferencesScreen()),
               ]),
@@ -117,7 +140,7 @@ class TeacherDashboard extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(gradient: theme.gradient),
+      decoration: BoxDecoration(gradient: widget.theme.gradient),
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -130,18 +153,18 @@ class TeacherDashboard extends StatelessWidget {
                   children: [
                     Text('Welcome back 👋', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
                     SizedBox(height: 4.h),
-                    Text('Prof. Harrison', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
+                    Text(teacherName, style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                     SizedBox(height: 6.h),
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                       decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
-                      child: Text('HOD Physics Dept.', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                      child: Text(teacherDesignation, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
                   ],
                 ),
               ),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(role: 'teacher', theme: theme))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(role: 'teacher', theme: widget.theme))),
                 child: Container(
                   width: 52.w, height: 52.w,
                   decoration: BoxDecoration(
