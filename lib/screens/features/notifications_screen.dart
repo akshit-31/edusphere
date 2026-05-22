@@ -7,7 +7,7 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
+    const Color darkNavy = Color(0xFF1E40AF);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -45,13 +45,13 @@ class NotificationsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Notifications', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                Text('3 unread alerts', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                Text('3 unread alerts', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
               ],
             ),
           ),
           Container(
             width: 40.w, height: 40.w,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(10.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10.r)),
           ),
         ],
       ),
@@ -72,7 +72,7 @@ class NotificationsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF))),
+                Text(text, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1E40AF))),
                 SizedBox(height: 4.h),
                 Text(time, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey)),
               ],

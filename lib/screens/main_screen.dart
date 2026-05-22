@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
-import '../widgets/common_widgets.dart';
+import '../models/user_model.dart';
 import 'dashboards/student_dashboard.dart';
 import 'dashboards/teacher_dashboard.dart';
+import 'dashboards/parent_dashboard.dart';
+import 'dashboards/admin_dashboard.dart';
+import 'dashboards/accountant_dashboard.dart';
+import 'dashboards/transport_dashboard.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
 import 'welcome_screen.dart';
 import 'features/class_management_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainScreen extends StatefulWidget {
   final String role;
@@ -18,6 +23,24 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  String _userName = 'Alex Rivera';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userName = prefs.getString('${widget.role}_name') ?? 
+                  (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
+                  (widget.role == 'student' ? prefs.getString('student_name') : null) ??
+                  kCredentials[widget.role]?['name'] ?? 
+                  'EduSphere User';
+    });
+  }
   int _idx = 0;
 
   RoleTheme get _theme => roleThemes[widget.role]!;
@@ -26,6 +49,10 @@ class _MainScreenState extends State<MainScreen> {
     switch (widget.role) {
       case 'student':    return StudentDashboard(theme: _theme);
       case 'teacher':    return TeacherDashboard(theme: _theme);
+      case 'parent':     return ParentDashboard(theme: _theme);
+      case 'admin':      return AdminDashboard(theme: _theme);
+      case 'accountant': return AccountantDashboard(theme: _theme);
+      case 'transport':  return TransportDashboard(theme: _theme);
       default:           return StudentDashboard(theme: _theme);
     }
   }
@@ -54,7 +81,7 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: isDesktop ? null : Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, -4))],
         ),
         child: SafeArea(
           child: Padding(
@@ -79,7 +106,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildSidebar() {
     return Container(
       width: 280.w,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AppColors.border)),
       ),
@@ -95,7 +122,7 @@ class _MainScreenState extends State<MainScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10.r),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8.r),
@@ -128,7 +155,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           Container(
             padding: EdgeInsets.all(24.r),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
             child: Row(
               children: [
                 CircleAvatar(backgroundColor: _theme.light, child: Icon(Icons.person_rounded, color: _theme.primary)),
@@ -137,7 +164,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Alex Rivera', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                      Text(_userName, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                       Text(_theme.label, style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textLight)),
                     ],
                   ),
@@ -172,7 +199,7 @@ class _SidebarItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.1) : Colors.transparent,
+          color: selected ? color.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Row(
@@ -203,7 +230,7 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.1) : Colors.transparent,
+          color: selected ? color.withValues(alpha: 0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(16.r),
         ),
         child: Column(

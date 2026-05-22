@@ -64,7 +64,7 @@ class _OverviewPage extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24.r),
                       border: Border.all(color: AppColors.border),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +113,7 @@ class _OverviewPage extends StatelessWidget {
                         padding: EdgeInsets.symmetric(vertical: 18.h),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18.r)),
                         elevation: 4,
-                        shadowColor: AppColors.studentPrimary.withOpacity(0.4),
+                        shadowColor: AppColors.studentPrimary.withValues(alpha: 0.4),
                       ),
                       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         Text('Pay Now', style: GoogleFonts.inter(fontSize: 17.sp, fontWeight: FontWeight.w900, color: Colors.white)),
@@ -148,7 +148,7 @@ class _OverviewPage extends StatelessWidget {
                             Container(
                               width: 44.w, height: 44.h,
                               decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(12.r)),
-                              child: Icon(Icons.receipt_long_rounded, color: Color(0xFF10B981), size: 22.sp),
+                              child: Icon(Icons.receipt_long_rounded, color: const Color(0xFF10B981), size: 22.sp),
                             ),
                             SizedBox(width: 14.w),
                             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -159,7 +159,7 @@ class _OverviewPage extends StatelessWidget {
                               Text(p['amount']!, style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.textDark, fontSize: 14.sp)),
                               SizedBox(height: 3.h),
                               Row(children: [
-                                Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14.sp),
+                                Icon(Icons.check_circle_rounded, color: const Color(0xFF10B981), size: 14.sp),
                                 SizedBox(width: 3.w),
                                 Text(p['status']!, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
                               ]),
@@ -227,14 +227,14 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
                     onTap: () => Navigator.pop(context),
                     child: Container(
                       width: 40.w, height: 40.h,
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12.r)),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12.r)),
                       child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
                     ),
                   ),
                   SizedBox(width: 14.w),
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('Scan & Pay', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                    Text('UPI / PhonePe / GPay / Paytm', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.7))),
+                    Text('UPI / PhonePe / GPay / Paytm', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.7))),
                   ]),
                 ]),
               ),
@@ -261,7 +261,7 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
             decoration: BoxDecoration(
               color: AppColors.studentLight,
               borderRadius: BorderRadius.circular(30.r),
-              border: Border.all(color: AppColors.studentPrimary.withOpacity(0.3)),
+              border: Border.all(color: AppColors.studentPrimary.withValues(alpha: 0.3)),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.currency_rupee_rounded, color: AppColors.studentPrimary, size: 18.sp),
@@ -284,10 +284,10 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24.r),
-                  border: Border.all(color: AppColors.studentPrimary.withOpacity(0.3), width: 2.w),
+                  border: Border.all(color: AppColors.studentPrimary.withValues(alpha: 0.3), width: 2.w),
                   boxShadow: [
-                    BoxShadow(color: AppColors.studentPrimary.withOpacity(0.15), blurRadius: 30, spreadRadius: 2),
-                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20),
+                    BoxShadow(color: AppColors.studentPrimary.withValues(alpha: 0.15), blurRadius: 30, spreadRadius: 2),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20),
                   ],
                 ),
                 child: Column(
@@ -299,7 +299,7 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
                         decoration: BoxDecoration(
                           color: const Color(0xFF1A6FDB),
                           shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: const Color(0xFF1A6FDB).withOpacity(0.3), blurRadius: 8)],
+                          boxShadow: [BoxShadow(color: const Color(0xFF1A6FDB).withValues(alpha: 0.3), blurRadius: 8)],
                         ),
                         child: Icon(Icons.account_balance_rounded, color: Colors.white, size: 18.sp),
                       ),
@@ -363,7 +363,7 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
                   padding: EdgeInsets.symmetric(vertical: 16.h),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
                   elevation: 4,
-                  shadowColor: const Color(0xFF10B981).withOpacity(0.4),
+                  shadowColor: const Color(0xFF10B981).withValues(alpha: 0.4),
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.check_circle_rounded, color: Colors.white, size: 22.sp),
@@ -400,11 +400,11 @@ class _QRPaymentPageState extends State<_QRPaymentPage> with SingleTickerProvide
             decoration: BoxDecoration(
               color: AppColors.studentLight,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: AppColors.studentPrimary.withOpacity(0.2), blurRadius: 30)],
+              boxShadow: [BoxShadow(color: AppColors.studentPrimary.withValues(alpha: 0.2), blurRadius: 30)],
             ),
             child: Padding(
               padding: EdgeInsets.all(24.r),
-              child: CircularProgressIndicator(color: AppColors.studentPrimary, strokeWidth: 4),
+              child: const CircularProgressIndicator(color: AppColors.studentPrimary, strokeWidth: 4),
             ),
           ),
           SizedBox(height: 24.h),
@@ -469,7 +469,7 @@ class _SuccessPageState extends State<_SuccessPage> with SingleTickerProviderSta
                         end: Alignment.bottomRight,
                       ),
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 30, spreadRadius: 4)],
+                      boxShadow: [BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.4), blurRadius: 30, spreadRadius: 4)],
                     ),
                     child: Icon(Icons.check_rounded, color: Colors.white, size: 60.sp),
                   ),
@@ -489,7 +489,7 @@ class _SuccessPageState extends State<_SuccessPage> with SingleTickerProviderSta
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24.r),
                     border: Border.all(color: AppColors.border),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20)],
                   ),
                   child: Column(
                     children: [
@@ -500,7 +500,7 @@ class _SuccessPageState extends State<_SuccessPage> with SingleTickerProviderSta
                           padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                           decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(20.r)),
                           child: Row(children: [
-                            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14.sp),
+                            Icon(Icons.check_circle_rounded, color: const Color(0xFF10B981), size: 14.sp),
                             SizedBox(width: 4.w),
                             Text('Paid', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: const Color(0xFF10B981))),
                           ]),
@@ -568,7 +568,7 @@ class _SuccessPageState extends State<_SuccessPage> with SingleTickerProviderSta
                       padding: EdgeInsets.symmetric(vertical: 16.h),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
                       elevation: 4,
-                      shadowColor: AppColors.studentPrimary.withOpacity(0.4),
+                      shadowColor: AppColors.studentPrimary.withValues(alpha: 0.4),
                     ),
                     child: Text('Back to Dashboard', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                   ),

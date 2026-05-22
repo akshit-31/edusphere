@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../theme/colors.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -22,26 +23,99 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final email = _emailCtrl.text.trim();
     final pass = _passCtrl.text;
 
-    String? targetRole;
-    if (email == 'student@demoschool.com' && pass == 'School123!') {
-      targetRole = 'student';
-    } else if (email == 'teacher@demoschool.com' && pass == 'School123!') {
-      targetRole = 'teacher';
+    if (email.isEmpty || pass.isEmpty) {
+      setState(() => _error = 'Please enter both email and password');
+      return;
     }
 
-    if (targetRole != null) {
-      setState(() { _loading = true; _error = null; });
-      await Future.delayed(const Duration(milliseconds: 1000));
-      if (mounted) {
-        Navigator.pushReplacement(context, PageRouteBuilder(
-          pageBuilder: (_, __, ___) => MainScreen(role: targetRole!),
-          transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
-          transitionDuration: const Duration(milliseconds: 600),
-        ));
+    setState(() { _loading = true; _error = null; });
+
+    try {
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: pass,
+      );
+
+      if (response.user != null) {
+        final user = response.user!;
+        final role = user.userMetadata?['role'] as String? ?? (email.contains('teacher') ? 'teacher' : 'student');
+        
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_role', role);
+
+        try {
+          if (role == 'teacher') {
+            final data = await Supabase.instance.client
+                .from('teachers')
+                .select()
+                .eq('email', email)
+                .single();
+
+            await prefs.setString('teacher_name', data['name'] as String? ?? 'Emma Johnson');
+            await prefs.setString('teacher_design', data['designation'] as String? ?? 'Senior Teacher');
+            await prefs.setString('teacher_dept', data['department'] as String? ?? 'Academics');
+            await prefs.setString('teacher_email', data['email'] as String? ?? email);
+            await prefs.setString('teacher_mobile', data['phone'] as String? ?? '');
+            await prefs.setString('teacher_joining', data['joining_date'] as String? ?? '');
+            await prefs.setString('teacher_emp_id', 'TCH${(data['id'] as String).substring(0, 4).toUpperCase()}');
+            
+            await prefs.setString('${role}_name', data['name'] as String? ?? 'Emma Johnson');
+            await prefs.setString('${role}_email', data['email'] as String? ?? email);
+          } else if (role == 'student') {
+            final data = await Supabase.instance.client
+                .from('students')
+                .select()
+                .eq('email', email)
+                .single();
+
+            await prefs.setString('student_name', data['name'] as String? ?? 'Alex Rivera');
+            await prefs.setString('student_email', data['email'] as String? ?? email);
+            await prefs.setString('student_class', data['class_name'] as String? ?? 'Grade 12');
+            await prefs.setString('student_section', data['section'] as String? ?? 'A');
+            await prefs.setString('student_roll', (data['roll_no'] ?? 24).toString());
+            await prefs.setString('student_guardian', data['guardian_name'] as String? ?? '');
+            await prefs.setString('student_phone', data['phone'] as String? ?? '');
+            await prefs.setString('student_admission', data['admission_date'] as String? ?? '');
+            
+            await prefs.setString('${role}_name', data['name'] as String? ?? 'Alex Rivera');
+            await prefs.setString('${role}_email', data['email'] as String? ?? email);
+          } else {
+            final name = user.userMetadata?['name'] as String? ?? 'EduSphere User';
+            await prefs.setString('${role}_name', name);
+            await prefs.setString('${role}_email', email);
+          }
+        } catch (e) {
+          final name = user.userMetadata?['name'] as String? ?? 'EduSphere User';
+          await prefs.setString('${role}_name', name);
+          await prefs.setString('${role}_email', email);
+          if (role == 'teacher') {
+            await prefs.setString('teacher_name', name);
+            await prefs.setString('teacher_email', email);
+          } else if (role == 'student') {
+            await prefs.setString('student_name', name);
+            await prefs.setString('student_email', email);
+          }
+        }
+
+        if (mounted) {
+          Navigator.pushReplacement(context, PageRouteBuilder(
+            pageBuilder: (_, __, ___) => MainScreen(role: role),
+            transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
+            transitionDuration: const Duration(milliseconds: 600),
+          ));
+        }
       }
-    } else {
+    } on AuthException catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Invalid credentials. Please use student or teacher login.';
+        _error = e.message;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'An unexpected error occurred';
+        _loading = false;
       });
     }
   }
@@ -61,14 +135,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: Center(
           child: SingleChildScrollView(
           child: Container(
-            constraints: BoxConstraints(maxWidth: 460),
+            constraints: const BoxConstraints(maxWidth: 460),
             margin: EdgeInsets.all(16.r),
             padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 32.h),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(40.r),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 50, offset: const Offset(0, 20)),
+                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 50, offset: const Offset(0, 20)),
               ],
             ),
             child: Column(
@@ -87,8 +161,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                     borderRadius: BorderRadius.circular(30.r),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 30, offset: const Offset(0, 15)),
-                      BoxShadow(color: Colors.white.withOpacity(0.8), blurRadius: 10, offset: const Offset(-5, -5)),
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 30, offset: const Offset(0, 15)),
+                      BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 10, offset: const Offset(-5, -5)),
                     ],
                   ),
                   child: Container(
@@ -135,7 +209,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       color: Colors.white,
                       shadows: [
                         const Shadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 6)),
-                        Shadow(color: Colors.white.withOpacity(0.5), blurRadius: 0, offset: const Offset(-1, -1)),
+                        Shadow(color: Colors.white.withValues(alpha: 0.5), blurRadius: 0, offset: const Offset(-1, -1)),
                       ],
                     ),
                   ),
@@ -206,7 +280,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       borderRadius: BorderRadius.circular(16.r),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF007BFF).withOpacity(0.3),
+                          color: const Color(0xFF007BFF).withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 6),
                         ),
@@ -214,7 +288,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                     child: Center(
                       child: _loading 
-                        ? SizedBox(width: 24.w, height: 24.h, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                        ? SizedBox(width: 24.w, height: 24.h, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                         : Text(
                             'LOGIN', 
                             style: GoogleFonts.outfit(
@@ -245,7 +319,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(18.r), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18.r), borderSide: BorderSide(color: Color(0xFF007BFF), width: 2.w)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18.r), borderSide: BorderSide(color: const Color(0xFF007BFF), width: 2.w)),
     );
   }
 

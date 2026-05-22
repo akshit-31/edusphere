@@ -45,24 +45,24 @@ class TransportDashboard extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 28.h),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Transport Manager 🚌', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+          Text('Transport Manager 🚌', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
           Text('Mr. Rajan', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
           SizedBox(height: 6.h),
           Container(padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
             child: Text('Fleet: 12 Vehicles Active', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white))),
         ])),
         Container(width: 52.w, height: 52.h,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w)),
           child: Icon(Icons.directions_bus_rounded, color: Colors.white, size: 28.sp)),
       ]),
     )),
   );
 
   Widget _stats() => GridView.count(
-    crossAxisCount: 2, shrinkWrap: true, physics: NeverScrollableScrollPhysics(),
+    crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
     crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.4,
-    children: [
+    children: const [
       InfoCard(title: 'Active Vehicles', value: '12', icon: Icons.directions_bus_rounded, iconColor: AppColors.transportPrimary, bgColor: AppColors.transportLight, trend: '2 in maintenance'),
       InfoCard(title: 'Students Today', value: '486', icon: Icons.people_rounded, iconColor: AppColors.studentPrimary, bgColor: AppColors.studentLight, trend: 'Boarded safely'),
       InfoCard(title: 'Routes Active', value: '08', icon: Icons.route_rounded, iconColor: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: 'All on time'),
@@ -76,7 +76,7 @@ class TransportDashboard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white, borderRadius: BorderRadius.circular(24.r),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,7 +125,7 @@ class TransportDashboard extends StatelessWidget {
   Widget _trackChip(IconData icon, String label, Color color) => Expanded(
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10.r)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10.r)),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, size: 14.sp, color: color),
         SizedBox(width: 4.w),

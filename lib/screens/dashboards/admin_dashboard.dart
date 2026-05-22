@@ -41,15 +41,15 @@ class AdminDashboard extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 28.h),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Admin Panel 🛡️', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+          Text('Admin Panel 🛡️', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
           Text('Dr. Sharma', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
           SizedBox(height: 6.h),
           Container(padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
             child: Text('School Administrator', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white))),
         ])),
         Container(width: 52.w, height: 52.h,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w)),
           child: Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28.sp)),
       ]),
     )),

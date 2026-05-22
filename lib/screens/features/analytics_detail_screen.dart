@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'ai_generator_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -10,11 +8,11 @@ class AnalyticsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
-    final Color accentBlue = const Color(0xFF3B82F6);
-    final Color accentGreen = const Color(0xFF10B981);
-    final Color accentAmber = const Color(0xFFF59E0B);
-    final Color accentRose = const Color(0xFFF43F5E);
+    const Color darkNavy = Color(0xFF1E40AF);
+    const Color accentBlue = Color(0xFF3B82F6);
+    const Color accentGreen = Color(0xFF10B981);
+    const Color accentAmber = Color(0xFFF59E0B);
+    const Color accentRose = Color(0xFFF43F5E);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -32,7 +30,7 @@ class AnalyticsDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Analytics', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                      Text('Student performance overview', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                      Text('Student performance overview', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -101,14 +99,14 @@ class AnalyticsDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(width: 32.w, height: 32.h, decoration: BoxDecoration(color: col.withOpacity(0.1), borderRadius: BorderRadius.circular(8.r))),
+          Container(width: 32.w, height: 32.h, decoration: BoxDecoration(color: col.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8.r))),
           SizedBox(height: 16.h),
           Text(val, style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1E40AF))),
           Text(label, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.grey.shade600)),
           SizedBox(height: 8.h),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-            decoration: BoxDecoration(color: col.withOpacity(0.1), borderRadius: BorderRadius.circular(4.r)),
+            decoration: BoxDecoration(color: col.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4.r)),
             child: Text(sub, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: col)),
           ),
         ],
@@ -121,7 +119,7 @@ class AnalyticsDetailScreen extends StatelessWidget {
       padding: EdgeInsets.only(bottom: 16.h),
       child: Row(
         children: [
-          SizedBox(width: 100.w, child: Text(label, style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF1E40AF).withOpacity(0.6)))),
+          SizedBox(width: 100.w, child: Text(label, style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF1E40AF).withValues(alpha: 0.6)))),
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: val, minHeight: 8, backgroundColor: const Color(0xFFF1F5F9), valueColor: AlwaysStoppedAnimation(col)))),
           SizedBox(width: 12.w),
           Text(pct, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1E40AF))),
@@ -136,7 +134,7 @@ class AnalyticsDetailScreen extends StatelessWidget {
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
       child: Row(
         children: [
-          CircleAvatar(radius: 18, backgroundColor: col.withOpacity(0.1), child: Text(initial, style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 14.sp))),
+          CircleAvatar(radius: 18, backgroundColor: col.withValues(alpha: 0.1), child: Text(initial, style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 14.sp))),
           SizedBox(width: 16.w),
           Expanded(child: Text(name, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600))),
           Text(score, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w800, color: col)),

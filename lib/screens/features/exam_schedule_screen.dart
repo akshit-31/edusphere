@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../../utils/pdf_utils.dart';
@@ -15,7 +13,6 @@ class ExamScheduleScreen extends StatefulWidget {
 
 class _ExamScheduleScreenState extends State<ExamScheduleScreen> with SingleTickerProviderStateMixin {
   late TabController _tab;
-  bool _downloading = false;
 
   final _exams = [
     {'subject': 'Physics',       'date': 'June 10', 'day': 'Wed', 'time': '10:00 AM', 'room': 'Hall A', 'duration': '3 hrs', 'syllabus': 'Ch 1-8'},
@@ -64,9 +61,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> with SingleTick
                         decoration: BoxDecoration(gradient: roleThemes['student']!.gradient, borderRadius: BorderRadius.circular(24.r)),
                         child: Row(children: [
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text('FINALS BEGIN IN', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+                            Text('FINALS BEGIN IN', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
                             Text('39 Days', style: GoogleFonts.inter(fontSize: 36.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                            Text('June 10 — June 20, 2026', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.7))),
+                            Text('June 10 — June 20, 2026', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7))),
                           ])),
                           Text('📅', style: TextStyle(fontSize: 48.sp)),
                         ]),
@@ -110,7 +107,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> with SingleTick
                         decoration: BoxDecoration(
                           color: Colors.white, borderRadius: BorderRadius.circular(24.r),
                           border: Border.all(color: AppColors.border),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20)],
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 20)],
                         ),
                         child: Column(children: [
                           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -143,14 +140,13 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> with SingleTick
                         label: '📥 Download Admit Card',
                         color: AppColors.studentPrimary,
                         onPressed: () async {
-                          setState(() => _downloading = true);
                           await Future.delayed(const Duration(seconds: 1));
                           
-                          if (mounted) {
-                            final content = 'Student Name: Alex Rivera\nRoll Number: 24\nClass: Grade 12-A\nExam: Final Term 2026\nCenter: Main Campus\n\nInstructions:\n1. Carry this admit card to all exams.\n2. No entry without it.\n3. Reporting time is 30 mins before the exam.';
-                            await PDFUtils.generateAndSavePDF(context, 'Admit Card - Alex Rivera', content);
-                            setState(() => _downloading = false);
-                          }
+                          if (!mounted) return;
+                          
+                          const content = 'Student Name: Alex Rivera\nRoll Number: 24\nClass: Grade 12-A\nExam: Final Term 2026\nCenter: Main Campus\n\nInstructions:\n1. Carry this admit card to all exams.\n2. No entry without it.\n3. Reporting time is 30 mins before the exam.';
+                          if (!context.mounted) return;
+                          await PDFUtils.generateAndSavePDF(context, 'Admit Card - Alex Rivera', content);
                         },
                       ),
                       SizedBox(height: 80.h),

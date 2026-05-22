@@ -17,7 +17,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   final _subjects = ['Physics', 'Maths', 'Chemistry', 'English', 'CS'];
   final _types = [{'icon': '📄', 'label': 'PDF'}, {'icon': '🎥', 'label': 'Video'}, {'icon': '🖼️', 'label': 'Image'}];
   String? _selectedClass;
-  List<String> _selectedSections = [];
+  final List<String> _selectedSections = [];
   PlatformFile? _attachedFile;
 
   bool get _isTargetSelected => _selectedClass != null && _selectedSections.isNotEmpty;
@@ -90,12 +90,14 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     onTap: () async {
                       try {
                         final result = await FilePicker.platform.pickFiles();
+                        if (!context.mounted) return;
                         if (result != null && result.files.isNotEmpty) {
                           setState(() => _attachedFile = result.files.first);
-                          if (mounted) showToast(context, 'File attached successfully');
+                          showToast(context, 'File attached successfully');
                         }
                       } catch (e) {
-                        if (mounted) showToast(context, 'Error picking file: $e');
+                        if (!context.mounted) return;
+                        showToast(context, 'Error picking file: $e');
                       }
                     },
                     child: AnimatedContainer(
@@ -103,7 +105,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                       width: double.infinity,
                       padding: EdgeInsets.all(16.r),
                       decoration: BoxDecoration(
-                        color: _attachedFile != null ? AppColors.teacherPrimary.withOpacity(0.02) : Colors.white, 
+                        color: _attachedFile != null ? AppColors.teacherPrimary.withValues(alpha: 0.02) : Colors.white, 
                         borderRadius: BorderRadius.circular(20.r),
                         border: Border.all(
                           color: _attachedFile != null ? AppColors.teacherPrimary : AppColors.border,
@@ -111,16 +113,16 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                         ),
                         boxShadow: [
                           if (_attachedFile != null)
-                            BoxShadow(color: AppColors.teacherPrimary.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+                            BoxShadow(color: AppColors.teacherPrimary.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))
                           else
-                            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
                         ],
                       ),
                       child: _attachedFile == null 
                         ? Column(children: [
                             Container(
                               padding: EdgeInsets.all(12.r),
-                              decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
+                              decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
                               child: Icon(Icons.upload_file_rounded, size: 28.sp, color: AppColors.teacherPrimary),
                             ),
                             SizedBox(height: 12.h),
@@ -131,7 +133,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                         : Row(children: [
                             Container(
                               padding: EdgeInsets.all(12.r),
-                              decoration: BoxDecoration(color: AppColors.teacherPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
+                              decoration: BoxDecoration(color: AppColors.teacherPrimary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r)),
                               child: Icon(Icons.description_rounded, color: AppColors.teacherPrimary, size: 26.sp),
                             ),
                             SizedBox(width: 16.w),
@@ -157,7 +159,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                                 borderRadius: BorderRadius.circular(20.r),
                                 child: Container(
                                   padding: EdgeInsets.all(8.r),
-                                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
+                                  decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
                                   child: Icon(Icons.close_rounded, color: Colors.redAccent, size: 20.sp),
                                 ),
                               ),
@@ -191,7 +193,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                         return;
                       }
                       await Future.delayed(const Duration(milliseconds: 1500));
-                      if (context.mounted) { showToast(context, 'Material uploaded successfully!'); Navigator.pop(context); }
+                      if (!context.mounted) return;
+                      showToast(context, 'Material uploaded successfully!');
+                      Navigator.pop(context);
                     },
                   ),
                   SizedBox(height: 80.h),

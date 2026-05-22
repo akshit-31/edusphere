@@ -39,12 +39,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> with SingleTickerProvid
     },
   ];
 
-  int _activeSurvey = 0;
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 2, vsync: this);
+  }
 
   @override
-  void initState() { super.initState(); _tab = TabController(length: 2, vsync: this); }
-  @override
-  void dispose() { _tab.dispose(); _feedbackCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _tab.dispose();
+    _feedbackCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +86,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> with SingleTickerProvid
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text('Your feedback matters! 💬', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                           SizedBox(height: 4.h),
-                          Text('Help us improve your learning experience', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.7))),
+                          Text('Help us improve your learning experience', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7))),
                         ]),
                       ),
                       SizedBox(height: 20.h),
@@ -245,7 +251,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> with SingleTickerProvid
       padding: EdgeInsets.all(32.r),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 100.w, height: 100.h, decoration: const BoxDecoration(color: Color(0xFFECFDF5), shape: BoxShape.circle),
-          child: Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 50.sp)),
+          child: Icon(Icons.check_circle_rounded, color: const Color(0xFF10B981), size: 50.sp)),
         SizedBox(height: 24.h),
         Text('Thank You! 🙏', style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
         SizedBox(height: 8.h),

@@ -39,19 +39,19 @@ class ResultsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: roleThemes['student']!.gradient,
                       borderRadius: BorderRadius.circular(24.r),
-                      boxShadow: [BoxShadow(color: AppColors.studentPrimary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                      boxShadow: [BoxShadow(color: AppColors.studentPrimary.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                     ),
                     child: Row(children: [
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Overall Performance', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+                        Text('Overall Performance', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
                         Text('$pct%', style: GoogleFonts.inter(fontSize: 40.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                        Text('$total/${subjects.length * 100} marks', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.7))),
+                        Text('$total/${subjects.length * 100} marks', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7))),
                       ])),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                         Text('🏆', style: TextStyle(fontSize: 36.sp)),
                         SizedBox(height: 8.h),
                         Text('Grade A+', style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16.sp)),
-                        Text('Rank #5 / 48', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.7))),
+                        Text('Rank #5 / 48', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.7))),
                       ]),
                     ]),
                   ),

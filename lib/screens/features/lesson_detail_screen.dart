@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'ai_generator_screen.dart';
 import 'create_homework_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -14,9 +12,9 @@ class LessonDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
-    final Color accentBlue = const Color(0xFF3B82F6);
-    final Color accentAmber = const Color(0xFFF59E0B);
+    const Color darkNavy = Color(0xFF1E40AF);
+    const Color accentBlue = Color(0xFF3B82F6);
+    const Color accentAmber = Color(0xFFF59E0B);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -34,7 +32,7 @@ class LessonDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                      Text('Physics · Class 12A', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                      Text('Physics · Class 12A', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -53,16 +51,16 @@ class LessonDetailScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('$chapter · 11:00–11:45', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6))),
+                        Text('$chapter · 11:00–11:45', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
                         SizedBox(height: 12.h),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('60%', style: GoogleFonts.inter(fontSize: 48.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                            SizedBox(width: 70.w, height: 70.h, child: CircularProgressIndicator(value: 0.6, strokeWidth: 8, backgroundColor: Colors.white.withOpacity(0.1), valueColor: AlwaysStoppedAnimation(accentBlue))),
+                            SizedBox(width: 70.w, height: 70.h, child: CircularProgressIndicator(value: 0.6, strokeWidth: 8, backgroundColor: Colors.white.withValues(alpha: 0.1), valueColor: const AlwaysStoppedAnimation(accentBlue))),
                           ],
                         ),
-                        Text('Class 12A · 40/48 present', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.8))),
+                        Text('Class 12A · 40/48 present', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.8))),
                       ],
                     ),
                   ),
@@ -87,9 +85,9 @@ class LessonDetailScreen extends StatelessWidget {
                   SizedBox(height: 16.h),
                   Container(
                     padding: EdgeInsets.all(16.r),
-                    decoration: BoxDecoration(color: accentAmber.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r), border: Border.all(color: accentAmber.withOpacity(0.2))),
+                    decoration: BoxDecoration(color: accentAmber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r), border: Border.all(color: accentAmber.withValues(alpha: 0.2))),
                     child: Center(
-                      child: Text('5 students are weak in this topic. Send remedial plan.', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: accentAmber.withOpacity(0.8))),
+                      child: Text('5 students are weak in this topic. Send remedial plan.', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: accentAmber.withValues(alpha: 0.8))),
                     ),
                   ),
                   SizedBox(height: 16.h),

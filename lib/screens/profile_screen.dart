@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../theme/colors.dart';
-import '../models/user_model.dart';
+
 import '../widgets/common_widgets.dart';
 import 'welcome_screen.dart';
 import '../screens/features/notification_preferences_screen.dart';
@@ -10,7 +10,6 @@ import 'features/privacy_security_screen.dart';
 import 'features/help_support_screen.dart';
 import 'features/change_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'features/teacher_profile_edit_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String role;
@@ -34,7 +33,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _dobCtrl = TextEditingController();
 
-  Map<String, String> _teacherData = {
+  final Map<String, String> _studentData = {
+    'name': 'Alex Rivera',
+    'email': 'alex.rivera@edusmart.edu',
+    'subtitle': 'Grade 12-A • Roll #24',
+  };
+
+  final Map<String, String> _teacherData = {
     'name': 'Emma Johnson',
     'designation': 'Senior Mathematics Teacher',
     'empId': 'TCH1024',
@@ -60,11 +65,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+
+  Future<void> _loadStudentData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      final name = prefs.getString('student_name') ?? 'Alex Rivera';
+      final email = prefs.getString('student_email') ?? 'alex.rivera@edusmart.edu';
+      final className = prefs.getString('student_class') ?? 'Grade 12';
+      final section = prefs.getString('student_section') ?? 'A';
+      final roll = prefs.getString('student_roll') ?? '24';
+
+      _studentData['name'] = name;
+      _studentData['email'] = email;
+      _studentData['subtitle'] = '$className-$section • Roll #$roll';
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.role == 'teacher') {
       _loadTeacherData();
+    } else if (widget.role == 'student') {
+      _loadStudentData();
     }
   }
 
@@ -119,7 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) showToast(context, 'Profile updated successfully!');
   }
 
-  Map<String, String> get _creds => kCredentials[widget.role]!;
+
 
   @override
   Widget build(BuildContext context) {
@@ -143,23 +166,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       gradient: widget.theme.gradient,
                       borderRadius: BorderRadius.circular(28.r),
-                      boxShadow: [BoxShadow(color: widget.theme.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                      boxShadow: [BoxShadow(color: widget.theme.primary.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                     ),
                     child: Column(children: [
                       Container(
                         width: 80.w, height: 80.h,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(24.r), border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w)),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(24.r), border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w)),
                         child: Icon(widget.theme.icon, color: Colors.white, size: 40.sp),
                       ),
                       SizedBox(height: 16.h),
-                      Text(_creds['name']!, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.white)),
+                      Text(_studentData['name']!, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                       SizedBox(height: 4.h),
-                      Text(_creds['email']!, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.7))),
+                      Text(_studentData['email']!, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7))),
                       SizedBox(height: 12.h),
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20.r)),
-                        child: Text(_creds['subtitle']!, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20.r)),
+                        child: Text(_studentData['subtitle']!, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white)),
                       ),
                     ]),
                   ),
@@ -237,7 +260,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(Icons.settings_outlined, color: AppColors.textDark),
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textDark),
             onPressed: _showSettingsMenu,
           ),
           SizedBox(width: 8.w),
@@ -257,7 +280,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24.r),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     children: [
@@ -318,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             SizedBox(height: 12.h),
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                              decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8.r)),
+                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8.r)),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -386,7 +409,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: Colors.grey.shade800,
                       borderRadius: BorderRadius.circular(30.r),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))],
                     ),
                     child: Row(children: [
                       Text('Edit', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.sp)),
@@ -415,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
         border: Border.all(color: Colors.white),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,7 +447,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Container(
                 padding: EdgeInsets.all(8.r),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r)),
                 child: Icon(icon, size: 18.sp, color: color),
               ),
               const Spacer(),
@@ -447,7 +470,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildTeacherEditOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Container(
@@ -562,7 +585,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text('Settings', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Container(width: 36.w, height: 36.h, decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
+                  child: Container(width: 36.w, height: 36.h, decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
                     child: Icon(Icons.close_rounded, size: 20.sp)),
                 ),
               ],
@@ -600,7 +623,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildLogoutDialog() {
     return Container(
-      color: Colors.black.withOpacity(0.6),
+      color: Colors.black.withValues(alpha: 0.6),
       child: Center(
         child: Container(
           margin: EdgeInsets.all(32.r),
@@ -634,7 +657,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Container(
                     padding: EdgeInsets.symmetric(vertical: 14.h),
                     decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(16.r),
-                      boxShadow: [BoxShadow(color: AppColors.error.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]),
+                      boxShadow: [BoxShadow(color: AppColors.error.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]),
                     child: Text('Yes, Logout', textAlign: TextAlign.center, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.white)),
                   ),
                 ),
@@ -677,11 +700,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  InputDecoration _dec(String hint) => InputDecoration(
-    hintText: hint, hintStyle: GoogleFonts.inter(color: AppColors.textLight),
-    filled: true, fillColor: AppColors.background,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
-    contentPadding: EdgeInsets.all(14.r),
-  );
 }

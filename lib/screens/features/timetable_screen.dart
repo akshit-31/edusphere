@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class TimetableScreen extends StatefulWidget {
@@ -36,60 +35,60 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   final List<List<dynamic>> _gridData = [
     [
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': Color(0xFFDCFCE7), 'text': Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': Color(0xFFDCFCE7), 'text': Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
     ],
     [
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': Color(0xFFDCFCE7), 'text': Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
     ],
     [
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': Color(0xFFDCFCE7), 'text': Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
       null,
     ],
     List.generate(6, (index) => 'Break'),
     [
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': Color(0xFFDCFCE7), 'text': Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
+      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
       null,
     ],
     [
       null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': Color(0xFFF3E8FF), 'text': Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': Color(0xFFFEF9C3), 'text': Color(0xFF854D0E)},
+      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
+      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
       null,
     ],
     List.generate(6, (index) => 'Lunch'),
     [
       null,
       null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
+      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
       null,
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': Color(0xFFDBEAFE), 'text': Color(0xFF1E40AF)},
+      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
       null,
     ],
     [
       null,
       null,
       null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
+      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
       null,
       null,
     ],
@@ -117,46 +116,46 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   final List<List<dynamic>> _studentGridData = [
     [
-      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': Color(0xFFEFF6FF), 'text': Color(0xFF1D4ED8)},
-      {'sub': 'English', 'icon': Icons.book_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Science', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Hindi', 'icon': Icons.menu_book_outlined, 'color': Color(0xFFFFF7ED), 'text': Color(0xFFC2410C)},
-      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': Color(0xFFF0F9FF), 'text': Color(0xFF0369A1)},
-      {'sub': 'GK', 'icon': Icons.lightbulb_outline, 'color': Color(0xFFFFF1F2), 'text': Color(0xFFBE123C)},
+      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': const Color(0xFFEFF6FF), 'text': const Color(0xFF1D4ED8)},
+      {'sub': 'English', 'icon': Icons.book_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Science', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Hindi', 'icon': Icons.menu_book_outlined, 'color': const Color(0xFFFFF7ED), 'text': const Color(0xFFC2410C)},
+      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': const Color(0xFFF0F9FF), 'text': const Color(0xFF0369A1)},
+      {'sub': 'GK', 'icon': Icons.lightbulb_outline, 'color': const Color(0xFFFFF1F2), 'text': const Color(0xFFBE123C)},
     ],
     [
-      {'sub': 'Physics', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': Color(0xFFEFF6FF), 'text': Color(0xFF1D4ED8)},
-      {'sub': 'SST', 'icon': Icons.public_outlined, 'color': Color(0xFFFFF7ED), 'text': Color(0xFFC2410C)},
-      {'sub': 'English', 'icon': Icons.book_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Sports', 'icon': Icons.sports_basketball_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
+      {'sub': 'Physics', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': const Color(0xFFEFF6FF), 'text': const Color(0xFF1D4ED8)},
+      {'sub': 'SST', 'icon': Icons.public_outlined, 'color': const Color(0xFFFFF7ED), 'text': const Color(0xFFC2410C)},
+      {'sub': 'English', 'icon': Icons.book_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Sports', 'icon': Icons.sports_basketball_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
     ],
     List.generate(6, (index) => 'BREAK'),
     [
-      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Biology', 'icon': Icons.eco_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': Color(0xFFEFF6FF), 'text': Color(0xFF1D4ED8)},
-      {'sub': 'Physics', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Hindi', 'icon': Icons.menu_book_outlined, 'color': Color(0xFFFFF7ED), 'text': Color(0xFFC2410C)},
-      {'sub': 'Library', 'icon': Icons.library_books_outlined, 'color': Color(0xFFFFF7ED), 'text': Color(0xFFC2410C)},
+      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Biology', 'icon': Icons.eco_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': const Color(0xFFEFF6FF), 'text': const Color(0xFF1D4ED8)},
+      {'sub': 'Physics', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Hindi', 'icon': Icons.menu_book_outlined, 'color': const Color(0xFFFFF7ED), 'text': const Color(0xFFC2410C)},
+      {'sub': 'Library', 'icon': Icons.library_books_outlined, 'color': const Color(0xFFFFF7ED), 'text': const Color(0xFFC2410C)},
     ],
     [
-      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': Color(0xFFF0F9FF), 'text': Color(0xFF0369A1)},
-      {'sub': 'SST', 'icon': Icons.public_outlined, 'color': Color(0xFFFFF7ED), 'text': Color(0xFFC2410C)},
-      {'sub': 'English', 'icon': Icons.book_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': Color(0xFFEFF6FF), 'text': Color(0xFF1D4ED8)},
-      {'sub': 'Science', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Activity', 'icon': Icons.star_outline, 'color': Color(0xFFFFF1F2), 'text': Color(0xFFBE123C)},
+      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': const Color(0xFFF0F9FF), 'text': const Color(0xFF0369A1)},
+      {'sub': 'SST', 'icon': Icons.public_outlined, 'color': const Color(0xFFFFF7ED), 'text': const Color(0xFFC2410C)},
+      {'sub': 'English', 'icon': Icons.book_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': const Color(0xFFEFF6FF), 'text': const Color(0xFF1D4ED8)},
+      {'sub': 'Science', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Activity', 'icon': Icons.star_outline, 'color': const Color(0xFFFFF1F2), 'text': const Color(0xFFBE123C)},
     ],
     List.generate(6, (index) => 'LUNCH'),
     [
-      {'sub': 'Sports', 'icon': Icons.sports_basketball_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': Color(0xFFF0F9FF), 'text': Color(0xFF0369A1)},
-      {'sub': 'Biology', 'icon': Icons.eco_outlined, 'color': Color(0xFFF0FDF4), 'text': Color(0xFF15803D)},
-      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': Color(0xFFF5F3FF), 'text': Color(0xFF6D28D9)},
-      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': Color(0xFFEFF6FF), 'text': Color(0xFF1D4ED8)},
-      {'sub': 'Art', 'icon': Icons.palette_outlined, 'color': Color(0xFFFFF1F2), 'text': Color(0xFFBE123C)},
+      {'sub': 'Sports', 'icon': Icons.sports_basketball_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Computer', 'icon': Icons.computer_outlined, 'color': const Color(0xFFF0F9FF), 'text': const Color(0xFF0369A1)},
+      {'sub': 'Biology', 'icon': Icons.eco_outlined, 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
+      {'sub': 'Chemistry', 'icon': Icons.science_outlined, 'color': const Color(0xFFF5F3FF), 'text': const Color(0xFF6D28D9)},
+      {'sub': 'Math', 'icon': Icons.book_outlined, 'color': const Color(0xFFEFF6FF), 'text': const Color(0xFF1D4ED8)},
+      {'sub': 'Art', 'icon': Icons.palette_outlined, 'color': const Color(0xFFFFF1F2), 'text': const Color(0xFFBE123C)},
     ],
   ];
 
@@ -196,7 +195,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.teacherPrimary, AppColors.teacherPrimary.withOpacity(0.8)],
+          colors: [AppColors.teacherPrimary, AppColors.teacherPrimary.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -210,7 +209,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                 onTap: () => Navigator.pop(context),
                 child: Container(
                   width: 40.w, height: 40.h,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12.r)),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12.r)),
                   child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
                 ),
               ),
@@ -220,7 +219,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('My Timetable', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                    Text('Academic Year: 2024-25  |  Semester: I', style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withOpacity(0.7))),
+                    Text('Academic Year: 2024-25  |  Semester: I', style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withValues(alpha: 0.7))),
                   ],
                 ),
               ),
@@ -281,19 +280,19 @@ class _TimetableScreenState extends State<TimetableScreen> {
       scrollDirection: Axis.horizontal,
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border.withOpacity(0.5)),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Table(
           defaultColumnWidth: const FixedColumnWidth(160),
           columnWidths: const {0: FixedColumnWidth(110)},
-          border: TableBorder.all(color: AppColors.border.withOpacity(0.3), width: 0.5.w),
+          border: TableBorder.all(color: AppColors.border.withValues(alpha: 0.3), width: 0.5.w),
           children: [
             TableRow(
-              decoration: BoxDecoration(color: AppColors.background.withOpacity(0.5)),
+              decoration: BoxDecoration(color: AppColors.background.withValues(alpha: 0.5)),
               children: [
                 _headerCell('Time'),
-                ..._days.map((d) => _headerCell('${d['day']}\n${d['date']}')).toList(),
+                ..._days.map((d) => _headerCell('${d['day']}\n${d['date']}')),
               ],
             ),
             ...List.generate(_timeSlots.length, (rowIndex) {
@@ -330,7 +329,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   Widget _specialCell(IconData icon, String label) => Container(
     height: 110.h,
-    decoration: BoxDecoration(color: AppColors.background.withOpacity(0.3)),
+    decoration: BoxDecoration(color: AppColors.background.withValues(alpha: 0.3)),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -365,8 +364,8 @@ class _TimetableScreenState extends State<TimetableScreen> {
             ],
           ),
           SizedBox(height: 8.h),
-          Text(data['cls'] as String, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: (data['text'] as Color).withOpacity(0.8))),
-          Text(data['rm'] as String, style: GoogleFonts.inter(fontSize: 11.sp, color: (data['text'] as Color).withOpacity(0.6))),
+          Text(data['cls'] as String, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: (data['text'] as Color).withValues(alpha: 0.8))),
+          Text(data['rm'] as String, style: GoogleFonts.inter(fontSize: 11.sp, color: (data['text'] as Color).withValues(alpha: 0.6))),
         ],
       ),
     );
@@ -374,11 +373,11 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   Widget _buildLegend() {
     final legends = [
-      {'cls': 'Class 8A', 'color': Color(0xFFDCFCE7)},
-      {'cls': 'Class 8B', 'color': Color(0xFFF3E8FF)},
-      {'cls': 'Class 9A', 'color': Color(0xFFF0FDF4)},
-      {'cls': 'Class 9B', 'color': Color(0xFFFEF9C3)},
-      {'cls': 'Class 10A', 'color': Color(0xFFDBEAFE)},
+      {'cls': 'Class 8A', 'color': const Color(0xFFDCFCE7)},
+      {'cls': 'Class 8B', 'color': const Color(0xFFF3E8FF)},
+      {'cls': 'Class 9A', 'color': const Color(0xFFF0FDF4)},
+      {'cls': 'Class 9B', 'color': const Color(0xFFFEF9C3)},
+      {'cls': 'Class 10A', 'color': const Color(0xFFDBEAFE)},
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,7 +475,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.studentPrimary, AppColors.studentPrimary.withOpacity(0.8)],
+          colors: [AppColors.studentPrimary, AppColors.studentPrimary.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -490,7 +489,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                 onTap: () => Navigator.pop(context),
                 child: Container(
                   width: 40.w, height: 40.h,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12.r)),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12.r)),
                   child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
                 ),
               ),
@@ -500,7 +499,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('My Timetable', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                    Text('Academic Year: 2024-25  |  Semester: I', style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withOpacity(0.7))),
+                    Text('Academic Year: 2024-25  |  Semester: I', style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withValues(alpha: 0.7))),
                   ],
                 ),
               ),
@@ -523,9 +522,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: AppColors.border.withOpacity(0.5)),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12.r),
@@ -534,13 +533,13 @@ class _TimetableScreenState extends State<TimetableScreen> {
           child: Table(
             defaultColumnWidth: const FixedColumnWidth(140),
             columnWidths: const {0: FixedColumnWidth(100)},
-            border: TableBorder.all(color: AppColors.border.withOpacity(0.3), width: 0.5.w),
+            border: TableBorder.all(color: AppColors.border.withValues(alpha: 0.3), width: 0.5.w),
             children: [
               TableRow(
                 decoration: const BoxDecoration(color: Color(0xFFF8FAFC)),
                 children: [
                   _headerCell('Time'),
-                  ..._studentDays.map((d) => _headerCell(d['day']!)).toList(),
+                  ..._studentDays.map((d) => _headerCell(d['day']!)),
                 ],
               ),
               ...List.generate(_studentTimeSlots.length, (rowIndex) {
@@ -591,7 +590,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
       decoration: BoxDecoration(
         color: data['color'] as Color,
         borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: (data['text'] as Color).withOpacity(0.1)),
+        border: Border.all(color: (data['text'] as Color).withValues(alpha: 0.1)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -600,7 +599,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
             style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: data['text'] as Color),
             textAlign: TextAlign.center),
           SizedBox(height: 6.h),
-          Icon(data['icon'] as IconData, size: 16.sp, color: (data['text'] as Color).withOpacity(0.6)),
+          Icon(data['icon'] as IconData, size: 16.sp, color: (data['text'] as Color).withValues(alpha: 0.6)),
         ],
       ),
     );
@@ -633,10 +632,10 @@ class _TimetableScreenState extends State<TimetableScreen> {
   Widget _buildNote() {
     return Container(
       padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(12.r), border: Border.all(color: Colors.blue.withOpacity(0.1))),
+      decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12.r), border: Border.all(color: Colors.blue.withValues(alpha: 0.1))),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, size: 20.sp, color: Color(0xFF3B82F6)),
+          Icon(Icons.info_outline_rounded, size: 20.sp, color: const Color(0xFF3B82F6)),
           SizedBox(width: 12.w),
           Expanded(
             child: Text('Timetable is subject to change. Please check regularly for updates or contact administration for any discrepancies.', 

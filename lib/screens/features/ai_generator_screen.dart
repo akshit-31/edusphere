@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class AIGeneratorScreen extends StatefulWidget {
@@ -111,7 +109,7 @@ Homework:
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('AI Lesson Generator', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                Text('Powered by Claude AI', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.6))),
+                Text('Powered by Claude AI', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.6))),
               ],
             ),
           ),
@@ -174,12 +172,12 @@ Homework:
             children: [
               Text('$_selectedMode — ${_topicController.text}', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800, color: darkNavy)),
               SizedBox(height: 16.h),
-              Text(_result!, style: GoogleFonts.inter(fontSize: 14.sp, color: darkNavy.withOpacity(0.8), height: 1.6.h)),
+              Text(_result!, style: GoogleFonts.inter(fontSize: 14.sp, color: darkNavy.withValues(alpha: 0.8), height: 1.6.h)),
             ],
           ),
         ),
         SizedBox(height: 16.h),
-        _buildButton('Save to Lesson Plans', Colors.white.withOpacity(0.1), () => Navigator.pop(context)),
+        _buildButton('Save to Lesson Plans', Colors.white.withValues(alpha: 0.1), () => Navigator.pop(context)),
       ],
     );
   }

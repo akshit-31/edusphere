@@ -118,6 +118,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                                 }));
                                 await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
                               } catch (e) {
+                                if (!context.mounted) return;
                                 showToast(context, 'Error: $e');
                               }
                             },
@@ -142,6 +143,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                                 }));
                                 await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
                               } catch (e) {
+                                if (!context.mounted) return;
                                 showToast(context, 'Error: $e');
                               }
                             },

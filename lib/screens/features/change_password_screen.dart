@@ -32,7 +32,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Center(
                     child: Container(
                       padding: EdgeInsets.all(20.r),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.studentLight,
                         shape: BoxShape.circle,
                       ),
@@ -80,7 +80,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       decoration: BoxDecoration(
                         gradient: roleThemes['student']!.gradient,
                         borderRadius: BorderRadius.circular(16.r),
-                        boxShadow: [BoxShadow(color: AppColors.studentPrimary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                        boxShadow: [BoxShadow(color: AppColors.studentPrimary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
                       ),
                       child: Center(
                         child: Text(

@@ -23,18 +23,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
     super.initState();
     _chats = [
       _Chat('Prof. Harrison', 'Physics Teacher', '10:35 AM', 2, true, 'Check the updated syllabus...', [
-        _Msg('them', "Don't forget to submit the lab report by 5 PM!", '10:30 AM'),
-        _Msg('me', "Yes sir, I'll submit it before 4 PM.", '10:32 AM'),
-        _Msg('them', "Great! Also check the updated syllabus.", '10:35 AM'),
+        const _Msg('them', "Don't forget to submit the lab report by 5 PM!", '10:30 AM'),
+        const _Msg('me', "Yes sir, I'll submit it before 4 PM.", '10:32 AM'),
+        const _Msg('them', "Great! Also check the updated syllabus.", '10:35 AM'),
       ]),
       _Chat('Physics Study Group', '24 members', '09:45 AM', 5, false, 'Can anyone explain Q4?', [
-        _Msg('them', "Can anyone explain Q4?", '09:45 AM'),
+        const _Msg('them', "Can anyone explain Q4?", '09:45 AM'),
       ]),
       _Chat('School Admin', 'Official', 'Yesterday', 0, true, 'Holiday notice for May 15th', [
-        _Msg('them', "Holiday notice for May 15th", 'Yesterday'),
+        const _Msg('them', "Holiday notice for May 15th", 'Yesterday'),
       ]),
       _Chat('Class 12-A Group', '48 members', '2 days ago', 0, false, 'Exam schedule updated!', [
-        _Msg('them', "Exam schedule updated!", '2 days ago'),
+        const _Msg('them', "Exam schedule updated!", '2 days ago'),
       ]),
     ];
   }
@@ -47,7 +47,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (mounted && _active != null) {
-        setState(() => _active!.messages.add(_Msg('them', 'Got it! Thanks.', 'Now')));
+        setState(() => _active!.messages.add(const _Msg('them', 'Got it! Thanks.', 'Now')));
       }
     });
   }
@@ -120,7 +120,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                     title: Text(c['name']!, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14.sp, color: AppColors.textDark)),
                     subtitle: Text(c['role']!, style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textLight)),
-                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.textLight.withOpacity(0.5)),
+                    trailing: Icon(Icons.chevron_right_rounded, color: AppColors.textLight.withValues(alpha: 0.5)),
                   );
                 },
               ),
@@ -245,12 +245,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 GestureDetector(onTap: () => setState(() => _active = null),
                   child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20.sp)),
                 SizedBox(width: 12.w),
-                Container(width: 40.w, height: 40.h, decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12.r)),
+                Container(width: 40.w, height: 40.h, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12.r)),
                   child: Center(child: Text(_active!.name[0], style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16.sp)))),
                 SizedBox(width: 12.w),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(_active!.name, style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 14.sp)),
-                  Text(_active!.online ? '🟢 Online' : _active!.role, style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withOpacity(0.7))),
+                  Text(_active!.online ? '🟢 Online' : _active!.role, style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withValues(alpha: 0.7))),
                 ])),
                 GestureDetector(
                   onTap: () => showDialog(
@@ -293,12 +293,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         topLeft: Radius.circular(18.r), topRight: Radius.circular(18.r),
                         bottomLeft: Radius.circular(isMe ? 18 : 4), bottomRight: Radius.circular(isMe ? 4 : 18),
                       ),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
                     ),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       Text(m.text, style: GoogleFonts.inter(fontSize: 13.sp, color: isMe ? Colors.white : AppColors.textDark, fontWeight: FontWeight.w500)),
                       SizedBox(height: 4.h),
-                      Text(m.time, style: GoogleFonts.inter(fontSize: 10.sp, color: isMe ? Colors.white.withOpacity(0.6) : AppColors.textLight)),
+                      Text(m.time, style: GoogleFonts.inter(fontSize: 10.sp, color: isMe ? Colors.white.withValues(alpha: 0.6) : AppColors.textLight)),
                     ]),
                   ),
                 );
@@ -312,6 +312,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               GestureDetector(
                 onTap: () async {
                   final result = await FilePicker.platform.pickFiles();
+                  if (!context.mounted) return;
                   if (result != null) {
                     showToast(context, 'File "${result.files.first.name}" attached!');
                   }
@@ -338,7 +339,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 child: Container(
                   width: 48.w, height: 48.h,
                   decoration: BoxDecoration(color: widget.theme.primary, borderRadius: BorderRadius.circular(16.r),
-                    boxShadow: [BoxShadow(color: widget.theme.primary.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]),
+                    boxShadow: [BoxShadow(color: widget.theme.primary.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))]),
                   child: Icon(Icons.send_rounded, color: Colors.white, size: 20.sp),
                 ),
               ),

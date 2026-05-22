@@ -48,7 +48,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                       child: Container(
                         width: 40.w, height: 40.h,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12.r),
                         ),
                         child: Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18.sp),
@@ -59,7 +59,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Timetable', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                        Text('Wednesday, May 2', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.6))),
+                        Text('Wednesday, May 2', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.6))),
                       ],
                     ),
                   ],
@@ -82,7 +82,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                     decoration: BoxDecoration(
                       color: _activeDay == d ? widget.primaryColor : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12.r),
-                      boxShadow: _activeDay == d ? [BoxShadow(color: widget.primaryColor.withOpacity(0.3), blurRadius: 8)] : null,
+                      boxShadow: _activeDay == d ? [BoxShadow(color: widget.primaryColor.withValues(alpha: 0.3), blurRadius: 8)] : null,
                     ),
                     child: Text(d, textAlign: TextAlign.center,
                       style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800,
@@ -112,7 +112,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                       color: isLive ? Colors.red.shade300 : isBreak ? Colors.amber.shade100 : AppColors.border,
                       width: isLive ? 2 : 1,
                     ),
-                    boxShadow: isLive ? [BoxShadow(color: Colors.red.withOpacity(0.1), blurRadius: 12)] : null,
+                    boxShadow: isLive ? [BoxShadow(color: Colors.red.withValues(alpha: 0.1), blurRadius: 12)] : null,
                   ),
                   child: Opacity(
                     opacity: isDone ? 0.6 : 1.0,
@@ -153,7 +153,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                               child: Text('Join', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                             ),
                           ),
-                        if (isDone) Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20.sp),
+                        if (isDone) Icon(Icons.check_circle_rounded, color: const Color(0xFF10B981), size: 20.sp),
                       ],
                     ),
                   ),
@@ -175,7 +175,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32.r)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -206,14 +206,14 @@ class _TimetableScreenState extends State<TimetableScreen> {
                   if (mounted) {
                     setState(() { _loading = false; _joining = null; });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Joined live class!'), backgroundColor: const Color(0xFF1E293B),
+                      SnackBar(content: const Text('Joined live class!'), backgroundColor: const Color(0xFF1E293B),
                         behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                         margin: EdgeInsets.all(16.r)));
                   }
                 });
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: EdgeInsets.symmetric(vertical: 16.h), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r))),
-              child: _loading ? SizedBox(width: 20.w, height: 20.h, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              child: _loading ? SizedBox(width: 20.w, height: 20.h, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : Text('Join Now', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white)),
             ),
           ),

@@ -22,7 +22,7 @@ class GradebookScreen extends StatelessWidget {
             children: [
               pw.Text('EduSphere ERP - Gradebook', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 10),
-              pw.Text('Class 12-B • Term 2', style: pw.TextStyle(fontSize: 14)),
+              pw.Text('Class 12-B • Term 2', style: const pw.TextStyle(fontSize: 14)),
               pw.SizedBox(height: 20),
               pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),

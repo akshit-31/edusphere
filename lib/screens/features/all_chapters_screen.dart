@@ -7,9 +7,9 @@ class AllChaptersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
-    final Color accentBlue = const Color(0xFF3B82F6);
-    final Color accentGreen = const Color(0xFF10B981);
+    const Color darkNavy = Color(0xFF1E40AF);
+    const Color accentBlue = Color(0xFF3B82F6);
+    const Color accentGreen = Color(0xFF10B981);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -50,13 +50,13 @@ class AllChaptersScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('All Chapters', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                Text('Physics — 18 chapters total', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                Text('Physics — 18 chapters total', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
               ],
             ),
           ),
           Container(
             width: 40.w, height: 40.h,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(10.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10.r)),
           ),
         ],
       ),
@@ -70,7 +70,7 @@ class AllChaptersScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('OVERALL PROGRESS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6))),
+          Text('OVERALL PROGRESS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
           SizedBox(height: 8.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -81,9 +81,9 @@ class AllChaptersScreen extends StatelessWidget {
             ],
           ),
           SizedBox(height: 8.h),
-          Text('14/18 chapters covered', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.8))),
+          Text('14/18 chapters covered', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.8))),
           SizedBox(height: 12.h),
-          ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: 0.78, minHeight: 8, backgroundColor: Colors.white.withOpacity(0.1), valueColor: AlwaysStoppedAnimation(accentGreen))),
+          ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: 0.78, minHeight: 8, backgroundColor: Colors.white.withValues(alpha: 0.1), valueColor: AlwaysStoppedAnimation(accentGreen))),
         ],
       ),
     );
@@ -103,7 +103,7 @@ class AllChaptersScreen extends StatelessWidget {
               Text(chapter, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.grey)),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(color: col.withOpacity(0.1), borderRadius: BorderRadius.circular(8.r)),
+                decoration: BoxDecoration(color: col.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8.r)),
                 child: Text(status, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w800, color: col)),
               ),
             ],

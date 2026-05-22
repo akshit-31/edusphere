@@ -12,7 +12,7 @@ import '../features/documents_screen.dart';
 
 class ParentDashboard extends StatelessWidget {
   final RoleTheme theme;
-  ParentDashboard({super.key, required this.theme});
+  const ParentDashboard({super.key, required this.theme});
 
   @override
   Widget build(BuildContext context) {
@@ -26,15 +26,15 @@ class ParentDashboard extends StatelessWidget {
             sliver: SliverList(delegate: SliverChildListDelegate([
               _stats(),
               SizedBox(height: 20.h),
-              SectionTitle(title: 'Child Overview'),
+              const SectionTitle(title: 'Child Overview'),
               SizedBox(height: 12.h),
               _childCard(),
               SizedBox(height: 20.h),
-              SectionTitle(title: 'Quick Access'),
+              const SectionTitle(title: 'Quick Access'),
               SizedBox(height: 12.h),
               _quickActions(context),
               SizedBox(height: 20.h),
-              SectionTitle(title: 'Parent Features'),
+              const SectionTitle(title: 'Parent Features'),
               SizedBox(height: 12.h),
               _modules(context),
               SizedBox(height: 100.h),
@@ -51,15 +51,15 @@ class ParentDashboard extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 28.h),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Hello 👋', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+          Text('Hello 👋', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
           Text('Mr. Smith', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
           SizedBox(height: 6.h),
           Container(padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
             child: Text('Parent of Alex Rivera', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white))),
         ])),
         Container(width: 52.w, height: 52.w,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w)),
           child: Icon(Icons.family_restroom_rounded, color: Colors.white, size: 28.sp)),
       ]),
     )),
@@ -68,7 +68,7 @@ class ParentDashboard extends StatelessWidget {
   Widget _stats() => GridView.count(
     crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
     crossAxisSpacing: 12.w, mainAxisSpacing: 12.h, childAspectRatio: 1.4,
-    children: [
+    children: const [
       InfoCard(title: "Child's Attendance", value: '92%', icon: Icons.check_circle_rounded, iconColor: Color(0xFF10B981), bgColor: Color(0xFFECFDF5), trend: 'This month'),
       InfoCard(title: 'Avg. Grade', value: 'A+', icon: Icons.star_rounded, iconColor: Color(0xFF8B5CF6), bgColor: Color(0xFFF5F3FF), trend: 'Top 5%'),
       InfoCard(title: 'Fee Status', value: 'Due', icon: Icons.credit_card_rounded, iconColor: Color(0xFFEF4444), bgColor: Color(0xFFFEF2F2), trend: '₹12,500 pending'),
@@ -80,16 +80,16 @@ class ParentDashboard extends StatelessWidget {
     padding: EdgeInsets.all(20.r),
     decoration: BoxDecoration(
       gradient: theme.gradient, borderRadius: BorderRadius.circular(24.r),
-      boxShadow: [BoxShadow(color: theme.primary.withOpacity(0.3), blurRadius: 20.r, offset: Offset(0, 8.h))],
+      boxShadow: [BoxShadow(color: theme.primary.withValues(alpha: 0.3), blurRadius: 20.r, offset: Offset(0, 8.h))],
     ),
     child: Row(children: [
       Container(width: 56.w, height: 56.w,
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(16.r)),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16.r)),
         child: Icon(Icons.school_rounded, color: Colors.white, size: 28.sp)),
       SizedBox(width: 16.w),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Alex Rivera', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-        Text('Grade 12-A • Roll #24', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.7))),
+        Text('Grade 12-A • Roll #24', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.7))),
         SizedBox(height: 8.h),
         Row(children: [
           _chip('Attendance: 92%'),
@@ -102,7 +102,7 @@ class ParentDashboard extends StatelessWidget {
 
   Widget _chip(String t) => Container(
     padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
     child: Text(t, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: Colors.white)),
   );
 

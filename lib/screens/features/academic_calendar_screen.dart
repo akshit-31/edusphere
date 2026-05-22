@@ -98,7 +98,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
                           ),
                           itemCount: 42,
                           itemBuilder: (_, i) {
-                            final year = 2026;
+                            const year = 2026;
                             final month = _selectedMonth + 1;
                             final firstDay = DateTime(year, month, 1);
                             final daysInMonth = DateTime(year, month + 1, 0).day;
