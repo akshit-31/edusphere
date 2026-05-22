@@ -4,6 +4,8 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart' as intl;
 
 class CreateAssignmentScreen extends StatefulWidget {
   const CreateAssignmentScreen({super.key});
@@ -17,18 +19,29 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
   String _subject = 'Physics';
   bool _published = false;
   PlatformFile? _attachedFile;
+  DateTime? _dueDate;
+  bool _isSubmitting = false;
 
   final _subjects = ['Physics', 'Maths', 'Chemistry', 'English', 'CS'];
   String? _selectedClass;
-  List<String> _selectedSections = [];
+  final List<String> _selectedSections = [];
 
   bool get _isTargetSelected => _selectedClass != null && _selectedSections.isNotEmpty;
   String get _targetText => _isTargetSelected 
       ? 'Class $_selectedClass (${_selectedSections.join(', ')})' 
       : 'Select Class & Section';
 
+  String _getDbClassName(String val) {
+    final numStr = val.replaceAll(RegExp(r'[^0-9]'), '');
+    return 'Grade $numStr';
+  }
+
   @override
-  void dispose() { _titleCtrl.dispose(); _descCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,19 +87,32 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                   _label('Due Date'),
                   SizedBox(height: 6.h),
                   GestureDetector(
-                    onTap: () => showDatePicker(
-                      context: context, 
-                      initialDate: DateTime.now(), 
-                      firstDate: DateTime(DateTime.now().year - 10), 
-                      lastDate: DateTime(DateTime.now().year + 10)
-                    ),
+                    onTap: () async {
+                      final selected = await showDatePicker(
+                        context: context, 
+                        initialDate: _dueDate ?? DateTime.now().add(const Duration(days: 1)), 
+                        firstDate: DateTime.now(), 
+                        lastDate: DateTime(DateTime.now().year + 5)
+                      );
+                      if (selected != null) {
+                        setState(() { _dueDate = selected; });
+                      }
+                    },
                     child: Container(
                       padding: EdgeInsets.all(16.r),
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.r), border: Border.all(color: AppColors.border)),
                       child: Row(children: [
                         Icon(Icons.calendar_today_rounded, color: AppColors.textLight, size: 20.sp),
                         SizedBox(width: 12.w),
-                        Text('Select due date', style: GoogleFonts.inter(color: AppColors.textLight)),
+                        Text(
+                          _dueDate == null 
+                            ? 'Select due date' 
+                            : intl.DateFormat('MMM d, yyyy').format(_dueDate!), 
+                          style: GoogleFonts.inter(
+                            color: _dueDate == null ? AppColors.textLight : AppColors.textDark,
+                            fontWeight: _dueDate == null ? FontWeight.normal : FontWeight.w700
+                          )
+                        ),
                       ]),
                     ),
                   ),
@@ -100,19 +126,21 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                           type: FileType.custom,
                           allowedExtensions: ['pdf', 'doc', 'docx', 'zip'],
                         );
+                        if (!context.mounted) return;
                         if (result != null && result.files.isNotEmpty) {
                           setState(() => _attachedFile = result.files.first);
-                          if (mounted) showToast(context, 'File attached successfully');
+                          showToast(context, 'File attached successfully');
                         }
                       } catch (e) {
-                        if (mounted) showToast(context, 'Error picking file: $e');
+                        if (!context.mounted) return;
+                        showToast(context, 'Error picking file: $e');
                       }
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       padding: EdgeInsets.all(16.r),
                       decoration: BoxDecoration(
-                        color: _attachedFile != null ? AppColors.teacherPrimary.withOpacity(0.02) : Colors.white, 
+                        color: _attachedFile != null ? AppColors.teacherPrimary.withValues(alpha: 0.02) : Colors.white, 
                         borderRadius: BorderRadius.circular(16.r), 
                         border: Border.all(
                           color: _attachedFile != null ? AppColors.teacherPrimary : AppColors.border, 
@@ -120,9 +148,9 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                         ),
                         boxShadow: [
                           if (_attachedFile != null)
-                            BoxShadow(color: AppColors.teacherPrimary.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+                            BoxShadow(color: AppColors.teacherPrimary.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))
                           else
-                            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
                         ],
                       ),
                       child: _attachedFile == null 
@@ -130,7 +158,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                             children: [
                               Container(
                                 padding: EdgeInsets.all(12.r),
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: AppColors.background,
                                   shape: BoxShape.circle
                                 ),
@@ -147,7 +175,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                               Container(
                                 padding: EdgeInsets.all(12.r),
                                 decoration: BoxDecoration(
-                                  color: AppColors.teacherPrimary.withOpacity(0.1),
+                                  color: AppColors.teacherPrimary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12.r),
                                 ),
                                 child: Icon(Icons.description_rounded, color: AppColors.teacherPrimary, size: 26.sp),
@@ -178,7 +206,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                   child: Container(
                                     padding: EdgeInsets.all(8.r),
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.1),
+                                      color: Colors.redAccent.withValues(alpha: 0.1),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(Icons.close_rounded, color: Colors.redAccent, size: 20.sp),
@@ -189,7 +217,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                           ),
                     ),
                   ),
-                  SizedBox(height: 16.h),
+                  SizedBox(height: 16.r),
                   _label('Assign To'),
                   SizedBox(height: 6.h),
                   GestureDetector(
@@ -207,15 +235,51 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                   ),
                   SizedBox(height: 24.h),
                   LoadingButton(
-                    label: 'Publish Assignment',
+                    label: _isSubmitting ? 'Publishing...' : 'Publish Assignment',
                     color: AppColors.teacherPrimary,
                     onPressed: () async {
+                      if (_isSubmitting) return;
                       if (!_isTargetSelected) {
                         showToast(context, 'Please select a class & section');
                         return;
                       }
-                      await Future.delayed(const Duration(milliseconds: 1500));
-                      if (mounted) setState(() => _published = true);
+                      if (_titleCtrl.text.trim().isEmpty) {
+                        showToast(context, 'Please enter an assignment title');
+                        return;
+                      }
+
+                      setState(() { _isSubmitting = true; });
+
+                      try {
+                        final dbClass = _getDbClassName(_selectedClass!);
+                        final selectedDue = _dueDate ?? DateTime.now().add(const Duration(days: 1));
+                        final formattedDue = intl.DateFormat('yyyy-MM-dd').format(selectedDue);
+
+                        // Save assignment record into Supabase for each selected section
+                        for (var sec in _selectedSections) {
+                          await Supabase.instance.client
+                              .from('assignments')
+                              .insert({
+                                'title': _titleCtrl.text.trim(),
+                                'subject': _subject,
+                                'description': _descCtrl.text.trim(),
+                                'due_date': formattedDue,
+                                'class_name': dbClass,
+                                'section': sec,
+                              });
+                        }
+
+                        if (context.mounted) {
+                          showToast(context, 'Assignment published successfully!');
+                        }
+                        if (context.mounted) setState(() => _published = true);
+                      } catch (e) {
+                        if (context.mounted) {
+                          showToast(context, 'Error publishing assignment: $e');
+                        }
+                      } finally {
+                        if (mounted) setState(() { _isSubmitting = false; });
+                      }
                     },
                   ),
                   SizedBox(height: 80.h),
@@ -251,7 +315,8 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
               Wrap(
                 spacing: 10, runSpacing: 10,
                 children: List.generate(12, (i) {
-                  final name = '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}';
+                  final suffix = i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th';
+                  final name = '${i + 1}$suffix';
                   final isSelected = _selectedClass == name;
                   return GestureDetector(
                     onTap: () => setModalState(() => setState(() => _selectedClass = name)),
@@ -334,7 +399,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
           SizedBox(height: 24.h),
           Text('Assignment Published!', style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
           SizedBox(height: 8.h),
-          Text('Sent to 45 students in Class 12-B', style: GoogleFonts.inter(fontSize: 14.sp, color: AppColors.textMedium)),
+          Text('Sent successfully to $_targetText', style: GoogleFonts.inter(fontSize: 14.sp, color: AppColors.textMedium)),
           SizedBox(height: 32.h),
           LoadingButton(label: 'Back to Dashboard', color: AppColors.teacherPrimary, onPressed: () async { Navigator.pop(context); }),
         ]),

@@ -15,12 +15,10 @@ import '../features/notices_screen.dart';
 import '../features/discussion_forum_screen.dart';
 import '../profile_screen.dart';
 import '../messages_screen.dart';
-import '../features/online_classes_screen.dart';
 import '../features/change_password_screen.dart';
 import '../features/notification_preferences_screen.dart';
 import '../features/leave_application_screen.dart';
 import '../features/cocurricular_screen.dart';
-import '../features/study_materials_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TeacherDashboard extends StatefulWidget {
@@ -43,6 +41,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   Future<void> _loadTeacherData() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       teacherName = prefs.getString('teacher_name') ?? 'Emma Johnson';
       teacherDesignation = prefs.getString('teacher_design') ?? 'Senior Mathematics Teacher';
@@ -61,31 +60,31 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Container(
-                  constraints: BoxConstraints(maxWidth: 1200),
+                  constraints: const BoxConstraints(maxWidth: 1200),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildStats(context),
                       SizedBox(height: 24.h),
-                      SectionTitle(title: 'Classroom Control'),
+                      const SectionTitle(title: 'Classroom Control'),
                       SizedBox(height: 12.h),
                       _buildQuickActions(context),
                       SizedBox(height: 24.h),
                       // Removed Next Class section
                       SizedBox(height: 8.h),
               // ── CLASSROOM MANAGEMENT ─────────────────────────────────────
-              SectionTitle(title: '🏫 Classroom Management'),
+              const SectionTitle(title: '🏫 Classroom Management'),
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('My Timetable & Classes', 'Today: 4 classes', '📅', const Color(0xFF3B82F6), const TimetableScreen(isStudent: false)),
                 _mod('Attendance (Mark)',      'Class 12-B',       '✅', const Color(0xFF16A34A), const MarkAttendanceScreen()),
-                _mod('Lesson Plan & Syllabus', '78% covered',      '📋', Color(0xFFF59E0B), const LessonPlanScreen()),
+                _mod('Lesson Plan & Syllabus', '78% covered',      '📋', const Color(0xFFF59E0B), const LessonPlanScreen()),
                 // Removed Online Classes module
               ]),
               SizedBox(height: 20.h),
 
               // ── ACADEMIC ────────────────────────────────────────────────
-              SectionTitle(title: '📚 Academic'),
+              const SectionTitle(title: '📚 Academic'),
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('Manage Assignments',     'Publish to students', '📝', const Color(0xFFF97316), const CreateAssignmentScreen()),
@@ -93,37 +92,37 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 _mod('Upload Study Materials', 'PDFs, Videos',        '📤', const Color(0xFF6366F1), const UploadMaterialScreen()),
                 _mod('Evaluate Submissions',   '12 pending',          '📝', const Color(0xFFF43F5E), const GradebookScreen()),
                 _mod('Grade Book / Marks',     'Update records',      '📊', const Color(0xFFEC4899), const GradebookScreen()),
-                _mod('Student Performance',    'Charts & analytics',  '📈', Color(0xFF0EA5E9), const StudentPerformanceScreen()),
+                _mod('Student Performance',    'Charts & analytics',  '📈', const Color(0xFF0EA5E9), const StudentPerformanceScreen()),
               ]),
               SizedBox(height: 20.h),
 
               // ── COMMUNICATION ───────────────────────────────────────────
-              SectionTitle(title: '💬 Communication'),
+              const SectionTitle(title: '💬 Communication'),
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('Send Notices',           'Announcements',       '📢', const Color(0xFFD97706), const NoticesScreen()),
                 _mod('Message Students/Parents','2 unread messages',  '💬', const Color(0xFF8B5CF6), MessagesScreen(theme: widget.theme)),
-                _mod('Discussion Forum',       'Engage with students','🗣️', Color(0xFF0EA5E9), const DiscussionForumScreen()),
+                _mod('Discussion Forum',       'Engage with students','🗣️', const Color(0xFF0EA5E9), const DiscussionForumScreen()),
               ]),
               SizedBox(height: 20.h),
 
               // ── PROFILE & ACCOUNT ────────────────────────────────────────
-              SectionTitle(title: '👤 Profile & Account'),
+              const SectionTitle(title: '👤 Profile & Account'),
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('My Profile',  'Manage details',      '👤', const Color(0xFF3B82F6), ProfileScreen(role: 'teacher', theme: widget.theme)),
                 _mod('Change Password',        'Update security',     '🔑', const Color(0xFFF59E0B), const ChangePasswordScreen()),
-                _mod('Notification Prefs',     'Manage alerts',       '🔔', Color(0xFF8B5CF6), const NotificationPreferencesScreen()),
+                _mod('Notification Prefs',     'Manage alerts',       '🔔', const Color(0xFF8B5CF6), const NotificationPreferencesScreen()),
               ]),
               SizedBox(height: 20.h),
 
               // ── OTHER FEATURES ───────────────────────────────────────────
-              SectionTitle(title: '⚡ Other Features'),
+              const SectionTitle(title: '⚡ Other Features'),
               SizedBox(height: 12.h),
               _buildSection(context, [
                 _mod('Co-curricular Activity', 'Manage clubs',        '⚽', const Color(0xFF7C3AED), const CoCurricularScreen()),
                 _mod('Event / Competition',    'Upcoming events',     '🏆', const Color(0xFF10B981), const CoCurricularScreen()),
-                _mod('Leave Application',      'Apply & track leaves','📅', Color(0xFF16A34A), const LeaveApplicationScreen()),
+                _mod('Leave Application',      'Apply & track leaves','📅', const Color(0xFF16A34A), const LeaveApplicationScreen()),
               ]),
               SizedBox(height: 20.h),
                     ],
@@ -151,13 +150,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Welcome back 👋', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+                    Text('Welcome back 👋', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
                     SizedBox(height: 4.h),
                     Text(teacherName, style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                     SizedBox(height: 6.h),
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
                       child: Text(teacherDesignation, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
                   ],
@@ -168,9 +167,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 child: Container(
                   width: 52.w, height: 52.w,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2), 
+                    color: Colors.white.withValues(alpha: 0.2), 
                     borderRadius: BorderRadius.circular(16.r), 
-                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w),
                     image: const DecorationImage(
                       image: NetworkImage('https://i.pravatar.cc/300?img=32'),
                       fit: BoxFit.cover,

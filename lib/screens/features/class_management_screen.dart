@@ -66,7 +66,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -104,7 +104,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                     ],
                   ),
                   SizedBox(height: 12.h),
-                  ..._classes.asMap().entries.map((e) => _buildClassCard(e.key, e.value)).toList(),
+                  ..._classes.asMap().entries.map((e) => _buildClassCard(e.key, e.value)),
                   SizedBox(height: 40.h),
                 ],
               ),
@@ -124,7 +124,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
   Widget _buildSummaryStats() {
     return Row(
       children: [
-        _statBox('Total Classes', _classes.length.toString(), Icons.school_rounded, Color(0xFF6366F1)),
+        _statBox('Total Classes', _classes.length.toString(), Icons.school_rounded, const Color(0xFF6366F1)),
         SizedBox(width: 12.w),
         _statBox('Active Now', _classes.where((c) => c['active'] == true).length.toString(), Icons.bolt_rounded, const Color(0xFF10B981)),
       ],
@@ -139,14 +139,14 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10.r, offset: Offset(0, 4.h))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10.r, offset: Offset(0, 4.h))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: EdgeInsets.all(8.r),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
               child: Icon(icon, color: color, size: 18.sp),
             ),
             SizedBox(height: 12.h),
@@ -168,8 +168,8 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24.r),
-        border: Border.all(color: expanded ? widget.theme.primary.withOpacity(0.3) : AppColors.border),
-        boxShadow: expanded ? [BoxShadow(color: widget.theme.primary.withOpacity(0.08), blurRadius: 20.r, offset: Offset(0, 8.h))] : null,
+        border: Border.all(color: expanded ? widget.theme.primary.withValues(alpha: 0.3) : AppColors.border),
+        boxShadow: expanded ? [BoxShadow(color: widget.theme.primary.withValues(alpha: 0.08), blurRadius: 20.r, offset: Offset(0, 8.h))] : null,
       ),
       child: Column(
         children: [
@@ -183,7 +183,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                   Container(
                     padding: EdgeInsets.all(10.r),
                     decoration: BoxDecoration(
-                      color: active ? widget.theme.primary.withOpacity(0.1) : AppColors.textLight.withOpacity(0.1),
+                      color: active ? widget.theme.primary.withValues(alpha: 0.1) : AppColors.textLight.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14.r),
                     ),
                     child: Icon(Icons.class_rounded, color: active ? widget.theme.primary : AppColors.textLight, size: 22.sp),
@@ -202,7 +202,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                               decoration: BoxDecoration(color: active ? const Color(0xFF10B981) : Colors.grey, shape: BoxShape.circle),
                             ),
                             SizedBox(width: 6.w),
-                            Text(active ? 'Active Batch' : 'Inactive', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: active ? Color(0xFF10B981) : AppColors.textLight)),
+                            Text(active ? 'Active Batch' : 'Inactive', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: active ? const Color(0xFF10B981) : AppColors.textLight)),
                           ],
                         ),
                       ],
@@ -226,16 +226,16 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                       children: [
                         Container(
                           padding: EdgeInsets.all(6.r),
-                          decoration: BoxDecoration(color: Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8.r)),
+                          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8.r)),
                           child: Icon(d['icon'] as IconData, size: 16.sp, color: widget.theme.primary),
                         ),
                         SizedBox(width: 12.w),
                         Text(d['label'] as String, style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textMedium, fontWeight: FontWeight.w500)),
-                        Spacer(),
+                        const Spacer(),
                         Text(d['val'] as String, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                       ],
                     ),
-                  )).toList(),
+                  )),
                   SizedBox(height: 8.h),
                   Row(
                     children: [
@@ -249,7 +249,7 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                           },
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
-                            side: BorderSide(color: Color(0xFFFEE2E2)),
+                            side: const BorderSide(color: Color(0xFFFEE2E2)),
                             padding: EdgeInsets.symmetric(vertical: 12.h),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                           ),

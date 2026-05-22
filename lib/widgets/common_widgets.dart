@@ -39,7 +39,7 @@ class PageHeader extends StatelessWidget {
                 child: Container(
                   width: 40.w, height: 40.w,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
@@ -52,7 +52,7 @@ class PageHeader extends StatelessWidget {
                   children: [
                     Text(title, style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                     if (subtitle != null)
-                      Text(subtitle!, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.7))),
+                      Text(subtitle!, style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.7))),
                   ],
                 ),
               ),
@@ -92,7 +92,7 @@ class InfoCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8.r, offset: Offset(0, 2.h))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8.r, offset: Offset(0, 2.h))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +136,7 @@ class FeatureCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  FeatureCard({
+  const FeatureCard({
     super.key,
     required this.title,
     required this.desc,
@@ -156,14 +156,14 @@ class FeatureCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8.r, offset: Offset(0, 2.h))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8.r, offset: Offset(0, 2.h))],
         ),
         child: Row(
           children: [
             Container(
               width: 52.w, height: 52.w,
               decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16.r),
-                boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 10.r, offset: Offset(0, 4.h))]),
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10.r, offset: Offset(0, 4.h))]),
               child: Center(child: Text(emoji, style: TextStyle(fontSize: 24.sp))),
             ),
             SizedBox(width: 16.w),
@@ -203,7 +203,7 @@ class QuickBtn extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20.r),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8.r)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8.r)],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -211,7 +211,7 @@ class QuickBtn extends StatelessWidget {
             Container(
               width: 48.w, height: 48.w,
               decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14.r),
-                boxShadow: [BoxShadow(color: color.withOpacity(0.35), blurRadius: 10.r, offset: Offset(0, 4.h))]),
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 10.r, offset: Offset(0, 4.h))]),
               child: Icon(icon, color: Colors.white, size: 22.sp),
             ),
             SizedBox(height: 8.h),
@@ -319,7 +319,7 @@ class NotifItem extends StatelessWidget {
   final String time;
   final String emoji;
 
-  NotifItem({super.key, required this.title, required this.time, required this.emoji});
+  const NotifItem({super.key, required this.title, required this.time, required this.emoji});
 
   @override
   Widget build(BuildContext context) {

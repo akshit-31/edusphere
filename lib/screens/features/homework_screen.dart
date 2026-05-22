@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'create_homework_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -10,9 +8,9 @@ class HomeworkScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
-    final Color accentGreen = const Color(0xFF10B981);
-    final Color accentAmber = const Color(0xFFF59E0B);
+    const Color darkNavy = Color(0xFF1E40AF);
+    const Color accentGreen = Color(0xFF10B981);
+    const Color accentAmber = Color(0xFFF59E0B);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -32,7 +30,7 @@ class HomeworkScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Homework', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                        Text('Assign & track submissions', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                        Text('Assign & track submissions', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
                       ],
                     ),
                   ],
@@ -78,7 +76,7 @@ class HomeworkScreen extends StatelessWidget {
               Expanded(child: Text(title, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800))),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(color: col.withOpacity(0.1), borderRadius: BorderRadius.circular(8.r)),
+                decoration: BoxDecoration(color: col.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8.r)),
                 child: Text(status, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w800, color: col)),
               ),
             ],

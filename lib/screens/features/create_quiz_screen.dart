@@ -16,7 +16,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   ];
 
   String? _selectedClass;
-  List<String> _selectedSections = [];
+  final List<String> _selectedSections = [];
   bool get _isTargetSelected => _selectedClass != null && _selectedSections.isNotEmpty;
 
   @override

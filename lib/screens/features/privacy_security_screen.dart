@@ -36,13 +36,13 @@ class PrivacySecurityScreen extends StatelessWidget {
                   Container(
                     width: double.infinity,
                     padding: EdgeInsets.all(16.r),
-                    decoration: BoxDecoration(color: Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: Color(0xFFFECACA))),
+                    decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: const Color(0xFFFECACA))),
                     child: Row(children: [
                       Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 24.sp),
                       SizedBox(width: 12.w),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('Deactivate Account', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.error, fontSize: 14.sp)),
-                        Text('Temporarily disable your profile', style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.error.withOpacity(0.7))),
+                        Text('Temporarily disable your profile', style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.error.withValues(alpha: 0.7))),
                       ])),
                       Icon(Icons.chevron_right_rounded, color: AppColors.error, size: 20.sp),
                     ]),
@@ -74,7 +74,7 @@ class PrivacySecurityScreen extends StatelessWidget {
           Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 14.sp)),
           Text(sub, style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textLight)),
         ])),
-        if (switchVal != null) Transform.scale(scale: 0.8.r, child: Switch(value: switchVal, onChanged: (v) {}, activeColor: AppColors.studentPrimary))
+        if (switchVal != null) Transform.scale(scale: 0.8.r, child: Switch(value: switchVal, onChanged: (v) {}, activeThumbColor: AppColors.studentPrimary))
         else Icon(Icons.chevron_right_rounded, color: AppColors.textLight, size: 20.sp),
       ]),
     );

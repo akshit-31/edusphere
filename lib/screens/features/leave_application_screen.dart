@@ -222,7 +222,7 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> with Si
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14.r)),
       child: Column(children: [
         Text(val, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w900, color: fg)),
-        Text(label, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: fg.withOpacity(0.7)), textAlign: TextAlign.center),
+        Text(label, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: fg.withValues(alpha: 0.7)), textAlign: TextAlign.center),
       ]),
     ),
   );
@@ -234,7 +234,7 @@ class _LeaveApplicationScreenState extends State<LeaveApplicationScreen> with Si
       padding: EdgeInsets.all(32.r),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 100.w, height: 100.h, decoration: const BoxDecoration(color: Color(0xFFECFDF5), shape: BoxShape.circle),
-          child: Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 50.sp)),
+          child: Icon(Icons.check_circle_rounded, color: const Color(0xFF10B981), size: 50.sp)),
         SizedBox(height: 24.h),
         Text('Application Submitted!', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
         SizedBox(height: 8.h),

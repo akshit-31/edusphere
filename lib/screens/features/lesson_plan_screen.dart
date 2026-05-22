@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'ai_generator_screen.dart';
 import 'lesson_detail_screen.dart';
 import 'add_lesson_screen.dart';
@@ -9,9 +7,6 @@ import 'analytics_detail_screen.dart';
 import 'homework_screen.dart';
 import 'notifications_screen.dart';
 import 'all_chapters_screen.dart';
-import 'create_homework_screen.dart';
-import 'mark_attendance_screen.dart';
-import '../profile_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class LessonPlanScreen extends StatefulWidget {
@@ -82,7 +77,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Lesson Planner', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                    Text('Physics — Grade 12 · Section A', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withOpacity(0.6))),
+                    Text('Physics — Grade 12 · Section A', style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
@@ -103,7 +98,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                   SizedBox(width: 12.w),
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: Color(0xFF3B82F6),
+                    backgroundColor: const Color(0xFF3B82F6),
                     child: Text('RS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.sp)),
                   ),
                 ],
@@ -125,7 +120,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
           color: Colors.white,
         ),
         labelColor: darkNavy,
-        unselectedLabelColor: Colors.white.withOpacity(0.6),
+        unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
         labelStyle: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700),
         indicatorPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         indicatorSize: TabBarIndicatorSize.tab,
@@ -204,11 +199,11 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('SYLLABUS PROGRESS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6), letterSpacing: 0.5)),
+                    Text('SYLLABUS PROGRESS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6), letterSpacing: 0.5)),
                     SizedBox(height: 8.h),
                     Text('78%', style: GoogleFonts.inter(fontSize: 48.sp, fontWeight: FontWeight.w900, color: Colors.white)),
                     SizedBox(height: 4.h),
-                    Text('14 of 18 chapters covered', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.8))),
+                    Text('14 of 18 chapters covered', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.8))),
                   ],
                 ),
               ),
@@ -220,7 +215,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                     child: CircularProgressIndicator(
                       value: 0.78,
                       strokeWidth: 8,
-                      backgroundColor: Colors.white.withOpacity(0.1),
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
                       valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)),
                     ),
                   ),
@@ -234,7 +229,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
             child: LinearProgressIndicator(
               value: 0.78,
               minHeight: 8,
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
               valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)),
             ),
           ),
@@ -257,13 +252,13 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
         margin: EdgeInsets.symmetric(horizontal: 4.w),
         padding: EdgeInsets.symmetric(vertical: 12.h),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Column(
           children: [
             Text(val, style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-            Text(label, style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white.withOpacity(0.6))),
+            Text(label, style: GoogleFonts.inter(fontSize: 10.sp, color: Colors.white.withValues(alpha: 0.6))),
           ],
         ),
       ),
@@ -286,7 +281,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
               children: [
                 Container(
                   width: 48.w, height: 48.h,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12.r)),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12.r)),
                   child: const Icon(Icons.bolt_rounded, color: Colors.white),
                 ),
                 SizedBox(width: 16.w),
@@ -294,7 +289,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('AI Lesson Generator', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                    Text('Tap to generate plan, quiz & notes', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withOpacity(0.6))),
+                    Text('Tap to generate plan, quiz & notes', style: GoogleFonts.inter(fontSize: 12.sp, color: Colors.white.withValues(alpha: 0.6))),
                   ],
                 ),
               ],
@@ -319,9 +314,9 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
       margin: EdgeInsets.only(right: 8.w),
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Text(label, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.white)),
     );
@@ -350,23 +345,23 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(width: 24.w, height: 24.h, decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6.r))),
+              Container(width: 24.w, height: 24.h, decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6.r))),
             ],
           ),
           const Spacer(),
           Text(val, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: darkNavy)),
-          Text(label, style: GoogleFonts.inter(fontSize: 11.sp, color: darkNavy.withOpacity(0.6))),
+          Text(label, style: GoogleFonts.inter(fontSize: 11.sp, color: darkNavy.withValues(alpha: 0.6))),
           SizedBox(height: 8.h),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-            decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4.r)),
+            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4.r)),
             child: Text(status, style: GoogleFonts.inter(fontSize: 9.sp, fontWeight: FontWeight.w800, color: statusColor)),
           ),
         ],
@@ -402,10 +397,10 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(chapter, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: darkNavy.withOpacity(0.4))),
+                Text(chapter, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: darkNavy.withValues(alpha: 0.4))),
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(color: isComplete ? accentGreen.withOpacity(0.1) : (isActive ? accentBlue.withOpacity(0.1) : Colors.grey.withOpacity(0.1)), borderRadius: BorderRadius.circular(8.r)),
+                  decoration: BoxDecoration(color: isComplete ? accentGreen.withValues(alpha: 0.1) : (isActive ? accentBlue.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)), borderRadius: BorderRadius.circular(8.r)),
                   child: Text(isComplete ? 'Complete' : (isActive ? 'Active' : 'Pending'), style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w800, color: isComplete ? accentGreen : (isActive ? accentBlue : Colors.grey))),
                 ),
               ],
@@ -413,7 +408,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
             SizedBox(height: 4.h),
             Text(title, style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: darkNavy)),
             SizedBox(height: 4.h),
-            Text('$lessons · $tools', style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withOpacity(0.6))),
+            Text('$lessons · $tools', style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withValues(alpha: 0.6))),
             SizedBox(height: 12.h),
             ClipRRect(
               borderRadius: BorderRadius.circular(4.r),
@@ -423,12 +418,12 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(tags[0], style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withOpacity(0.4))),
+                Text(tags[0], style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withValues(alpha: 0.4))),
                 if (tags.length > 1) 
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-                    decoration: BoxDecoration(color: backgroundGrey, borderRadius: BorderRadius.circular(4.r), border: Border.all(color: Colors.black.withOpacity(0.1))),
-                    child: Text(tags[1], style: GoogleFonts.inter(fontSize: 10.sp, color: darkNavy.withOpacity(0.6))),
+                    decoration: BoxDecoration(color: backgroundGrey, borderRadius: BorderRadius.circular(4.r), border: Border.all(color: Colors.black.withValues(alpha: 0.1))),
+                    child: Text(tags[1], style: GoogleFonts.inter(fontSize: 10.sp, color: darkNavy.withValues(alpha: 0.6))),
                   ),
               ],
             ),
@@ -446,7 +441,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
     return Container(
       margin: EdgeInsets.only(right: 8.w),
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6.r), border: Border.all(color: textCol.withOpacity(0.2))),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6.r), border: Border.all(color: textCol.withValues(alpha: 0.2))),
       child: Text(text, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: textCol)),
     );
   }
@@ -483,7 +478,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
           children: [
             Column(
               children: [
-                Text(time, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: darkNavy.withOpacity(0.5))),
+                Text(time, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: darkNavy.withValues(alpha: 0.5))),
                 SizedBox(height: 8.h),
                 Container(width: 12.w, height: 12.h, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
                 Container(width: 2.w, height: 60.h, color: Colors.grey.shade300),
@@ -504,12 +499,12 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
                         if (progress > 0) Text('${(progress * 100).round()}%', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: color)),
                       ],
                     ),
-                    Text(subtitle, style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withOpacity(0.6))),
+                    Text(subtitle, style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withValues(alpha: 0.6))),
                     SizedBox(height: 12.h),
                     Row(
                       children: [
-                        _tagButton(status, color.withOpacity(0.1), color),
-                        if (extra != null) _tagButton(extra, accentAmber.withOpacity(0.1), accentAmber),
+                        _tagButton(status, color.withValues(alpha: 0.1), color),
+                        if (extra != null) _tagButton(extra, accentAmber.withValues(alpha: 0.1), accentAmber),
                       ],
                     ),
                   ],
@@ -573,7 +568,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
       padding: EdgeInsets.only(bottom: 12.h),
       child: Row(
         children: [
-          SizedBox(width: 80.w, child: Text(day, style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withOpacity(0.6)))),
+          SizedBox(width: 80.w, child: Text(day, style: GoogleFonts.inter(fontSize: 12.sp, color: darkNavy.withValues(alpha: 0.6)))),
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: val, minHeight: 12, backgroundColor: backgroundGrey, valueColor: AlwaysStoppedAnimation(col)))),
           SizedBox(width: 12.w),
           Text(count, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: col)),
@@ -590,7 +585,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800)),
-          Text(subtitle, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withOpacity(0.6))),
+          Text(subtitle, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withValues(alpha: 0.6))),
           SizedBox(height: 20.h),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: items),
           if (footer != null) ...[
@@ -608,7 +603,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
         margin: EdgeInsets.symmetric(horizontal: 4.w),
         padding: EdgeInsets.symmetric(vertical: 12.h),
         decoration: BoxDecoration(
-          color: done ? accentGreen.withOpacity(0.1) : (active ? accentBlue.withOpacity(0.1) : backgroundGrey),
+          color: done ? accentGreen.withValues(alpha: 0.1) : (active ? accentBlue.withValues(alpha: 0.1) : backgroundGrey),
           borderRadius: BorderRadius.circular(12.r),
           border: active ? Border.all(color: accentBlue) : null,
         ),
@@ -643,7 +638,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withOpacity(0.6))),
+          Text(title, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withValues(alpha: 0.6))),
           Text(date, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: col)),
         ],
       ),
@@ -683,7 +678,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
           SizedBox(height: 20.h),
           Row(
             children: [
-              Text('12 students need remedial support.', style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withOpacity(0.6))),
+              Text('12 students need remedial support.', style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withValues(alpha: 0.6))),
               GestureDetector(
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsDetailScreen())),
                 child: Text(' View list →', style: GoogleFonts.inter(fontSize: 13.sp, color: accentBlue, fontWeight: FontWeight.w700)),
@@ -715,7 +710,7 @@ class _LessonPlanScreenState extends State<LessonPlanScreen> with SingleTickerPr
       padding: EdgeInsets.only(bottom: 16.h),
       child: Row(
         children: [
-          SizedBox(width: 100.w, child: Text(label, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withOpacity(0.6)))),
+          SizedBox(width: 100.w, child: Text(label, style: GoogleFonts.inter(fontSize: 13.sp, color: darkNavy.withValues(alpha: 0.6)))),
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: val, minHeight: 8, backgroundColor: backgroundGrey, valueColor: AlwaysStoppedAnimation(col)))),
           SizedBox(width: 12.w),
           Text(pct, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: darkNavy)),
@@ -753,9 +748,9 @@ class ChapterDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkNavy = const Color(0xFF1E40AF);
-    final Color accentBlue = const Color(0xFF3B82F6);
-    final Color accentGreen = const Color(0xFF10B981);
+    const Color darkNavy = Color(0xFF1E40AF);
+    const Color accentBlue = Color(0xFF3B82F6);
+    const Color accentGreen = Color(0xFF10B981);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
@@ -773,7 +768,7 @@ class ChapterDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                      Text('$chapter · Physics Grade 12', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                      Text('$chapter · Physics Grade 12', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -792,18 +787,18 @@ class ChapterDetailScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ACTIVE · 6/10 LESSONS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.6))),
+                        Text('ACTIVE · 6/10 LESSONS', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.6))),
                         SizedBox(height: 12.h),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('60%', style: GoogleFonts.inter(fontSize: 48.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-                            SizedBox(width: 70.w, height: 70.h, child: CircularProgressIndicator(value: 0.6, strokeWidth: 8, backgroundColor: Colors.white.withOpacity(0.1), valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)))),
+                            SizedBox(width: 70.w, height: 70.h, child: CircularProgressIndicator(value: 0.6, strokeWidth: 8, backgroundColor: Colors.white.withValues(alpha: 0.1), valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)))),
                           ],
                         ),
-                        Text('6 of 10 lessons completed', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.8))),
+                        Text('6 of 10 lessons completed', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.8))),
                         SizedBox(height: 16.h),
-                        ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: 0.6, minHeight: 8, backgroundColor: Colors.white.withOpacity(0.1), valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)))),
+                        ClipRRect(borderRadius: BorderRadius.circular(10.r), child: LinearProgressIndicator(value: 0.6, minHeight: 8, backgroundColor: Colors.white.withValues(alpha: 0.1), valueColor: const AlwaysStoppedAnimation(Color(0xFF10B981)))),
                       ],
                     ),
                   ),
@@ -855,7 +850,7 @@ class ChapterDetailScreen extends StatelessWidget {
           if (isStatus)
             Container(
               padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-              decoration: BoxDecoration(color: const Color(0xFF3B82F6).withOpacity(0.1), borderRadius: BorderRadius.circular(8.r)),
+              decoration: BoxDecoration(color: const Color(0xFF3B82F6).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8.r)),
               child: Text(val, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w800, color: const Color(0xFF3B82F6))),
             )
           else
@@ -874,7 +869,7 @@ class ChapterDetailScreen extends StatelessWidget {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.r)),
         child: Row(
           children: [
-            Container(width: 12.w, height: 12.h, decoration: BoxDecoration(color: col.withOpacity(0.2), shape: BoxShape.circle)),
+            Container(width: 12.w, height: 12.h, decoration: BoxDecoration(color: col.withValues(alpha: 0.2), shape: BoxShape.circle)),
             SizedBox(width: 16.w),
             Expanded(child: Text(title, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w600, color: status == 'Active' ? col : Colors.black))),
             Text(status, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: col)),

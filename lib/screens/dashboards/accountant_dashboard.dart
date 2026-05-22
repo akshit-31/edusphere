@@ -42,24 +42,24 @@ class AccountantDashboard extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 28.h),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Finance Dashboard 💼', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withOpacity(0.7))),
+          Text('Finance Dashboard 💼', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.7))),
           Text('Ms. Priya', style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.white)),
           SizedBox(height: 6.h),
           Container(padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8.r)),
             child: Text('Senior Accountant', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w700, color: Colors.white))),
         ])),
         Container(width: 52.w, height: 52.h,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.w)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2.w)),
           child: Icon(Icons.account_balance_rounded, color: Colors.white, size: 28.sp)),
       ]),
     )),
   );
 
   Widget _stats() => GridView.count(
-    crossAxisCount: 2, shrinkWrap: true, physics: NeverScrollableScrollPhysics(),
+    crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
     crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.4,
-    children: [
+    children: const [
       InfoCard(title: 'Fee Collected', value: '₹8.2L', icon: Icons.account_balance_wallet_rounded, iconColor: AppColors.accountantPrimary, bgColor: AppColors.accountantLight, trend: 'This month'),
       InfoCard(title: 'Pending Fees', value: '₹1.4L', icon: Icons.pending_rounded, iconColor: Color(0xFFEF4444), bgColor: Color(0xFFFEF2F2), trend: '48 students'),
       InfoCard(title: 'Transactions', value: '342', icon: Icons.receipt_long_rounded, iconColor: Color(0xFF3B82F6), bgColor: AppColors.studentLight, trend: 'This month'),

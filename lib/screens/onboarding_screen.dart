@@ -121,7 +121,7 @@ class _SlideWidget extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(colors: slide.colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(40.r),
-              boxShadow: [BoxShadow(color: slide.colors[0].withOpacity(0.4), blurRadius: 30, offset: const Offset(0, 15))],
+              boxShadow: [BoxShadow(color: slide.colors[0].withValues(alpha: 0.4), blurRadius: 30, offset: const Offset(0, 15))],
             ),
             child: Center(child: Text(slide.emoji, style: TextStyle(fontSize: 64.sp))),
           ),

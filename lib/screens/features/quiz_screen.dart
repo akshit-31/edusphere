@@ -29,8 +29,11 @@ class _QuizScreenState extends State<QuizScreen> {
   void _startQuiz() {
     setState(() { _view = 'quiz'; _current = 0; _selected.clear(); _timeLeft = 600; });
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_timeLeft > 0) setState(() => _timeLeft--);
-      else _submitQuiz();
+      if (_timeLeft > 0) {
+        setState(() => _timeLeft--);
+      } else {
+        _submitQuiz();
+      }
     });
   }
 
@@ -193,7 +196,7 @@ class _QuizScreenState extends State<QuizScreen> {
                               margin: EdgeInsets.only(bottom: 12.h),
                               padding: EdgeInsets.all(18.r),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.studentPrimary.withOpacity(0.15) : const Color(0xFF1E293B),
+                                color: isSelected ? AppColors.studentPrimary.withValues(alpha: 0.15) : const Color(0xFF1E293B),
                                 borderRadius: BorderRadius.circular(16.r),
                                 border: Border.all(color: isSelected ? AppColors.studentPrimary : const Color(0xFF334155), width: isSelected ? 2 : 1),
                               ),
@@ -241,8 +244,11 @@ class _QuizScreenState extends State<QuizScreen> {
                   flex: 2,
                   child: ElevatedButton(
                     onPressed: () {
-                      if (_current < _questions.length - 1) setState(() => _current++);
-                      else _submitQuiz();
+                      if (_current < _questions.length - 1) {
+                        setState(() => _current++);
+                      } else {
+                        _submitQuiz();
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.studentPrimary,
@@ -272,7 +278,7 @@ class _QuizScreenState extends State<QuizScreen> {
               SizedBox(height: 20.h),
               Container(
                 width: 120.w, height: 120.h,
-                decoration: BoxDecoration(color: AppColors.studentLight, shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: AppColors.studentLight, shape: BoxShape.circle),
                 child: Center(child: Text('$_score/${_questions.length}', style: GoogleFonts.inter(fontSize: 28.sp, fontWeight: FontWeight.w900, color: AppColors.studentPrimary))),
               ),
               SizedBox(height: 20.h),

@@ -177,7 +177,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -186,7 +186,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
           onTap: () => Navigator.pop(context),
           child: Container(
             margin: EdgeInsets.all(8.r),
-            decoration: BoxDecoration(color: Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12.r)),
+            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12.r)),
             child: Icon(Icons.arrow_back_ios_new_rounded, size: 18.sp, color: AppColors.textDark),
           ),
         ),
@@ -245,7 +245,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
             Stack(
               alignment: Alignment.bottomRight,
               children: [
-                CircleAvatar(radius: 48.r, backgroundImage: NetworkImage('https://i.pravatar.cc/300?img=32')),
+                CircleAvatar(radius: 48.r, backgroundImage: const NetworkImage('https://i.pravatar.cc/300?img=32')),
                 Container(
                   padding: EdgeInsets.all(6.r),
                   decoration: BoxDecoration(color: widget.theme.primary, shape: BoxShape.circle),
@@ -345,7 +345,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
                   onTap: _addSubject,
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-                    decoration: BoxDecoration(color: widget.theme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: widget.theme.primary.withOpacity(0.3))),
+                    decoration: BoxDecoration(color: widget.theme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: widget.theme.primary.withValues(alpha: 0.3))),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.add_rounded, size: 14.sp, color: widget.theme.primary),
                       SizedBox(width: 4.w),
@@ -360,7 +360,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
             SizedBox(height: 8.h),
             Container(
               padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.h),
-              decoration: BoxDecoration(color: Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12.r)),
+              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12.r)),
               child: Row(children: [
                 Expanded(child: Text(_classesHandled.join(', '), style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark))),
                 Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium, size: 20.sp),
@@ -417,23 +417,23 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
             _label('Teaching Language'),
             SizedBox(height: 8.h),
             DropdownButtonFormField<String>(
-              value: _teachLang,
+              initialValue: _teachLang,
               onChanged: (v) => setState(() => _teachLang = v!),
               items: ['English', 'Hindi', 'Spanish', 'French'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
               style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark),
               decoration: _inputDec(),
-              icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
             ),
           ])),
           SizedBox(height: 16.h),
           _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _label('Social Links (Optional)'),
             SizedBox(height: 14.h),
-            _socialField(Icons.facebook_rounded, Color(0xFF1877F2), _facebookCtrl),
+            _socialField(Icons.facebook_rounded, const Color(0xFF1877F2), _facebookCtrl),
             SizedBox(height: 12.h),
-            _socialField(Icons.flutter_dash, Color(0xFF1DA1F2), _twitterCtrl),
+            _socialField(Icons.flutter_dash, const Color(0xFF1DA1F2), _twitterCtrl),
             SizedBox(height: 12.h),
-            _socialField(Icons.camera_alt_rounded, Color(0xFFE1306C), _instaCtrl),
+            _socialField(Icons.camera_alt_rounded, const Color(0xFFE1306C), _instaCtrl),
           ])),
           SizedBox(height: 40.h),
         ],
@@ -464,7 +464,8 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
                         'date': 'Just now',
                       });
                     });
-                    if (context.mounted) showToast(context, 'Document uploaded!');
+                    if (!mounted) return;
+                    showToast(context, 'Document uploaded!');
                   }
                 },
                 child: Container(
@@ -499,11 +500,11 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
                   Container(
                     width: 44.w, height: 44.w,
                     decoration: BoxDecoration(
-                      color: isPdf ? Color(0xFFFEF2F2) : Color(0xFFEFF6FF),
+                      color: isPdf ? const Color(0xFFFEF2F2) : const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(12.r),
                     ),
                     child: Icon(isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                        color: isPdf ? Color(0xFFEF4444) : Color(0xFF3B82F6), size: 22.sp),
+                        color: isPdf ? const Color(0xFFEF4444) : const Color(0xFF3B82F6), size: 22.sp),
                   ),
                   SizedBox(width: 14.w),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -536,7 +537,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(leading: const Icon(Icons.download_rounded, color: AppColors.textDark), title: Text('Download', style: GoogleFonts.inter(fontWeight: FontWeight.w700)), onTap: () { Navigator.pop(context); showToast(context, 'Downloading...'); }),
         ListTile(leading: const Icon(Icons.share_rounded, color: AppColors.textDark), title: Text('Share', style: GoogleFonts.inter(fontWeight: FontWeight.w700)), onTap: () { Navigator.pop(context); showToast(context, 'Sharing...'); }),
-        ListTile(leading: Icon(Icons.delete_outline_rounded, color: AppColors.error), title: Text('Delete', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.error)),
+        ListTile(leading: const Icon(Icons.delete_outline_rounded, color: AppColors.error), title: Text('Delete', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.error)),
           onTap: () { Navigator.pop(context); setState(() => _docs.removeAt(index)); showToast(context, 'Document removed.'); }),
       ]),
     ));
@@ -576,11 +577,11 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
     suffixIcon: suffix,
     prefixIcon: prefix,
     filled: true,
-    fillColor: Color(0xFFF8FAFC),
+    fillColor: const Color(0xFFF8FAFC),
     contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: widget.theme.primary.withOpacity(0.5))),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide(color: widget.theme.primary.withValues(alpha: 0.5))),
   );
 
   Widget _label(String text) => Text(text, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textMedium));
@@ -588,7 +589,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
   Widget _chip(String label, {VoidCallback? onRemove}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-      decoration: BoxDecoration(color: widget.theme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: widget.theme.primary.withOpacity(0.2))),
+      decoration: BoxDecoration(color: widget.theme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20.r), border: Border.all(color: widget.theme.primary.withValues(alpha: 0.2))),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Text(label, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: widget.theme.primary)),
         if (onRemove != null) ...[
@@ -603,7 +604,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
     return Row(children: [
       Container(
         width: 36.w, height: 36.w,
-        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10.r)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10.r)),
         child: Icon(icon, color: color, size: 18.sp),
       ),
       SizedBox(width: 12.w),

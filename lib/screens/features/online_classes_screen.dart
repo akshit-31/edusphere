@@ -75,7 +75,7 @@ class _OnlineClassesScreenState extends State<OnlineClassesScreen> with SingleTi
                       decoration: BoxDecoration(
                         color: Colors.white, borderRadius: BorderRadius.circular(20.r),
                         border: Border.all(color: isLive ? Colors.red.shade300 : AppColors.border, width: isLive ? 2 : 1),
-                        boxShadow: isLive ? [BoxShadow(color: Colors.red.withOpacity(0.1), blurRadius: 16)] : null,
+                        boxShadow: isLive ? [BoxShadow(color: Colors.red.withValues(alpha: 0.1), blurRadius: 16)] : null,
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -219,8 +219,8 @@ class _OnlineClassesScreenState extends State<OnlineClassesScreen> with SingleTi
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Container(
                     width: 80.w, height: 80.h,
-                    decoration: BoxDecoration(color: const Color(0xFF334155), shape: BoxShape.circle),
-                    child: Icon(Icons.person_rounded, color: Color(0xFF64748B), size: 40.sp),
+                    decoration: const BoxDecoration(color: Color(0xFF334155), shape: BoxShape.circle),
+                    child: Icon(Icons.person_rounded, color: const Color(0xFF64748B), size: 40.sp),
                   ),
                   SizedBox(height: 12.h),
                   Text('Prof. Harrison', style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16.sp)),
@@ -234,8 +234,8 @@ class _OnlineClassesScreenState extends State<OnlineClassesScreen> with SingleTi
               child: Container(
                 margin: EdgeInsets.only(right: 32.w, bottom: 8.h),
                 width: 80.w, height: 110.h,
-                decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(14.r), border: Border.all(color: Colors.white.withOpacity(0.2))),
-                child: Icon(Icons.person_rounded, color: Color(0xFF64748B), size: 32.sp),
+                decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(14.r), border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
+                child: Icon(Icons.person_rounded, color: const Color(0xFF64748B), size: 32.sp),
               ),
             ),
             // Controls
@@ -263,7 +263,7 @@ class _OnlineClassesScreenState extends State<OnlineClassesScreen> with SingleTi
                   child: Container(
                     width: 60.w, height: 60.h,
                     decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 16)]),
+                      boxShadow: [BoxShadow(color: Colors.red.withValues(alpha: 0.4), blurRadius: 16)]),
                     child: Icon(Icons.call_end_rounded, color: Colors.white, size: 26.sp),
                   ),
                 ),

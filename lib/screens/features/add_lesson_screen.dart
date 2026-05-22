@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'ai_generator_screen.dart';
 
 class AddLessonScreen extends StatefulWidget {
@@ -18,7 +16,7 @@ class _AddLessonScreenState extends State<AddLessonScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF1F5F9),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: Column(
         children: [
           Container(
@@ -33,7 +31,7 @@ class _AddLessonScreenState extends State<AddLessonScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Add New Lesson', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                      Text('Create lesson plan', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                      Text('Create lesson plan', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -82,7 +80,7 @@ class _AddLessonScreenState extends State<AddLessonScreen> {
                   SizedBox(height: 24.h),
                   _buildPrimaryButton(darkNavy, 'Save Lesson Plan', onTap: () => Navigator.pop(context)),
                   SizedBox(height: 12.h),
-                  _buildPrimaryButton(Colors.white, 'Generate with AI instead', isDark: false, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AIGeneratorScreen()))),
+                  _buildPrimaryButton(Colors.white, 'Generate with AI instead', isDark: false, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIGeneratorScreen()))),
                   SizedBox(height: 40.h),
                 ],
               ),
@@ -134,7 +132,7 @@ class _AddLessonScreenState extends State<AddLessonScreen> {
         padding: EdgeInsets.symmetric(vertical: 16.h),
         decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12.r), border: !isDark ? Border.all(color: Colors.grey.shade200) : null),
         child: Center(
-          child: Text(label, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Color(0xFF1E40AF))),
+          child: Text(label, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w700, color: isDark ? Colors.white : const Color(0xFF1E40AF))),
         ),
       ),
     );

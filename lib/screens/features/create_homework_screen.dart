@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class CreateHomeworkScreen extends StatefulWidget {
@@ -79,13 +78,13 @@ class _CreateHomeworkScreenState extends State<CreateHomeworkScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Create Homework', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                Text('Assign to students', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withOpacity(0.6))),
+                Text('Assign to students', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.6))),
               ],
             ),
           ),
           Container(
             width: 40.w, height: 40.h,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(10.r)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10.r)),
           ),
         ],
       ),
@@ -154,7 +153,7 @@ class _CreateHomeworkScreenState extends State<CreateHomeworkScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3), style: BorderStyle.solid),
+        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3), style: BorderStyle.solid),
       ),
       child: Column(
         children: [

@@ -99,7 +99,7 @@ class CoCurricularScreen extends StatelessWidget {
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Container(width: 36.w, height: 36.h, decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
+                  child: Container(width: 36.w, height: 36.h, decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
                     child: Icon(Icons.close_rounded, size: 20.sp)),
                 ),
               ],

@@ -28,7 +28,6 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
   String _selectedTeacher = 'Emma Johnson';
   String _selectedType = 'Regular';
   String _selectedMedium = 'English';
-  String _selectedShift = 'Morning';
   bool _isActive = true;
 
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
@@ -137,14 +136,14 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
           Container(
             padding: EdgeInsets.all(8.r),
             decoration: BoxDecoration(
-              color: widget.theme.primary.withOpacity(0.1),
+              color: widget.theme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Icon(icon, color: widget.theme.primary, size: 18.sp),
           ),
           SizedBox(width: 12.w),
           Text(title, style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-          Spacer(),
+          const Spacer(),
           if (action != null)
             TextButton(
               onPressed: onAction,
@@ -227,11 +226,11 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
                     SizedBox(height: 8.h),
                     Row(
                       children: [
-                        Text(_isActive ? 'Active' : 'Inactive', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: _isActive ? Color(0xFF10B981) : AppColors.textLight)),
+                        Text(_isActive ? 'Active' : 'Inactive', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: _isActive ? const Color(0xFF10B981) : AppColors.textLight)),
                         const Spacer(),
                         Switch.adaptive(
                           value: _isActive,
-                          activeColor: const Color(0xFF10B981),
+                          activeTrackColor: const Color(0xFF10B981),
                           onChanged: (val) => setState(() => _isActive = val),
                         ),
                       ],
@@ -253,9 +252,9 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
       children: _subjects.map((subject) => Container(
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: _getSubjectColor(subject).withOpacity(0.1),
+          color: _getSubjectColor(subject).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: _getSubjectColor(subject).withOpacity(0.2)),
+          border: Border.all(color: _getSubjectColor(subject).withValues(alpha: 0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -338,7 +337,7 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
             style: OutlinedButton.styleFrom(
               padding: EdgeInsets.symmetric(vertical: 16.h),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-              side: BorderSide(color: Color(0xFFE2E8F0)),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             child: Text('Cancel', style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: AppColors.textMedium)),
           ),
@@ -380,11 +379,11 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
             hintText: hint,
             hintStyle: GoogleFonts.inter(fontSize: 14.sp, color: AppColors.textLight),
             filled: true,
-            fillColor: Color(0xFFF8FAFC),
+            fillColor: const Color(0xFFF8FAFC),
             contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withOpacity(0.5))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withValues(alpha: 0.5))),
           ),
         ),
       ],
@@ -398,7 +397,7 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
         Text(label, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textMedium)),
         SizedBox(height: 8.h),
         DropdownButtonFormField<String>(
-          value: selected,
+          initialValue: selected,
           onChanged: onChanged,
           items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
           style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: AppColors.textDark),
@@ -408,9 +407,9 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withOpacity(0.5))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withValues(alpha: 0.5))),
           ),
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
         ),
       ],
     );
@@ -423,7 +422,7 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
         Text('Class Teacher', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textMedium)),
         SizedBox(height: 8.h),
         DropdownButtonFormField<String>(
-          value: _selectedTeacher,
+          initialValue: _selectedTeacher,
           onChanged: (val) => setState(() => _selectedTeacher = val!),
           items: ['Emma Johnson', 'John Doe', 'Sarah Smith'].map((e) => DropdownMenuItem(
             value: e,
@@ -431,7 +430,7 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
               children: [
                 CircleAvatar(
                   radius: 12.r,
-                  backgroundColor: widget.theme.primary.withOpacity(0.1),
+                  backgroundColor: widget.theme.primary.withValues(alpha: 0.1),
                   child: Text(e[0], style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.bold, color: widget.theme.primary)),
                 ),
                 SizedBox(width: 10.w),
@@ -446,9 +445,9 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withOpacity(0.5))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14.r), borderSide: BorderSide(color: widget.theme.primary.withValues(alpha: 0.5))),
           ),
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMedium),
         ),
       ],
     );
@@ -465,13 +464,13 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
             decoration: BoxDecoration(
-              color: Color(0xFFF8FAFC),
+              color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14.r),
             ),
             child: Row(
               children: [
                 Text(time.format(context), style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-                Spacer(),
+                const Spacer(),
                 Icon(Icons.access_time_rounded, color: AppColors.textMedium, size: 18.sp),
               ],
             ),
