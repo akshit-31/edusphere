@@ -34,7 +34,13 @@ class StudentProfileDetailsScreen extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: AppColors.border),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+boxShadow: [
+  BoxShadow(
+    color: Colors.black.withOpacity(0.03),
+    blurRadius: 10,
+    offset: const Offset(0, 4),
+  )
+],
               ),
               child: Column(
                 children: [
@@ -256,7 +262,8 @@ class StudentProfileDetailsScreen extends StatelessWidget {
     ),
   );
 
-  Widget _divider() => Divider(height: 24, color: AppColors.border.withOpacity(0.5));
+Widget _divider() =>
+    Divider(height: 24, color: AppColors.border.withOpacity(0.5));
 
   Widget _healthItem(String label, String val, {Color? color}) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
