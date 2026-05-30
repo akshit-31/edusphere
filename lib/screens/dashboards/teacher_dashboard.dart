@@ -8,18 +8,17 @@ import '../features/mark_attendance_screen.dart';
 import '../features/create_assignment_screen.dart';
 import '../features/gradebook_screen.dart';
 import '../features/create_quiz_screen.dart';
-import '../features/my_quizzes_screen.dart';
 import '../features/upload_material_screen.dart';
 import '../features/student_performance_screen.dart';
 import '../features/lesson_plan_screen.dart';
 import '../features/notices_screen.dart';
-import '../features/discussion_forum_screen.dart';
 import '../profile_screen.dart';
 import '../messages_screen.dart';
-import '../features/change_password_screen.dart';
-import '../features/notification_preferences_screen.dart';
 import '../features/leave_application_screen.dart';
-import '../features/cocurricular_screen.dart';
+import '../features/exam_marks_entry_screen.dart';
+import '../features/exam_approval_screen.dart';
+import '../features/exam_terms_screen.dart';
+import '../features/fee_approvals_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TeacherDashboard extends StatefulWidget {
@@ -118,6 +117,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                             const Color(0xFFF43F5E), const GradebookScreen()),
                         _mod('Grade Book / Marks', 'Update records', '📊',
                             const Color(0xFFEC4899), const GradebookScreen()),
+                        _mod('Enter Exam Marks', 'Record student scores', '📝',
+                            widget.theme.primary, ExamMarksEntryScreen(theme: widget.theme)),
+                        _mod('Result Approvals', 'Approve/Reject submissions', '✅',
+                            const Color(0xFF10B981), ExamApprovalScreen(theme: widget.theme)),
+                        _mod('Academic Terms Performance', 'Summaries per term', '🗓️',
+                            const Color(0xFFF59E0B), ExamTermsScreen(theme: widget.theme)),
                         _mod(
                             'Student Performance',
                             'Charts & analytics',
@@ -139,12 +144,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                             '💬',
                             const Color(0xFF8B5CF6),
                             MessagesScreen(theme: widget.theme)),
-                        _mod(
-                            'Discussion Forum',
-                            'Engage with students',
-                            '🗣️',
-                            const Color(0xFF0EA5E9),
-                            const DiscussionForumScreen()),
                       ]),
                       SizedBox(height: 20.h),
 
@@ -159,18 +158,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                             const Color(0xFF3B82F6),
                             ProfileScreen(
                                 role: 'teacher', theme: widget.theme)),
-                        _mod(
-                            'Change Password',
-                            'Update security',
-                            '🔑',
-                            const Color(0xFFF59E0B),
-                            const ChangePasswordScreen()),
-                        _mod(
-                            'Notification Prefs',
-                            'Manage alerts',
-                            '🔔',
-                            const Color(0xFF8B5CF6),
-                            const NotificationPreferencesScreen()),
                       ]),
                       SizedBox(height: 20.h),
 
@@ -179,23 +166,17 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       SizedBox(height: 12.h),
                       _buildSection(context, [
                         _mod(
-                            'Co-curricular Activity',
-                            'Manage clubs',
-                            '⚽',
-                            const Color(0xFF7C3AED),
-                            const CoCurricularScreen()),
-                        _mod(
-                            'Event / Competition',
-                            'Upcoming events',
-                            '🏆',
-                            const Color(0xFF10B981),
-                            const CoCurricularScreen()),
-                        _mod(
                             'Leave Application',
                             'Apply & track leaves',
                             '📅',
                             const Color(0xFF16A34A),
                             const LeaveApplicationScreen()),
+                        _mod(
+                            'Fee Approvals',
+                            'Waiver & discount requests',
+                            '💰',
+                            const Color(0xFF7C3AED),
+                            FeeApprovalsScreen(theme: widget.theme)),
                       ]),
                       SizedBox(height: 20.h),
                     ],

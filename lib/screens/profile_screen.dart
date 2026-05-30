@@ -5,10 +5,6 @@ import '../theme/colors.dart';
 
 import '../widgets/common_widgets.dart';
 import 'welcome_screen.dart';
-import '../screens/features/notification_preferences_screen.dart';
-import 'features/privacy_security_screen.dart';
-import 'features/help_support_screen.dart';
-import 'features/change_password_screen.dart';
 import 'features/student_profile_details_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -210,11 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24.r), border: Border.all(color: AppColors.border)),
                     child: Column(
                       children: [
-                        _menuItem(Icons.person_outline_rounded, 'Personal Information', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentProfileDetailsScreen()))),
-                        _menuItem(Icons.notifications_outlined, 'Notification Preferences', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen()))),
-                        _menuItem(Icons.lock_outline_rounded, 'Change Password', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen()))),
-                        _menuItem(Icons.shield_outlined, 'Privacy & Security', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()))),
-                        _menuItem(Icons.help_outline_rounded, 'Help & Support', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen())), isLast: true),
+                        _menuItem(Icons.person_outline_rounded, 'Personal Information', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentProfileDetailsScreen())), isLast: true),
                       ],
                     ),
                   ),
@@ -261,10 +253,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text('My Profile', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: AppColors.textDark)),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppColors.textDark),
-            onPressed: _showSettingsMenu,
-          ),
           SizedBox(width: 8.w),
         ],
       ),
@@ -568,60 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showSettingsMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => Container(
-        padding: EdgeInsets.all(24.r),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32.r))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40.w, height: 4.h, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2.r))),
-            SizedBox(height: 24.h),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Settings', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(width: 36.w, height: 36.h, decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
-                    child: Icon(Icons.close_rounded, size: 20.sp)),
-                ),
-              ],
-            ),
-            SizedBox(height: 24.h),
-            Container(
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24.r), border: Border.all(color: AppColors.border)),
-              child: Column(
-                children: [
-                  _menuItem(Icons.notifications_outlined, 'Notification Preferences', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen()));
-                  }),
-                  _menuItem(Icons.lock_outline_rounded, 'Change Password', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
-                  }),
-                  _menuItem(Icons.shield_outlined, 'Privacy & Security', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()));
-                  }),
-                  _menuItem(Icons.help_outline_rounded, 'Help & Support', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen()));
-                  }, isLast: true),
-                ],
-              ),
-            ),
-            SizedBox(height: 24.h),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildLogoutDialog() {
     return Container(
