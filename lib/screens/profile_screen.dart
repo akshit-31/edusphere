@@ -6,6 +6,7 @@ import '../theme/colors.dart';
 import '../widgets/common_widgets.dart';
 import 'welcome_screen.dart';
 import 'features/student_profile_details_screen.dart';
+import 'features/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -206,7 +207,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24.r), border: Border.all(color: AppColors.border)),
                     child: Column(
                       children: [
-                        _menuItem(Icons.person_outline_rounded, 'Personal Information', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentProfileDetailsScreen())), isLast: true),
+                        _menuItem(Icons.person_outline_rounded, 'Personal Information', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentProfileDetailsScreen())), isLast: false),
+                        _menuItem(Icons.settings_rounded, 'Settings & Security', () => Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(role: widget.role, theme: widget.theme))).then((_) {
+                          _loadStudentData();
+                        }), isLast: true),
                       ],
                     ),
                   ),
@@ -405,6 +409,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text('Edit', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.sp)),
                       SizedBox(width: 8.w),
                       Icon(Icons.edit_outlined, color: Colors.white, size: 16.sp),
+                    ]),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context, 
+                    MaterialPageRoute(
+                      builder: (_) => SettingsScreen(role: widget.role, theme: widget.theme),
+                    ),
+                  ).then((_) {
+                    _loadTeacherData();
+                  }),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                    decoration: BoxDecoration(
+                      color: widget.theme.primary,
+                      borderRadius: BorderRadius.circular(30.r),
+                      boxShadow: [BoxShadow(color: widget.theme.primary.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))],
+                    ),
+                    child: Row(children: [
+                      Text('Settings', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.sp)),
+                      SizedBox(width: 8.w),
+                      Icon(Icons.settings_rounded, color: Colors.white, size: 16.sp),
                     ]),
                   ),
                 ),
