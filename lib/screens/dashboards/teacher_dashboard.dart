@@ -359,7 +359,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 16.w,
       mainAxisSpacing: 16.h,
-      childAspectRatio: isDesktop ? 1.4 : 1.1,
+      childAspectRatio: isDesktop ? 1.4 : 0.95,
       children: actions
           .map((a) => QuickBtn(
                 label: a['label'] as String,

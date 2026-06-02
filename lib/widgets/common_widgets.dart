@@ -205,19 +205,25 @@ class QuickBtn extends StatelessWidget {
           border: Border.all(color: AppColors.border),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8.r)],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 48.w, height: 48.w,
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14.r),
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 10.r, offset: Offset(0, 4.h))]),
-              child: Icon(icon, color: Colors.white, size: 22.sp),
-            ),
-            SizedBox(height: 8.h),
-            Text(label, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: AppColors.textMedium),
-              textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.h),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Container(
+                  width: 44.w, height: 44.w,
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14.r),
+                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 8.r, offset: Offset(0, 3.h))]),
+                  child: Icon(icon, color: Colors.white, size: 22.sp),
+                ),
+              ),
+              SizedBox(height: 6.h),
+              Text(label, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: AppColors.textMedium),
+                textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ),
         ),
       ),
     );

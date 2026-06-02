@@ -173,32 +173,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Icon(widget.theme.icon, color: Colors.white, size: 40.sp),
                       ),
                       SizedBox(height: 16.h),
-                      Text(_studentData['name']!, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.white)),
+                      Text(_studentData['name']!, style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
                       SizedBox(height: 4.h),
-                      Text(_studentData['email']!, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7))),
+                      Text(_studentData['email']!, style: GoogleFonts.inter(fontSize: 13.sp, color: Colors.white.withValues(alpha: 0.7)), maxLines: 1, overflow: TextOverflow.ellipsis),
                       SizedBox(height: 12.h),
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
                         decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20.r)),
-                        child: Text(_studentData['subtitle']!, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white)),
+                        child: Text(_studentData['subtitle']!, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w700, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ]),
                   ),
                   SizedBox(height: 20.h),
 
                   // Stats
-                  Row(
-                    children: _getStats().map((s) => Expanded(
-                      child: Container(
-                        margin: EdgeInsets.symmetric(horizontal: 4.w),
-                        padding: EdgeInsets.all(14.r),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.r), border: Border.all(color: AppColors.border)),
-                        child: Column(children: [
-                          Text(s['val']!, style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
-                          Text(s['label']!, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: AppColors.textLight)),
-                        ]),
-                      ),
-                    )).toList(),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Determine number of columns based on available width
+                      int crossAxisCount = constraints.maxWidth > 500 ? 2 : 1;
+                      double itemWidth = (constraints.maxWidth - (crossAxisCount - 1) * 8.w) / crossAxisCount;
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: 8.h,
+                          crossAxisSpacing: 8.w,
+                          childAspectRatio: itemWidth / 100, // approximate height
+                        ),
+                        itemCount: _getStats().length,
+                        itemBuilder: (context, index) {
+                          final s = _getStats()[index];
+                          return Container(
+                            width: itemWidth,
+                            padding: EdgeInsets.all(14.r),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16.r),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(s['val']!, style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
+                                Text(s['label']!, style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: AppColors.textLight)),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
                   SizedBox(height: 20.h),
 
@@ -450,7 +474,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _detailCard(String label, String value, IconData icon, Color color, {bool isFullWidth = false}) {
     return Container(
       width: isFullWidth ? double.infinity : (MediaQuery.of(context).size.width - 52.w) / 2,
-      height: isFullWidth ? null : 150.h,
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
         color: Colors.white,

@@ -373,7 +373,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     ];
     return GridView.count(
       crossAxisCount: isDesktop ? 8 : 4, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: isDesktop ? 1.4 : 1.1,
+      crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: isDesktop ? 1.4 : 0.95,
       children: actions.map((a) => QuickBtn(
         label: a['label'] as String,
         icon: a['icon'] as IconData,
