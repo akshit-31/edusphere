@@ -13,6 +13,12 @@ import 'profile_screen.dart';
 import 'welcome_screen.dart';
 import 'academic_screen.dart';
 import 'features/class_management_screen.dart';
+import 'features/academic_calendar_screen.dart';
+import 'features/assignments_screen.dart';
+import 'features/fee_ledger_screen.dart';
+import 'features/transport_screen.dart';
+import 'features/announcements_screen.dart';
+import 'features/services_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,7 +66,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _setupSocketListeners() {
-    // 1. Listen for NEW_NOTIFICATION
     SocketService().on('NEW_NOTIFICATION', (data) {
       if (!mounted) return;
       dev.log('🔔 Real-time notification: $data', name: 'MainScreen');
@@ -68,13 +73,9 @@ class _MainScreenState extends State<MainScreen> {
       final title = data['title'] as String? ?? 'Notification';
       final message = data['message'] as String? ?? 'You have a new update';
       
-      showToast(
-        context,
-        '📣 $title: $message',
-      );
+      showToast(context, '📣 $title: $message');
     });
 
-    // 2. Listen for attendance:qr-scan
     SocketService().on('attendance:qr-scan', (data) {
       if (!mounted) return;
       dev.log('🟢 Attendance QR Scan: $data', name: 'MainScreen');
@@ -83,13 +84,9 @@ class _MainScreenState extends State<MainScreen> {
       final user = data['user'] as Map? ?? {};
       final userName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
       
-      showToast(
-        context,
-        '🚨 Live Scan! $userName marked ${action.toUpperCase()}',
-      );
+      showToast(context, '🚨 Live Scan! $userName marked ${action.toUpperCase()}');
     });
 
-    // 3. Listen for ATTENDANCE_MARKED
     SocketService().on('ATTENDANCE_MARKED', (data) {
       if (!mounted) return;
       dev.log('🟢 Attendance Marked: $data', name: 'MainScreen');
@@ -98,10 +95,7 @@ class _MainScreenState extends State<MainScreen> {
       final status = data['status'] as String? ?? 'PRESENT';
       final type = data['type'] as String? ?? 'System';
       
-      showToast(
-        context,
-        '📅 Attendance: $studentName marked $status via $type',
-      );
+      showToast(context, '📅 Attendance: $studentName marked $status via $type');
     });
   }
 
@@ -127,24 +121,47 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  List<Widget> _buildScreensList() {
+    if (widget.role == 'student') {
+      return [
+        _dashboard(), // 0: Dashboard
+        const AcademicCalendarScreen(), // 1: Academic Calendar
+        const AssignmentsScreen(), // 2: Assignments
+        AcademicScreen(theme: _theme, onBack: () => setState(() => _idx = 0)), // 3: Academic
+        FeeLedgerScreen(theme: _theme), // 4: Fees
+        TransportScreen(theme: _theme), // 5: Transport
+        AnnouncementsScreen(theme: _theme), // 6: Announcements
+        MessagesScreen(theme: _theme, isActive: _idx == 7, onBack: () => setState(() => _idx = 0)), // 7: Community
+        ServicesScreen(theme: _theme), // 8: Services
+        ProfileScreen(role: widget.role, theme: _theme, onBack: () => setState(() => _idx = 0)), // 9: My Profile
+      ];
+    } else {
+      return [
+        _dashboard(), // 0: Dashboard
+        ClassManagementScreen(theme: _theme, onBack: () => setState(() => _idx = 0)), // 1: Classes
+        MessagesScreen(theme: _theme, isActive: _idx == 2, onBack: () => setState(() => _idx = 0)), // 2: Messages
+        ProfileScreen(role: widget.role, theme: _theme, onBack: () => setState(() => _idx = 0)), // 3: Profile
+      ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width > 900;
-
-    final screens = [
-      _dashboard(),
-      if (widget.role == 'student') AcademicScreen(theme: _theme, onBack: () => setState(() => _idx = 0)),
-      if (widget.role == 'teacher') ClassManagementScreen(theme: _theme, onBack: () => setState(() => _idx = 0)),
-      MessagesScreen(
-        theme: _theme,
-        isActive: _idx == (widget.role == 'teacher' || widget.role == 'student' ? 2 : 1),
-        onBack: () => setState(() => _idx = 0),
-      ),
-      ProfileScreen(role: widget.role, theme: _theme, onBack: () => setState(() => _idx = 0)),
-    ];
+    final screens = _buildScreensList();
 
     return Scaffold(
+      appBar: isDesktop ? null : AppBar(
+        title: Text(
+          widget.role == 'student' ? 'EduSphere Student' : 'EduSphere Teacher',
+          style: GoogleFonts.outfit(fontSize: 18.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppColors.textDark, size: 24.sp),
+      ),
+      drawer: isDesktop ? null : _buildDrawer(),
       body: Row(
         children: [
           if (isDesktop) _buildSidebar(),
@@ -166,11 +183,23 @@ class _MainScreenState extends State<MainScreen> {
               children: [
                 _NavItem(icon: Icons.home_rounded, label: 'Home', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
                 if (widget.role == 'student')
-                  _NavItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
+                  _NavItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 3, color: _theme.primary, onTap: () => setState(() => _idx = 3)),
                 if (widget.role == 'teacher')
                   _NavItem(icon: Icons.class_rounded, label: 'Classes', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
-                _NavItem(icon: Icons.chat_bubble_rounded, label: 'Messages', selected: selectedIdx(widget.role == 'teacher' || widget.role == 'student' ? 2 : 1), color: _theme.primary, onTap: () => setState(() => _idx = widget.role == 'teacher' || widget.role == 'student' ? 2 : 1)),
-                _NavItem(icon: Icons.person_rounded, label: 'My Profile', selected: selectedIdx(widget.role == 'teacher' || widget.role == 'student' ? 3 : 2), color: _theme.primary, onTap: () => setState(() => _idx = widget.role == 'teacher' || widget.role == 'student' ? 3 : 2)),
+                _NavItem(
+                  icon: Icons.chat_bubble_rounded, 
+                  label: 'Messages', 
+                  selected: widget.role == 'student' ? _idx == 7 : _idx == 2, 
+                  color: _theme.primary, 
+                  onTap: () => setState(() => _idx = widget.role == 'student' ? 7 : 2)
+                ),
+                _NavItem(
+                  icon: Icons.person_rounded, 
+                  label: 'My Profile', 
+                  selected: widget.role == 'student' ? _idx == 9 : _idx == 3, 
+                  color: _theme.primary, 
+                  onTap: () => setState(() => _idx = widget.role == 'student' ? 9 : 3)
+                ),
               ],
             ),
           ),
@@ -179,7 +208,108 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  bool selectedIdx(int i) => _idx == i;
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(gradient: _theme.gradient),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.white.withValues(alpha: 0.2), 
+                    child: Icon(widget.role == 'student' ? Icons.school_rounded : Icons.person_rounded, color: Colors.white)
+                  ),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('EduSphere', style: GoogleFonts.outfit(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Text(widget.role == 'student' ? 'Student Portal' : 'Teacher Portal', style: GoogleFonts.inter(fontSize: 11.sp, color: Colors.white.withValues(alpha: 0.8))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                child: Column(
+                  children: _sidebarItems(),
+                ),
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: Row(
+                children: [
+                  CircleAvatar(backgroundColor: _theme.light, child: Icon(Icons.person_rounded, color: _theme.primary)),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_userName, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                        Text(_theme.label, style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textLight)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.logout_rounded, color: AppColors.error, size: 20.sp), 
+                    onPressed: () => Navigator.pushAndRemoveUntil(context, 
+                      MaterialPageRoute(builder: (_) => const WelcomeScreen()), (r) => false)
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _sidebarItems() {
+    if (widget.role == 'student') {
+      return [
+        _SidebarItem(icon: Icons.dashboard_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () { setState(() => _idx = 0); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.calendar_month_rounded, label: 'Academic Calendar', selected: _idx == 1, color: _theme.primary, onTap: () { setState(() => _idx = 1); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.assignment_rounded, label: 'Assignments', selected: _idx == 2, color: _theme.primary, onTap: () { setState(() => _idx = 2); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 3, color: _theme.primary, onTap: () { setState(() => _idx = 3); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.credit_card_rounded, label: 'Fees', selected: _idx == 4, color: _theme.primary, onTap: () { setState(() => _idx = 4); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.directions_bus_rounded, label: 'Transport', selected: _idx == 5, color: _theme.primary, onTap: () { setState(() => _idx = 5); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.campaign_rounded, label: 'Announcements', selected: _idx == 6, color: _theme.primary, onTap: () { setState(() => _idx = 6); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.people_rounded, label: 'Community', selected: _idx == 7, color: _theme.primary, onTap: () { setState(() => _idx = 7); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.support_agent_rounded, label: 'Services', selected: _idx == 8, color: _theme.primary, onTap: () { setState(() => _idx = 8); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == 9, color: _theme.primary, onTap: () { setState(() => _idx = 9); if (Navigator.canPop(context)) Navigator.pop(context); }),
+      ];
+    } else {
+      return [
+        _SidebarItem(icon: Icons.home_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () { setState(() => _idx = 0); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.class_rounded, label: 'Class Management', selected: _idx == 1, color: _theme.primary, onTap: () { setState(() => _idx = 1); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.chat_bubble_rounded, label: 'Messages', selected: _idx == 2, color: _theme.primary, onTap: () { setState(() => _idx = 2); if (Navigator.canPop(context)) Navigator.pop(context); }),
+        SizedBox(height: 8.h),
+        _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == 3, color: _theme.primary, onTap: () { setState(() => _idx = 3); if (Navigator.canPop(context)) Navigator.pop(context); }),
+      ];
+    }
+  }
+
   Widget _buildSidebar() {
     return Container(
       width: 280.w,
@@ -215,22 +345,10 @@ class _MainScreenState extends State<MainScreen> {
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: Column(
-                children: [
-                  _SidebarItem(icon: Icons.home_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
-                  SizedBox(height: 8.h),
-                  if (widget.role == 'student') ...[
-                    _SidebarItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
-                    SizedBox(height: 8.h),
-                  ],
-                  if (widget.role == 'teacher') ...[
-                    _SidebarItem(icon: Icons.class_rounded, label: 'Class Management', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
-                    SizedBox(height: 8.h),
-                  ],
-                  _SidebarItem(icon: Icons.chat_bubble_rounded, label: 'Messages', selected: selectedIdx(widget.role == 'teacher' || widget.role == 'student' ? 2 : 1), color: _theme.primary, onTap: () => setState(() => _idx = widget.role == 'teacher' || widget.role == 'student' ? 2 : 1)),
-                  SizedBox(height: 8.h),
-                  _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: selectedIdx(widget.role == 'teacher' || widget.role == 'student' ? 3 : 2), color: _theme.primary, onTap: () => setState(() => _idx = widget.role == 'teacher' || widget.role == 'student' ? 3 : 2)),
-                ],
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _sidebarItems(),
+                ),
               ),
             ),
           ),
@@ -287,7 +405,7 @@ class _SidebarItem extends StatelessWidget {
           children: [
             Icon(icon, color: selected ? color : AppColors.textLight, size: 22.sp),
             SizedBox(width: 16.w),
-            Text(label, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected ? color : AppColors.textMedium)),
+            Expanded(child: Text(label, style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected ? color : AppColors.textMedium))),
           ],
         ),
       ),
