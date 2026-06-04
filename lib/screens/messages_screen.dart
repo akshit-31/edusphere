@@ -15,7 +15,18 @@ class MessagesScreen extends StatefulWidget {
   final RoleTheme theme;
   final bool isActive;
   final VoidCallback? onBack;
-  const MessagesScreen({super.key, required this.theme, this.isActive = true, this.onBack});
+  final bool showAppBar;
+  final VoidCallback? onOpenDrawer;
+
+  const MessagesScreen({
+    super.key,
+    required this.theme,
+    this.isActive = true,
+    this.onBack,
+    this.showAppBar = true,
+    this.onOpenDrawer,
+  });
+
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
@@ -700,6 +711,51 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
+  Widget _buildInlineSearchBar() {
+    return Container(
+      margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 4.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 2.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+          });
+        },
+        style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
+        decoration: InputDecoration(
+          hintText: 'Search chats...',
+          hintStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 14.sp),
+          icon: Icon(Icons.search_rounded, color: const Color(0xFF94A3B8), size: 20.sp),
+          border: InputBorder.none,
+          suffixIcon: _searchQuery.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _searchCtrl.clear();
+                      _searchQuery = '';
+                    });
+                  },
+                  child: Icon(Icons.close_rounded, color: const Color(0xFF94A3B8), size: 18.sp),
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
   Widget _listView(BuildContext context) {
     // Filter chats based on search query
     final filteredChats = _chats.where((c) {
@@ -711,43 +767,39 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F6),
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        elevation: 2,
-        leading: (!_isSearching && (Navigator.canPop(context) || widget.onBack != null)) ? GestureDetector(
-          onTap: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else if (widget.onBack != null) {
-              widget.onBack!();
-            }
-          },
-          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        ) : null,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: widget.theme.gradient,
-          ),
-        ),
-        title: _isSearching
-            ? Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                    onPressed: () {
-                      setState(() {
-                        _isSearching = false;
-                        _searchQuery = '';
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: TextField(
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 16.sp),
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: _isSearching
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+                      onPressed: () {
+                        setState(() {
+                          _isSearching = false;
+                          _searchQuery = '';
+                        });
+                      },
+                    )
+                  : (Navigator.canPop(context)
+                      ? const BackButton(color: Color(0xFF0F172A))
+                      : (widget.onBack != null
+                          ? IconButton(
+                              icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                              onPressed: widget.onBack,
+                            )
+                          : IconButton(
+                              icon: Icon(Icons.menu, size: 28.sp),
+                              onPressed: widget.onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
+                            ))),
+              title: _isSearching
+                  ? TextField(
+                      style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontSize: 16.sp),
                       autofocus: true,
                       decoration: InputDecoration(
                         hintText: 'Search...',
-                        hintStyle: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6), fontSize: 16.sp),
+                        hintStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 16.sp),
                         border: InputBorder.none,
                       ),
                       onChanged: (val) {
@@ -755,73 +807,56 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           _searchQuery = val;
                         });
                       },
+                    )
+                  : Text(
+                      'EduSphere',
+                      style: GoogleFonts.outfit(
+                        fontSize: 22.sp,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                      ),
                     ),
-                  ),
-                ],
-              )
-            : Padding(
-                padding: EdgeInsets.only(left: 4.w),
-                child: Text(
-                  'EduSphere Chats',
-                  style: GoogleFonts.inter(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-        actions: _isSearching
-            ? []
-            : [
-                IconButton(
-                  icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
-                  onPressed: () {
-                    showToast(context, 'Camera preview opened (simulated)');
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.search_rounded, color: Colors.white),
-                  onPressed: () {
-                    setState(() {
-                      _isSearching = true;
-                    });
-                  },
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-                  onSelected: (val) {
-                    showToast(context, '$val clicked');
-                    if (val == 'New Chat') {
-                      _showNewMessageModal(context);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'New Chat', child: Text('New Chat')),
-                    const PopupMenuItem(value: 'Settings', child: Text('Settings')),
-                  ],
-                ),
-              ],
-      ),
-      body: filteredChats.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.chat_bubble_outline_rounded, size: 60.sp, color: AppColors.textLight),
-                  SizedBox(height: 12.h),
-                  Text(
-                    'No conversations found',
-                    style: GoogleFonts.inter(color: AppColors.textMedium, fontSize: 15.sp, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+              actions: _isSearching
+                  ? []
+                  : [
+                      IconButton(
+                        icon: Icon(Icons.search_rounded, size: 28.sp),
+                        onPressed: () {
+                          setState(() {
+                            _isSearching = true;
+                          });
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                        onPressed: () {},
+                      ),
+                      SizedBox(width: 8.w),
+                    ],
             )
-          : ListView.builder(
-                  padding: EdgeInsets.symmetric(vertical: 8.h),
-                  itemCount: filteredChats.length,
-                  itemBuilder: (_, i) {
+          : null,
+      body: Column(
+        children: [
+          if (!widget.showAppBar) _buildInlineSearchBar(),
+          Expanded(
+            child: filteredChats.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline_rounded, size: 60.sp, color: AppColors.textLight),
+                        SizedBox(height: 12.h),
+                        Text(
+                          'No conversations found',
+                          style: GoogleFonts.inter(color: AppColors.textMedium, fontSize: 15.sp, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                        padding: EdgeInsets.symmetric(vertical: 8.h),
+                        itemCount: filteredChats.length,
+                        itemBuilder: (_, i) {
                     final c = filteredChats[i];
                     final latestMsg = c.messages.isNotEmpty ? c.messages.last.text : c.preview;
                     final latestTime = c.messages.isNotEmpty ? c.messages.last.time : c.time;
@@ -960,6 +995,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     );
                   },
                 ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showNewMessageModal(context),
         backgroundColor: const Color(0xFF25D366),

@@ -10,7 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' as intl;
 
 class CreateAssignmentScreen extends StatefulWidget {
-  const CreateAssignmentScreen({super.key});
+  final VoidCallback? onOpenDrawer;
+  final bool showAppBar;
+
+  const CreateAssignmentScreen({
+    super.key,
+    this.onOpenDrawer,
+    this.showAppBar = true,
+  });
+
   @override
   State<CreateAssignmentScreen> createState() => _CreateAssignmentScreenState();
 }
@@ -157,6 +165,34 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> with Si
     if (_published) return _buildSuccess(context);
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : IconButton(
+                      icon: Icon(Icons.menu, size: 28.sp),
+                      onPressed: widget.onOpenDrawer,
+                    ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: Column(
         children: [
           PageHeader(

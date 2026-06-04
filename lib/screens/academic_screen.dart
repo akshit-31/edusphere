@@ -14,11 +14,13 @@ import 'features/exam_report_card_screen.dart';
 class AcademicScreen extends StatefulWidget {
   final RoleTheme theme;
   final VoidCallback? onBack;
+  final bool showAppBar;
 
   const AcademicScreen({
     super.key,
     required this.theme,
     this.onBack,
+    this.showAppBar = true,
   });
 
   @override
@@ -261,6 +263,34 @@ class _AcademicScreenState extends State<AcademicScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : IconButton(
+                      icon: Icon(Icons.menu, size: 28.sp),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -296,11 +326,13 @@ class _AcademicScreenState extends State<AcademicScreen> {
       color: Colors.white,
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
-            onPressed: widget.onBack ?? () => Navigator.pop(context),
-          ),
-          SizedBox(width: 8.w),
+          if (!widget.showAppBar) ...[
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+              onPressed: widget.onBack ?? () => Navigator.pop(context),
+            ),
+            SizedBox(width: 8.w),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

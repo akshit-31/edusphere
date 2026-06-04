@@ -10,11 +10,15 @@ import '../../widgets/common_widgets.dart';
 class ScheduleScreen extends StatefulWidget {
   final String role;
   final RoleTheme theme;
+  final VoidCallback? onOpenDrawer;
+  final bool showAppBar;
 
   const ScheduleScreen({
     super.key,
     required this.role,
     required this.theme,
+    this.onOpenDrawer,
+    this.showAppBar = true,
   });
 
   @override
@@ -433,6 +437,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : IconButton(
+                      icon: Icon(Icons.menu, size: 28.sp),
+                      onPressed: widget.onOpenDrawer,
+                    ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: Column(
         children: [
           PageHeader(

@@ -153,8 +153,16 @@ class _MainScreenState extends State<MainScreen> {
                   theme: _theme,
                   isActive: _idx == 2,
                   onBack: () => setState(() => _idx = 0),
+                  showAppBar: isDesktop,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
-                ProfileScreen(role: widget.role, theme: _theme, onBack: () => setState(() => _idx = 0)),
+                ProfileScreen(
+                  role: widget.role,
+                  theme: _theme,
+                  onBack: () => setState(() => _idx = 0),
+                  showAppBar: isDesktop,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                ),
               ]
             : [
                 _dashboard(),
@@ -174,20 +182,33 @@ class _MainScreenState extends State<MainScreen> {
               ])
         : [
             _dashboard(),
-            if (widget.role == 'student') AcademicScreen(theme: _theme, onBack: () => setState(() => _idx = 0)),
+            if (widget.role == 'student')
+              AcademicScreen(
+                theme: _theme,
+                onBack: () => setState(() => _idx = 0),
+                showAppBar: isDesktop,
+              ),
             MessagesScreen(
               theme: _theme,
               isActive: _idx == (widget.role == 'student' ? 2 : 1),
               onBack: () => setState(() => _idx = 0),
+              showAppBar: isDesktop,
+              onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
             ),
-            ProfileScreen(role: widget.role, theme: _theme, onBack: () => setState(() => _idx = 0)),
+            ProfileScreen(
+              role: widget.role,
+              theme: _theme,
+              onBack: () => setState(() => _idx = 0),
+              showAppBar: isDesktop,
+              onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
           ];
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF0F4F8),
-      drawer: (!isDesktop && widget.role == 'teacher') ? _buildDrawer() : null,
-      appBar: (!isDesktop && widget.role == 'teacher')
+      drawer: !isDesktop ? _buildDrawer() : null,
+      appBar: (!isDesktop && (widget.role == 'teacher' || widget.role == 'student'))
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
@@ -373,56 +394,75 @@ class _MainScreenState extends State<MainScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: EdgeInsets.symmetric(vertical: 12.h),
                 child: Column(
-                  children: [
-                    _buildDrawerItem(Icons.grid_view_rounded, 'Dashboard', () {
-                      Navigator.pop(context);
-                      setState(() => _idx = 0);
-                    }),
-                    _buildDrawerItem(Icons.calendar_month_outlined, 'Academic Calendar', () {
-                      Navigator.pop(context);
-                      setState(() => _idx = 1);
-                    }),
-                     _buildDrawerItem(Icons.people_outline_rounded, 'Students', () {
-                      Navigator.pop(context);
-                      setState(() => _idx = 2);
-                    }),
-                     _buildDrawerItem(Icons.calendar_today_outlined, 'Attendance', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const TeacherAttendanceScreen()));
-                    }),
-                     _buildDrawerItem(Icons.check_box_outlined, 'Assignments', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateAssignmentScreen()));
-                    }),
-                    _buildDrawerItem(Icons.menu_book_outlined, 'Academic', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => AcademicScreen(theme: _theme)));
-                    }),
-                    _buildDrawerItem(Icons.description_outlined, 'Examinations', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ExamScheduleScreen()));
-                    }),
-                    _buildDrawerItem(Icons.assignment_turned_in_outlined, 'Marks Entry', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => ExamMarksEntryScreen(theme: _theme)));
-                    }),
-                    _buildDrawerItem(Icons.access_time_rounded, 'My Schedule', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => ScheduleScreen(role: 'teacher', theme: _theme)));
-                    }),
-                    _buildDrawerItem(Icons.notifications_none_rounded, 'Announcements', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => AnnouncementsScreen(theme: _theme)));
-                    }),
-                    _buildDrawerItem(Icons.group_outlined, 'Community', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => MessagesScreen(theme: _theme, isActive: true)));
-                    }),
-                    _buildDrawerItem(Icons.person_outline_rounded, 'My Profile', () {
-                      Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(role: 'teacher', theme: _theme)));
-                    }),
-                  ],
+                  children: widget.role == 'teacher'
+                      ? [
+                          _buildDrawerItem(Icons.grid_view_rounded, 'Dashboard', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 0);
+                          }),
+                          _buildDrawerItem(Icons.calendar_month_outlined, 'Academic Calendar', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 1);
+                          }),
+                           _buildDrawerItem(Icons.people_outline_rounded, 'Students', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 2);
+                          }),
+                           _buildDrawerItem(Icons.calendar_today_outlined, 'Attendance', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const TeacherAttendanceScreen()));
+                          }),
+                           _buildDrawerItem(Icons.check_box_outlined, 'Assignments', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateAssignmentScreen()));
+                          }),
+                          _buildDrawerItem(Icons.menu_book_outlined, 'Academic', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => AcademicScreen(theme: _theme)));
+                          }),
+                          _buildDrawerItem(Icons.description_outlined, 'Examinations', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ExamScheduleScreen()));
+                          }),
+                          _buildDrawerItem(Icons.assignment_turned_in_outlined, 'Marks Entry', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ExamMarksEntryScreen(theme: _theme)));
+                          }),
+                          _buildDrawerItem(Icons.access_time_rounded, 'My Schedule', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ScheduleScreen(role: 'teacher', theme: _theme)));
+                          }),
+                          _buildDrawerItem(Icons.notifications_none_rounded, 'Announcements', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => AnnouncementsScreen(theme: _theme)));
+                          }),
+                          _buildDrawerItem(Icons.group_outlined, 'Community', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => MessagesScreen(theme: _theme, isActive: true)));
+                          }),
+                          _buildDrawerItem(Icons.person_outline_rounded, 'My Profile', () {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(role: 'teacher', theme: _theme)));
+                          }),
+                        ]
+                      : [
+                          _buildDrawerItem(Icons.home_rounded, 'Home', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 0);
+                          }),
+                          _buildDrawerItem(Icons.school_rounded, 'Academic', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 1);
+                          }),
+                          _buildDrawerItem(Icons.chat_bubble_rounded, 'Messages', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 2);
+                          }),
+                          _buildDrawerItem(Icons.person_rounded, 'My Profile', () {
+                            Navigator.pop(context);
+                            setState(() => _idx = 3);
+                          }),
+                        ],
                 ),
               ),
             ),
