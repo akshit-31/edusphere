@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../welcome_screen.dart';
 
-import 'assignments_screen.dart';
+import 'create_assignment_screen.dart';
 import 'exam_marks_entry_screen.dart';
 import 'schedule_screen.dart';
 import 'announcements_screen.dart';
@@ -114,7 +114,7 @@ class _TeacherMoreScreenState extends State<TeacherMoreScreen> {
                       label: 'Assignments',
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AssignmentsScreen()),
+                        MaterialPageRoute(builder: (_) => const CreateAssignmentScreen()),
                       ),
                     ),
                     _buildMenuItem(
