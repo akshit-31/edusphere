@@ -20,7 +20,15 @@ class StudentScore {
 
 class ExamMarksEntryScreen extends StatefulWidget {
   final RoleTheme theme;
-  const ExamMarksEntryScreen({super.key, required this.theme});
+  final VoidCallback? onOpenDrawer;
+  final bool showAppBar;
+
+  const ExamMarksEntryScreen({
+    super.key,
+    required this.theme,
+    this.onOpenDrawer,
+    this.showAppBar = true,
+  });
 
   @override
   State<ExamMarksEntryScreen> createState() => _ExamMarksEntryScreenState();

@@ -13,7 +13,18 @@ class ProfileScreen extends StatefulWidget {
   final String role;
   final RoleTheme theme;
   final VoidCallback? onBack;
-  const ProfileScreen({super.key, required this.role, required this.theme, this.onBack});
+  final bool showAppBar;
+  final VoidCallback? onOpenDrawer;
+
+  const ProfileScreen({
+    super.key,
+    required this.role,
+    required this.theme,
+    this.onBack,
+    this.showAppBar = true,
+    this.onOpenDrawer,
+  });
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -153,6 +164,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : (widget.onBack != null
+                      ? IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                          onPressed: widget.onBack,
+                        )
+                      : IconButton(
+                          icon: Icon(Icons.menu, size: 28.sp),
+                          onPressed: widget.onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
+                        )),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: Stack(
         children: [
           SafeArea(
@@ -160,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: EdgeInsets.all(20.r),
               child: Column(
                 children: [
-                  if (canPop || widget.onBack != null) ...[
+                  if ((canPop || widget.onBack != null) && !widget.showAppBar) ...[
                     Align(
                       alignment: Alignment.topLeft,
                       child: GestureDetector(
@@ -299,33 +343,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildTeacherProfile() {
-    final canPop = Navigator.canPop(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        leading: (canPop || widget.onBack != null) ? GestureDetector(
-          onTap: () {
-            if (canPop) {
-              Navigator.pop(context);
-            } else if (widget.onBack != null) {
-              widget.onBack!();
-            }
-          },
-          child: Container(
-            margin: EdgeInsets.all(8.r),
-            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12.r)),
-            child: Icon(Icons.arrow_back_ios_new_rounded, size: 18.sp, color: AppColors.textDark),
-          ),
-        ) : null,
-        title: Text('My Profile', style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-        centerTitle: true,
-        actions: [
-          SizedBox(width: 8.w),
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : (widget.onBack != null
+                      ? IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                          onPressed: widget.onBack,
+                        )
+                      : IconButton(
+                          icon: Icon(Icons.menu, size: 28.sp),
+                          onPressed: widget.onOpenDrawer ?? () => Scaffold.of(context).openDrawer(),
+                        )),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: Stack(
         children: [
           SingleChildScrollView(
