@@ -18,17 +18,30 @@ async function main() {
 
   console.log(`Found ${students.length} students. Generating attendance records...`);
 
+  // 1.5 Delete existing student records for May 2026 to prevent duplicates/incorrect entries
+  console.log('🧹 Deleting existing student attendance records for May 2026...');
+  const deleteResult = await prisma.attendanceRecord.deleteMany({
+    where: {
+      attendeeType: 'STUDENT',
+      date: {
+        gte: new Date('2026-05-01'),
+        lte: new Date('2026-05-31')
+      }
+    }
+  });
+  console.log(`Deleted ${deleteResult.count} records.`);
+
   // 2. Identify school days in May 2026 (excluding Saturdays and Sundays)
   const schoolDays = [];
   const year = 2026;
   const month = 4; // May (0-indexed)
 
   for (let day = 1; day <= 31; day++) {
-    const date = new Date(year, month, day);
-    const dayOfWeek = date.getDay();
+    const date = new Date(Date.UTC(year, month, day));
+    const dayOfWeek = date.getUTCDay();
     // 0 = Sunday, 6 = Saturday
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      schoolDays.push(new Date(year, month, day));
+      schoolDays.push(date);
     }
   }
 
