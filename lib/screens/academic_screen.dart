@@ -1250,9 +1250,10 @@ class _AcademicScreenState extends State<AcademicScreen> {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.symmetric(vertical: 8.h),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 12.w),
+      child: _buildTabs(),
+    );
+  }
+
   Widget _buildTabs() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1497,8 +1498,6 @@ class _AcademicScreenState extends State<AcademicScreen> {
     );
   }
 
-  // ── Teacher sections listing ──
-  Widget _buildSectionsTab() {
   Widget _buildCustomSubjectsTable() {
     final filteredList = _subjectsList.where((s) {
       final name = s['name']?.toString().toLowerCase() ?? '';

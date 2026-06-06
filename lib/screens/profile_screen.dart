@@ -51,9 +51,6 @@ class QRSimulatorPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-import '../theme/colors.dart';
-import '../widgets/common_widgets.dart';
-import 'features/settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String role;
@@ -136,17 +133,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _studentName = 'Kavya Yadav';
   String _studentEmail = 'kavya.yadav@edusmart.edu';
   String _admissionNo = 'ADM-2023-0681';
-  String _className = 'Grade 11';
+  String _studentClass = 'Grade 11';
   String _section = 'C';
   String _rollNo = '118';
   String _batch = '2024-25';
   String _medium = 'ENGLISH';
-  String _joinedDate = '4/16/2023';
+  String _studentJoinedDate = '4/16/2023';
   String _emergencyInfo = 'UNSET';
 
-  String _gender = '—';
-  String _dob = '—';
-  String _bloodGroup = '—';
+  String _studentGender = '—';
+  String _studentDob = '—';
+  String _studentBloodGroup = '—';
   String _religion = 'HINDU';
   String _casteGroup = 'GENERAL';
   String _nationality = 'INDIAN';
@@ -160,17 +157,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     if (widget.role == 'teacher') {
-      _loadTeacherData();
+      _loadProfileData();
+      _loadSessionData();
     } else if (widget.role == 'student') {
       _loadStudentData();
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfileData();
-    _loadSessionData();
   }
 
   Future<void> _loadStudentData() async {
@@ -179,17 +170,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _studentName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Kavya Yadav';
       _studentEmail = prefs.getString('student_email') ?? prefs.getString('user_email') ?? 'kavya.yadav@edusmart.edu';
       _admissionNo = prefs.getString('student_admission_no') ?? 'ADM-2023-0681';
-      _className = prefs.getString('student_class') ?? 'Grade 11';
+      _studentClass = prefs.getString('student_class') ?? 'Grade 11';
       _section = prefs.getString('student_section') ?? 'C';
       _rollNo = prefs.getString('student_roll') ?? '118';
       _batch = prefs.getString('student_batch') ?? '2024-25';
       _medium = prefs.getString('student_medium') ?? 'ENGLISH';
-      _joinedDate = prefs.getString('student_joined_date') ?? '4/16/2023';
+      _studentJoinedDate = prefs.getString('student_joined_date') ?? '4/16/2023';
       _emergencyInfo = prefs.getString('student_emergency_info') ?? 'UNSET';
 
-      _gender = prefs.getString('student_gender') ?? '—';
-      _dob = prefs.getString('student_dob') ?? '—';
-      _bloodGroup = prefs.getString('student_blood_group') ?? '—';
+      _studentGender = prefs.getString('student_gender') ?? '—';
+      _studentDob = prefs.getString('student_dob') ?? '—';
+      _studentBloodGroup = prefs.getString('student_blood_group') ?? '—';
       _religion = prefs.getString('student_religion') ?? 'HINDU';
       _casteGroup = prefs.getString('student_caste_group') ?? 'GENERAL';
       _nationality = prefs.getString('student_nationality') ?? 'INDIAN';
@@ -212,17 +203,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setString('student_name', _studentName);
     await prefs.setString('student_email', _studentEmail);
     await prefs.setString('student_admission_no', _admissionNo);
-    await prefs.setString('student_class', _className);
+    await prefs.setString('student_class', _studentClass);
     await prefs.setString('student_section', _section);
     await prefs.setString('student_roll', _rollNo);
     await prefs.setString('student_batch', _batch);
     await prefs.setString('student_medium', _medium);
-    await prefs.setString('student_joined_date', _joinedDate);
+    await prefs.setString('student_joined_date', _studentJoinedDate);
     await prefs.setString('student_emergency_info', _emergencyInfo);
 
-    await prefs.setString('student_gender', _gender);
-    await prefs.setString('student_dob', _dob);
-    await prefs.setString('student_blood_group', _bloodGroup);
+    await prefs.setString('student_gender', _studentGender);
+    await prefs.setString('student_dob', _studentDob);
+    await prefs.setString('student_blood_group', _studentBloodGroup);
     await prefs.setString('student_religion', _religion);
     await prefs.setString('student_caste_group', _casteGroup);
     await prefs.setString('student_nationality', _nationality);
@@ -279,16 +270,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openEditProfileSheet() {
     final nameCtrl = TextEditingController(text: _studentName);
     final admissionCtrl = TextEditingController(text: _admissionNo);
-    final classCtrl = TextEditingController(text: _className);
+    final classCtrl = TextEditingController(text: _studentClass);
     final sectionCtrl = TextEditingController(text: _section);
     final rollCtrl = TextEditingController(text: _rollNo);
     final batchCtrl = TextEditingController(text: _batch);
-    final dobCtrl = TextEditingController(text: _dob);
+    final dobCtrl = TextEditingController(text: _studentDob);
     final casteCtrl = TextEditingController(text: _casteGroup);
     final religionCtrl = TextEditingController(text: _religion);
     final emergencyCtrl = TextEditingController(text: _emergencyInfo);
-    final genderCtrl = TextEditingController(text: _gender);
-    final bloodCtrl = TextEditingController(text: _bloodGroup);
+    final genderCtrl = TextEditingController(text: _studentGender);
+    final bloodCtrl = TextEditingController(text: _studentBloodGroup);
 
     showModalBottomSheet(
       context: context,
@@ -377,16 +368,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         setState(() {
                           _studentName = nameCtrl.text;
                           _admissionNo = admissionCtrl.text;
-                          _className = classCtrl.text;
+                          _studentClass = classCtrl.text;
                           _section = sectionCtrl.text;
                           _rollNo = rollCtrl.text;
                           _batch = batchCtrl.text;
-                          _dob = dobCtrl.text;
+                          _studentDob = dobCtrl.text;
                           _casteGroup = casteCtrl.text;
                           _religion = religionCtrl.text;
                           _emergencyInfo = emergencyCtrl.text;
-                          _gender = genderCtrl.text;
-                          _bloodGroup = bloodCtrl.text;
+                          _studentGender = genderCtrl.text;
+                          _studentBloodGroup = bloodCtrl.text;
                         });
                         _saveStudentData();
                         Navigator.pop(ctx);
@@ -431,6 +422,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
   Future<void> _loadSessionData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -713,7 +706,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Icon(Icons.school_outlined, size: 14.sp, color: const Color(0xFF868E96)),
                                   SizedBox(width: 4.w),
                                   Text(
-                                    '$_className - $_section',
+                                    '$_studentClass - $_section',
                                     style: GoogleFonts.inter(
                                       fontSize: 11.5.sp,
                                       fontWeight: FontWeight.w700,
@@ -780,7 +773,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.date_range_outlined,
                         iconColor: const Color(0xFF8B5CF6),
                         label: 'Joined',
-                        value: _joinedDate,
+                        value: _studentJoinedDate,
                       ),
                       SizedBox(width: 8.w),
                       _buildMetricCard(
@@ -821,14 +814,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Row(
                           children: [
-                            Expanded(child: _buildIdentityItem('Gender', _gender)),
-                            Expanded(child: _buildIdentityItem('Date of Birth', _dob)),
+                            Expanded(child: _buildIdentityItem('Gender', _studentGender)),
+                            Expanded(child: _buildIdentityItem('Date of Birth', _studentDob)),
                           ],
                         ),
                         Divider(color: const Color(0xFFE2EAF4), height: 24.h),
                         Row(
                           children: [
-                            Expanded(child: _buildIdentityItem('Blood Group', _bloodGroup)),
+                            Expanded(child: _buildIdentityItem('Blood Group', _studentBloodGroup)),
                             Expanded(child: _buildIdentityItem('Religion', _religion)),
                           ],
                         ),
@@ -1535,8 +1528,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTeacherProfile() {
-    return Scaffold(
   String _getInitials(String name) {
     try {
       final parts = name.trim().split(RegExp(r'\s+'));
@@ -1549,8 +1540,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return 'U';
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTeacherProfile() {
     final isDesktop = MediaQuery.of(context).size.width > 900;
     final canPop = Navigator.canPop(context);
 
@@ -1592,13 +1582,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  margin: EdgeInsets.all(16.r),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24.r),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5))],
                 // Title and Subtitle Header
                 Text(
                   'My Profile',
@@ -1676,7 +1659,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(height: 24.h),
 
                 // Digital Identity QR card
-                _buildDigitalIdentityCard(isDesktop),
+                _buildTeacherDigitalIdentityCard(isDesktop),
               ],
             ),
           ),
@@ -2045,6 +2028,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       boxShadow: [BoxShadow(color: AppColors.error.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]),
                     child: Text('Yes, Logout', textAlign: TextAlign.center, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.white)),
                   ),
+                ),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatusTile(String title, String val, IconData icon, Color color, Color bg) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16.r),
@@ -2349,7 +2341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildDigitalIdentityCard(bool isDesktop) {
+  Widget _buildTeacherDigitalIdentityCard(bool isDesktop) {
     final qrBox = Container(
       width: double.infinity,
       padding: EdgeInsets.all(20.r),
@@ -2537,6 +2529,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildDivider() {
     return Divider(height: 16.h, color: const Color(0xFFF1F5F9));
+  }
+
+  Widget _detailCard(String label, String value, IconData icon, Color color, {bool isFullWidth = false}) {
+    return Container(
+      width: isFullWidth ? double.infinity : null,
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.01),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(8.r),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 18.sp),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildBotBubble() {
