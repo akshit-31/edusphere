@@ -2,6 +2,7 @@ import 'dart:developer' as dev;
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'dart:io' show Platform;
+import '../config/backend_config.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -21,16 +22,8 @@ class SocketService {
 
   /// Gets the default server URL based on the running platform
   String get defaultServerUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5001';
-    }
-    try {
-      if (Platform.isAndroid) {
-        // 10.0.2.2 is the special IP in Android emulators to access host's localhost
-        return 'http://10.0.2.2:5001';
-      }
-    } catch (_) {}
-    return 'http://localhost:5001';
+    // Default to the live Render backend URL
+    return BackendConfig.baseUrl;
   }
 
   /// Initialize and connect to the Socket.io server
@@ -53,7 +46,7 @@ class SocketService {
         .enableAutoConnect()
         .enableForceNew()
         .setReconnectionDelay(2000)
-        .setReconnectionAttempts(5)
+        .setReconnectionAttempts(30) // 30 attempts * 2s delay = 60s window (handles Render cold start)
         .build()
       );
 
