@@ -10,6 +10,8 @@ class PageHeader extends StatelessWidget {
   final RoleTheme theme;
   final List<Widget>? actions;
   final VoidCallback? onBack;
+  final bool showBackButton;
+  final Widget? leading;
 
   const PageHeader({
     super.key,
@@ -18,6 +20,8 @@ class PageHeader extends StatelessWidget {
     required this.theme,
     this.actions,
     this.onBack,
+    this.showBackButton = true,
+    this.leading,
   });
 
   @override
@@ -30,22 +34,27 @@ class PageHeader extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 20.h),
           child: Row(
             children: [
-              GestureDetector(
-                onTap: onBack ?? () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.pop(context);
-                  }
-                },
-                child: Container(
-                  width: 40.w, height: 40.w,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12.r),
+              if (leading != null) ...[
+                leading!,
+                SizedBox(width: 14.w),
+              ] else if (showBackButton) ...[
+                GestureDetector(
+                  onTap: onBack ?? () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Container(
+                    width: 40.w, height: 40.w,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
                   ),
-                  child: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18.sp),
                 ),
-              ),
-              SizedBox(width: 14.w),
+                SizedBox(width: 14.w),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

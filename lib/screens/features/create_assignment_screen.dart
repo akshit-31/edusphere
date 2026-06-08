@@ -8,6 +8,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart' as intl;
+import '../main_screen.dart';
+
 
 class CreateAssignmentScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -24,6 +26,7 @@ class CreateAssignmentScreen extends StatefulWidget {
 }
 
 class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   // Loading states
   bool _isLoadingAssignments = true;
   bool _isLoadingSubmissions = true;
@@ -219,20 +222,22 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
   @override
   Widget build(BuildContext context) {
     final initials = _getInitials(_teacherName);
+    final bool isPushed = Navigator.canPop(context);
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: widget.showAppBar ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Assignments') : null,
+      bottomNavigationBar: widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 6) : null,
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: Navigator.canPop(context)
-                  ? const BackButton(color: Color(0xFF0F172A))
-                  : IconButton(
-                      icon: Icon(Icons.menu, size: 28.sp),
-                      onPressed: widget.onOpenDrawer,
-                    ),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
               title: Text(
                 'EduSphere',
                 style: GoogleFonts.outfit(

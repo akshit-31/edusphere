@@ -10,6 +10,8 @@ import '../theme/colors.dart';
 import 'welcome_screen.dart';
 import 'features/settings_screen.dart';
 import '../widgets/common_widgets.dart';
+import 'main_screen.dart';
+
 
 // ── CUSTOM QR SIMULATOR PAINTER ──
 class QRSimulatorPainter extends CustomPainter {
@@ -74,8 +76,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final GlobalKey<ScaffoldState> _teacherScaffoldKey = GlobalKey<ScaffoldState>();
   bool _showLogout = false;
-  bool _isEditing = false;
 
   // Teacher editing text controllers
   final TextEditingController _nameCtrl = TextEditingController();
@@ -277,7 +279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .select('parentId, relationship')
               .eq('studentId', studentId);
 
-          if (studentParentRes != null && studentParentRes.isNotEmpty) {
+          if (studentParentRes.isNotEmpty) {
             String father = '—';
             String mother = '—';
             String guardianPhone = '—';
@@ -326,26 +328,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .eq('studentId', studentId)
               .order('uploadedAt', ascending: false);
 
-          if (docsRes != null) {
-            setState(() {
-              _uploadedDocuments = docsRes.map((d) {
-                final String docName = d['documentName'] as String? ?? 'Document.pdf';
-                final String? uploadDateStr = d['uploadedAt'] as String?;
-                String dateStr = '—';
-                if (uploadDateStr != null) {
-                  try {
-                    final parsed = DateTime.parse(uploadDateStr);
-                    dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
-                  } catch (_) {}
-                }
-                return {
-                  'name': docName,
-                  'date': dateStr,
-                };
-              }).toList();
-            });
-          }
-        } catch (e) {
+          setState(() {
+            _uploadedDocuments = docsRes.map((d) {
+              final String docName = d['documentName'] as String? ?? 'Document.pdf';
+              final String? uploadDateStr = d['uploadedAt'] as String?;
+              String dateStr = '—';
+              if (uploadDateStr != null) {
+                try {
+                  final parsed = DateTime.parse(uploadDateStr);
+                  dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
+                } catch (_) {}
+              }
+              return {
+                'name': docName,
+                'date': dateStr,
+              };
+            }).toList();
+          });
+                } catch (e) {
           debugPrint('Error fetching documents: $e');
         }
       } else {
@@ -1935,29 +1935,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildTeacherProfile() {
     final isDesktop = MediaQuery.of(context).size.width > 900;
-    final canPop = Navigator.canPop(context);
+    final bool isPushed = Navigator.canPop(context);
 
     return Scaffold(
+      key: _teacherScaffoldKey,
+      drawer: isPushed ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Profile') : null,
+      bottomNavigationBar: isPushed ? const TeacherBottomNavBar(activeIndex: 13) : null,
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: canPop
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  : (widget.onBack != null
-                      ? IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: widget.onBack,
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.menu),
-                          onPressed: widget.onOpenDrawer ?? () {},
-                        )),
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => _teacherScaffoldKey.currentState?.openDrawer(),
+              ),
               title: const Text(
                 'My Profile',
                 style: TextStyle(
@@ -2370,17 +2363,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _teacherActionBtn(String label, Color bg, Color textCol, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 16.h),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20.r), border: Border.all(color: textCol == AppColors.error ? const Color(0xFFFECACA) : AppColors.border)),
-        child: Center(child: Text(label, style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800, color: textCol))),
-      ),
-    );
-  }
+
 
   Widget _buildLogoutDialog() {
     return Container(

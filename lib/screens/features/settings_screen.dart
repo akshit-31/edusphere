@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../welcome_screen.dart';
+import '../main_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String role;
@@ -566,6 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      bottomNavigationBar: widget.role == 'teacher' ? const TeacherBottomNavBar(activeIndex: 13) : null,
       body: Column(
         children: [
           PageHeader(

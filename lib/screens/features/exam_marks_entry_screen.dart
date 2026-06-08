@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
+import '../main_screen.dart';
 
 class StudentScore {
   final String admissionNo;
@@ -35,6 +36,7 @@ class ExamMarksEntryScreen extends StatefulWidget {
 }
 
 class _ExamMarksEntryScreenState extends State<ExamMarksEntryScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   // --- Selected Values ---
   String? _selectedClass;
   String? _selectedSubject;
@@ -556,19 +558,25 @@ class _ExamMarksEntryScreenState extends State<ExamMarksEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isPushed = Navigator.canPop(context);
+    final bool isTeacher = widget.theme.label.toLowerCase() == 'teacher';
+
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Marks Entry') : null,
       backgroundColor: AppColors.background,
+      bottomNavigationBar: (widget.showAppBar && isTeacher)
+          ? const TeacherBottomNavBar(activeIndex: 9)
+          : null,
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: Navigator.canPop(context)
-                  ? const BackButton(color: Color(0xFF0F172A))
-                  : IconButton(
-                      icon: Icon(Icons.menu, size: 28.sp),
-                      onPressed: widget.onOpenDrawer,
-                    ),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
               title: Text(
                 'EduSphere',
                 style: GoogleFonts.outfit(
@@ -608,7 +616,7 @@ class _ExamMarksEntryScreenState extends State<ExamMarksEntryScreen> {
             ),
           ),
           // Bottom Navigation Bar
-          _buildBottomNav(),
+          if (widget.showAppBar && widget.theme.label.toLowerCase() != 'teacher') _buildBottomNav(),
         ],
       ),
     );

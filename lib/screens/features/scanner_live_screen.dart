@@ -1,19 +1,24 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
+import '../main_screen.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
   final RoleTheme theme;
   final String scannerId;
+  final DateTime? sessionDate;
+  final String? sessionAction;
 
   const ScannerLiveScreen({
     super.key,
     required this.theme,
     required this.scannerId,
+    this.sessionDate,
+    this.sessionAction,
   });
 
   @override
@@ -25,11 +30,16 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   Map<String, dynamic>? _scannerDetails;
   List<Map<String, dynamic>> _scanEvents = [];
   Timer? _refreshTimer;
+  List<Map<String, dynamic>> _availableStudents = [];
+  String _teacherName = 'Vikram Yadav';
+  final bool _showBotBubble = true;
+  bool _isSimulating = false;
 
   @override
   void initState() {
     super.initState();
     _loadLiveDashboard();
+    _loadTeacherName();
     
     // Set up active polling synchronization every 10 seconds for real-time monitoring
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
@@ -43,6 +53,28 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadTeacherName() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      try {
+        final profileRes = await Supabase.instance.client
+            .from('User')
+            .select('firstName, lastName')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (profileRes != null && mounted) {
+          final pFName = profileRes['firstName'] as String? ?? '';
+          final pLName = profileRes['lastName'] as String? ?? '';
+          setState(() {
+            _teacherName = '$pFName $pLName'.trim();
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading teacher profile name: $e');
+      }
+    }
   }
 
   Future<void> _loadLiveDashboard() async {
@@ -61,11 +93,11 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
 
       // 2. Fetch live scans list
       await _loadLiveFeed();
+
+      // 3. Pre-fetch available students for simulation
+      await _loadAvailableStudents();
     } catch (e) {
       debugPrint('Error loading live dashboard details: $e');
-      if (mounted) {
-        showToast(context, 'Failed to load checkpoint dashboard', isError: true);
-      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -73,19 +105,33 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     }
   }
 
+  Future<void> _loadAvailableStudents() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('Student')
+          .select('id, user:User(firstName, lastName)');
+      _availableStudents = List<Map<String, dynamic>>.from(res);
+        } catch (e) {
+      debugPrint('Error loading students for simulation: $e');
+    }
+  }
+
   Future<void> _loadLiveFeed() async {
     try {
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final dateStr = widget.sessionDate != null
+          ? widget.sessionDate!.toIso8601String().substring(0, 10)
+          : DateTime.now().toIso8601String().substring(0, 10);
       
       final recordsRes = await Supabase.instance.client
           .from('AttendanceRecord')
           .select('*, student:Student(*, user:User(*)), teacher:Teacher(*, user:User(*)), staff:Staff(*, user:User(*))')
           .eq('scannerId', widget.scannerId)
-          .eq('date', todayStr)
+          .eq('date', dateStr)
           .order('createdAt', ascending: false)
           .limit(40);
 
       final records = List<Map<String, dynamic>>.from(recordsRes);
+      final actionFilter = widget.sessionAction?.toUpperCase().replaceAll('-', '_');
 
       // Decompose row check-in / check-out timestamps into distinct chronological scan events
       final List<Map<String, dynamic>> tempEvents = [];
@@ -96,7 +142,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         final checkInTimeStr = rec['checkInTime'];
         final checkOutTimeStr = rec['checkOutTime'];
 
-        if (checkOutTimeStr != null) {
+        if (checkOutTimeStr != null && (actionFilter == null || actionFilter == 'CHECK_OUT')) {
           tempEvents.add({
             'id': '${rec['id']}_out',
             'name': name,
@@ -106,7 +152,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
             'type': (rec['attendeeType'] ?? 'STUDENT').toString(),
           });
         }
-        if (checkInTimeStr != null) {
+        if (checkInTimeStr != null && (actionFilter == null || actionFilter == 'CHECK_IN')) {
           tempEvents.add({
             'id': '${rec['id']}_in',
             'name': name,
@@ -132,6 +178,98 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       }
     } catch (e) {
       debugPrint('Error loading scan feeds: $e');
+    }
+  }
+
+  Future<void> _simulateScan() async {
+    if (_isSimulating) return;
+    setState(() => _isSimulating = true);
+
+    try {
+      if (_availableStudents.isEmpty) {
+        await _loadAvailableStudents();
+      }
+
+      if (_availableStudents.isNotEmpty) {
+        final student = _availableStudents[Random().nextInt(_availableStudents.length)];
+        
+        final dateStr = widget.sessionDate != null
+            ? widget.sessionDate!.toIso8601String().substring(0, 10)
+            : DateTime.now().toIso8601String().substring(0, 10);
+            
+        final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' || widget.sessionAction?.toLowerCase() == 'check_in';
+        
+        final Map<String, dynamic> scanData = {
+          'attendeeType': 'STUDENT',
+          'studentId': student['id'],
+          'date': dateStr,
+          'status': 'PRESENT',
+          'scannedByQR': true,
+          'scannerId': widget.scannerId,
+        };
+
+        if (isCheckIn) {
+          scanData['checkInTime'] = DateTime.now().toIso8601String();
+        } else {
+          scanData['checkOutTime'] = DateTime.now().toIso8601String();
+        }
+
+        await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(scanData);
+
+        final studentName = student['user'] != null
+            ? '${student['user']['firstName'] ?? ''} ${student['user']['lastName'] ?? ''}'.trim()
+            : 'Student';
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully scanned QR for $studentName'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        await _loadLiveFeed();
+      } else {
+        // Fallback: Mock in-memory scan if no students found in DB
+        final mockName = 'Test Student ${Random().nextInt(100) + 1}';
+        final mockEvent = {
+          'id': 'mock_${DateTime.now().millisecondsSinceEpoch}',
+          'name': mockName,
+          'time': DateTime.now().toIso8601String(),
+          'action': widget.sessionAction?.toUpperCase().replaceAll('-', '_') ?? 'CHECK_IN',
+          'status': 'PRESENT',
+          'type': 'STUDENT',
+        };
+        setState(() {
+          _scanEvents.insert(0, mockEvent);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully simulated scan for $mockName (local mode)'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error simulating scan: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to simulate scan record: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSimulating = false);
+      }
     }
   }
 
@@ -168,176 +306,493 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     }
   }
 
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scannerName = _scannerDetails?['name'] ?? 'Loading Scanner...';
-    final location = _scannerDetails?['location'] ?? '';
-    final isActive = _scannerDetails?['isActive'] as bool? ?? false;
+    final scannerName = _scannerDetails?['name'] ?? 'main gate scanner';
+    final type = _scannerDetails?['scannerType'] ?? 'ENTRY';
+    final scannerCode = widget.scannerId.length >= 8 ? widget.scannerId.substring(0, 8) : 'abcdefgh';
+    final dateStr = widget.sessionDate != null ? _formatDate(widget.sessionDate!) : _formatDate(DateTime.now());
+    final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' || widget.sessionAction?.toLowerCase() == 'check_in';
+    
+    final size = MediaQuery.of(context).size;
+    final isDesktop = size.width > 800;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          PageHeader(
-            title: scannerName,
-            subtitle: location,
-            theme: widget.theme,
-          ),
-          
-          Expanded(
-            child: _isLoading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      color: widget.theme.primary,
-                      strokeWidth: 3.w,
+      backgroundColor: const Color(0xFFF8FAFC),
+      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 5),
+      body: _isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                color: widget.theme.primary,
+                strokeWidth: 3.w,
+              ),
+            )
+          : Stack(
+              children: [
+                Column(
+                  children: [
+                    // Top Bar Header
+                    _buildTopBar(scannerName, type, scannerCode),
+                    
+                    // Body Area
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                        child: Center(
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 1200),
+                            child: Column(
+                              children: [
+                                _buildGreenBanner(dateStr, isCheckIn),
+                                SizedBox(height: 20.h),
+                                _buildMainLayout(isDesktop),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  )
-                : SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: EdgeInsets.all(16.r),
-                    child: Column(
-                      children: [
-                        // ── SECTION 1: QR CODE DISPLAY CARD ──
-                        _buildQRCodeCard(isActive),
-                        SizedBox(height: 24.h),
+                  ],
+                ),
 
-                        // ── SECTION 2: LIVE SCANS FEED LIST ──
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Speech Bubble for bot greeting
+                if (_showBotBubble)
+                  Positioned(
+                    bottom: 96.h,
+                    right: 24.w,
+                    child: _buildBotBubble(),
+                  ),
+
+                // AI Helper chatbot floating action button
+                Positioned(
+                  bottom: 30.h,
+                  right: 20.w,
+                  child: FloatingActionButton(
+                    heroTag: 'scanner_chatbot_fab',
+                    onPressed: _showChatbotDialog,
+                    backgroundColor: const Color(0xFF0284C7),
+                    child: const Icon(Icons.auto_awesome, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildTopBar(String name, String type, String code) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isNarrow = constraints.maxWidth < 800;
+
+        if (isNarrow) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back_rounded, color: const Color(0xFF1E293B), size: 22.sp),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    SizedBox(width: 8.w),
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.inter(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAF5FF),
+                        borderRadius: BorderRadius.circular(4.r),
+                        border: Border.all(color: const Color(0xFFE9D5FF)),
+                      ),
+                      child: Text(
+                        type.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          fontSize: 9.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF7E22CE),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      code,
+                      style: GoogleFonts.inter(
+                        fontSize: 10.sp,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 6.h),
+                Padding(
+                  padding: EdgeInsets.only(left: 30.w),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Scanning: STUDENT, TEACHER, STAFF',
+                          style: GoogleFonts.inter(
+                            fontSize: 10.sp,
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(4.r),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const SectionTitle(title: 'Live Scan Feed'),
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                              decoration: BoxDecoration(
-                                color: widget.theme.light,
-                                borderRadius: BorderRadius.circular(20.r),
-                              ),
-                              child: Text(
-                                '${_scanEvents.length} scans today',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w800,
-                                  color: widget.theme.primary,
-                                ),
+                            Icon(
+                              Icons.location_off_rounded,
+                              size: 11.sp,
+                              color: const Color(0xFFD97706),
+                            ),
+                            SizedBox(width: 4.w),
+                            Text(
+                              'GPS Pending',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFD97706),
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 12.h),
-
-                        _scanEvents.isEmpty
-                            ? _buildEmptyFeedState()
-                            : ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: _scanEvents.length,
-                                itemBuilder: (context, index) {
-                                  return _buildScanRow(_scanEvents[index]);
-                                },
-                              ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Desktop Layout
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back_rounded, color: const Color(0xFF1E293B), size: 22.sp),
+                onPressed: () => Navigator.pop(context),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              SizedBox(width: 12.w),
+              Flexible(
+                child: Text(
+                  name,
+                  style: GoogleFonts.inter(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAF5FF),
+                  borderRadius: BorderRadius.circular(6.r),
+                  border: Border.all(color: const Color(0xFFE9D5FF)),
+                ),
+                child: Text(
+                  type.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 10.sp,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF7E22CE),
+                  ),
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Text(
+                code,
+                style: GoogleFonts.inter(
+                  fontSize: 11.sp,
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(6.r),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_off_rounded,
+                      size: 13.sp,
+                      color: const Color(0xFFD97706),
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      'GPS Pending',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFD97706),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 16.w),
+              Text(
+                'Scanning: STUDENT, TEACHER, STAFF',
+                style: GoogleFonts.inter(
+                  fontSize: 11.sp,
+                  color: const Color(0xFF475569),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGreenBanner(String dateStr, bool isCheckIn) {
+    final modeText = isCheckIn ? 'CHECKIN MODE ACTIVE' : 'CHECKOUT MODE ACTIVE';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFDCFCE7), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32.w,
+            height: 32.h,
+            decoration: const BoxDecoration(
+              color: Color(0xFFDCFCE7),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person_add_alt_1_rounded,
+              color: Color(0xFF16A34A),
+              size: 16,
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  modeText,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF14532D),
+                  ),
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  '$dateStr - Ready for Scans',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.sp,
+                    color: const Color(0xFF166534),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Text(
+              'Change Params',
+              style: GoogleFonts.inter(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF475569),
+                decoration: TextDecoration.underline,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQRCodeCard(bool isActive) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(24.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10.r,
-            offset: Offset(0, 4.h),
+  Widget _buildMainLayout(bool isDesktop) {
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 6,
+            child: _buildCameraPanel(),
+          ),
+          SizedBox(width: 20.w),
+          Expanded(
+            flex: 4,
+            child: _buildLiveFeedPanel(),
           ),
         ],
+      );
+    } else {
+      return Column(
+        children: [
+          _buildCameraPanel(),
+          SizedBox(height: 20.h),
+          _buildLiveFeedPanel(),
+        ],
+      );
+    }
+  }
+
+  Widget _buildCameraPanel() {
+    return Container(
+      width: double.infinity,
+      height: 420.h,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Dynamic active status tag banner
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.success.withValues(alpha: 0.08)
-                  : AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20.r),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8.w,
-                  height: 8.h,
-                  decoration: BoxDecoration(
-                    color: isActive ? AppColors.success : AppColors.error,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                Text(
-                  isActive ? 'Scanner Active 🟢' : 'Scanner Inactive 🔴',
-                  style: GoogleFonts.inter(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w800,
-                    color: isActive ? AppColors.success : AppColors.error,
-                  ),
-                ),
-              ],
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 48.sp,
+            color: const Color(0xFFF97316),
+          ),
+          SizedBox(height: 12.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            child: Text(
+              'Camera access denied — check browser camera permissions',
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF475569),
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
           SizedBox(height: 24.h),
-
-          // Generated QR Code Simulator Painter
-          Container(
-            padding: EdgeInsets.all(12.r),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: AppColors.border, width: 1.5),
-            ),
-            child: CustomPaint(
-              size: Size(180.w, 180.w),
-              painter: QRSimulatorPainter(
-                color: isActive ? AppColors.textDark : AppColors.textLight,
-              ),
-            ),
-          ),
-          SizedBox(height: 20.h),
-
-          // Scanner ID label styled box
-          Text(
-            'SCANNER ID',
-            style: GoogleFonts.inter(
-              fontSize: 9.sp,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textLight,
-            ),
-          ),
-          SizedBox(height: 4.h),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(10.r),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: SelectableText(
-              widget.scannerId,
+          ElevatedButton.icon(
+            onPressed: _simulateScan,
+            icon: _isSimulating
+                ? SizedBox(
+                    width: 16.w,
+                    height: 16.w,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.w,
+                    ),
+                  )
+                : Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18.sp),
+            label: Text(
+              _isSimulating ? 'Simulating Scan...' : 'Simulate Scan (Test Mode)',
               style: GoogleFonts.inter(
                 fontSize: 12.sp,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textDark,
+                color: Colors.white,
               ),
             ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.theme.primary,
+              padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveFeedPanel() {
+    return Container(
+      width: double.infinity,
+      height: 420.h,
+      padding: EdgeInsets.all(20.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Live Feed',
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            'Scans will appear here in real-time',
+            style: GoogleFonts.inter(
+              fontSize: 11.sp,
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 16.h),
+          Expanded(
+            child: _scanEvents.isEmpty
+                ? _buildEmptyFeedState()
+                : ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: _scanEvents.length,
+                    itemBuilder: (context, index) {
+                      return _buildScanRow(_scanEvents[index]);
+                    },
+                  ),
           ),
         ],
       ),
@@ -360,7 +815,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14.r),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -398,7 +853,6 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                 SizedBox(height: 3.h),
                 Row(
                   children: [
-                    // Action label text
                     Text(
                       isCheckIn ? 'Check-In' : 'Check-Out',
                       style: GoogleFonts.inter(
@@ -408,7 +862,6 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                       ),
                     ),
                     SizedBox(width: 8.w),
-                    // Attendee type badge
                     Text(
                       '•  ${type.toUpperCase()}',
                       style: GoogleFonts.inter(
@@ -466,12 +919,8 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(24.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.history_toggle_off_rounded,
@@ -489,7 +938,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
           ),
           SizedBox(height: 4.h),
           Text(
-            'The attendance records lists will populate automatically when checkpoints are scanned.',
+            'Scanned cards will appear here in real-time.',
             style: GoogleFonts.inter(
               fontSize: 11.sp,
               fontWeight: FontWeight.w500,
@@ -501,53 +950,166 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       ),
     );
   }
-}
 
-// ── CUSTOM QR SIMULATOR PAINTER ──
-class QRSimulatorPainter extends CustomPainter {
-  final Color color;
-  QRSimulatorPainter({this.color = Colors.black});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final double px = size.width / 15; // 15x15 pixel grid simulation
-
-    // Helper to draw finder corner square
-    void drawFinder(double x, double y) {
-      // Outer 5x5 px block
-      canvas.drawRect(Rect.fromLTWH(x, y, px * 5, px * 5), paint);
-      // Inner white 3x3 block
-      canvas.drawRect(Rect.fromLTWH(x + px, y + px, px * 3, px * 3), Paint()..color = Colors.white);
-      // Inner black 1x1 block
-      canvas.drawRect(Rect.fromLTWH(x + px * 1.5, y + px * 1.5, px * 2, px * 2), paint);
-    }
-
-    // Draw three main finder corner blocks
-    drawFinder(0, 0); // Top-left
-    drawFinder(px * 10, 0); // Top-right
-    drawFinder(0, px * 10); // Bottom-left
-
-    // Draw random checkered data blocks
-    for (int r = 0; r < 15; r++) {
-      for (int c = 0; c < 15; c++) {
-        // Skip corner finder block zones
-        if (r < 6 && c < 6) continue;
-        if (r < 6 && c >= 9) continue;
-        if (r >= 9 && c < 6) continue;
-
-        // Deterministic noise block generator
-        final int val = (r * 7 + c * 13) % 5;
-        if (val == 0 || val == 2) {
-          canvas.drawRect(Rect.fromLTWH(c * px, r * px, px, px), paint);
-        }
-      }
-    }
+  Widget _buildBotBubble() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Text(
+        'HI\n${_teacherName.split(" ").first.toUpperCase()}!\nHOW\nCAN I\nHELP?',
+        style: GoogleFonts.inter(
+          fontSize: 10.sp,
+          fontWeight: FontWeight.w900,
+          color: const Color(0xFF0284C7),
+          height: 1.2,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  void _showChatbotDialog() {
+    final messageCtrl = TextEditingController();
+    final List<Map<String, String>> chatMessages = [
+      {
+        'sender': 'bot',
+        'text': 'Hello $_teacherName! I am your EduSphere Scanner Helper. How can I assist you with scanning sessions or attendance logs today?'
+      }
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+          title: Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: Color(0xFF0284C7)),
+              SizedBox(width: 8.w),
+              Text('AI Scanning Assistant', style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16.sp)),
+            ],
+          ),
+          content: SizedBox(
+            width: 320.w,
+            height: 350.h,
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: chatMessages.length,
+                    itemBuilder: (context, index) {
+                      final msg = chatMessages[index];
+                      final isBot = msg['sender'] == 'bot';
+                      return Align(
+                        alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+                        child: Container(
+                          margin: EdgeInsets.symmetric(vertical: 4.h),
+                          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                          decoration: BoxDecoration(
+                            color: isBot ? const Color(0xFFF1F5F9) : const Color(0xFF0284C7),
+                            borderRadius: BorderRadius.circular(16.r).copyWith(
+                              topLeft: isBot ? Radius.zero : Radius.circular(16.r),
+                              topRight: isBot ? Radius.circular(16.r) : Radius.zero,
+                            ),
+                          ),
+                          child: Text(
+                            msg['text']!,
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              color: isBot ? const Color(0xFF1E293B) : Colors.white,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(height: 12.h),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: messageCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Ask helper...',
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                        ),
+                        onFieldSubmitted: (val) {
+                          if (val.trim().isEmpty) return;
+                          setDialogState(() {
+                            chatMessages.add({'sender': 'user', 'text': val});
+                            final reply = _getBotReply(val);
+                            chatMessages.add({'sender': 'bot', 'text': reply});
+                          });
+                          messageCtrl.clear();
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    IconButton(
+                      icon: const Icon(Icons.send, color: Color(0xFF0284C7)),
+                      onPressed: () {
+                        final val = messageCtrl.text;
+                        if (val.trim().isEmpty) return;
+                        setDialogState(() {
+                          chatMessages.add({'sender': 'user', 'text': val});
+                          final reply = _getBotReply(val);
+                          chatMessages.add({'sender': 'bot', 'text': reply});
+                        });
+                        messageCtrl.clear();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getBotReply(String query) {
+    query = query.toLowerCase();
+    final name = _scannerDetails?['name'] ?? 'main gate scanner';
+    final loc = _scannerDetails?['location'] ?? 'Main Gate';
+    
+    if (query.contains('scanner') || query.contains('device')) {
+      return 'You are currently using "$name" located at "$loc".';
+    }
+    if (query.contains('check-in') || query.contains('checkin') || query.contains('entry')) {
+      return 'The scanner session is in CHECK-IN mode. All successful scans mark matching students as present for Entry.';
+    }
+    if (query.contains('check-out') || query.contains('checkout') || query.contains('exit')) {
+      return 'To toggle Check-Out logging, tap "Change Params" in the green active banner to configure variables.';
+    }
+    if (query.contains('gps') || query.contains('location')) {
+      return 'The coordinate verification check is "GPS Pending" while calibrating alignment criteria.';
+    }
+    if (query.contains('clear') || query.contains('reset')) {
+      return 'Logs are synced immediately to the Supabase database and cannot be cleared from this screen interface.';
+    }
+    return 'I can assist you with active scanner modes, real-time feed listings, and database logging. What would you like to know?';
+  }
 }

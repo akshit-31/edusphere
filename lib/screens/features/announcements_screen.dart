@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
+import '../main_screen.dart';
+
 
 class AnnouncementModel {
   final String id;
@@ -64,6 +65,7 @@ class AnnouncementsScreen extends StatefulWidget {
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<AnnouncementModel> _announcements = [];
   bool _isLoading = true;
   String _firstName = 'Kavya';
@@ -288,10 +290,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
   }
 
-  // --- Save Announcements ---
-  Future<void> _saveAnnouncements() async {
-    // Kept for backwards compatibility
-  }
 
   // --- Add Announcement ---
   Future<void> _addAnnouncement(AnnouncementModel announcement) async {
@@ -664,19 +662,24 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     if (widget.role == 'student') {
       return _buildStudentLayout();
     }
+    final bool isPushed = Navigator.canPop(context);
+    final bool isTeacher = widget.role == 'teacher';
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Announcements') : null,
       backgroundColor: AppColors.background,
+      bottomNavigationBar: (widget.showAppBar && isTeacher)
+          ? const TeacherBottomNavBar(activeIndex: 11)
+          : null,
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: Navigator.canPop(context)
-                  ? const BackButton(color: Color(0xFF0F172A))
-                  : IconButton(
-                      icon: Icon(Icons.menu, size: 28.sp),
-                      onPressed: widget.onOpenDrawer,
-                    ),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
               title: Text(
                 'EduSphere',
                 style: GoogleFonts.outfit(
@@ -746,7 +749,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ),
           ),
           // Bottom Navigation Bar
-          _buildBottomNav(),
+          if (widget.showAppBar && widget.role != 'teacher') _buildBottomNav(),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -1478,16 +1481,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     });
   }
 
-  String _formatAudience(String audience) {
-    if (audience.toUpperCase() == 'ALL') {
-      return 'STUDENT, TEACHER, PARENT';
-    } else if (audience.toUpperCase() == 'STUDENTS') {
-      return 'STUDENT';
-    } else if (audience.toUpperCase() == 'TEACHERS') {
-      return 'TEACHER';
-    }
-    return audience.toUpperCase();
-  }
 
   // --- UI Component: Banner Card ---
   Widget _buildBannerCard() {

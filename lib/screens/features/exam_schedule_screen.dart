@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:intl/intl.dart' as intl;
+import '../main_screen.dart';
+import 'exam_detail_screen.dart';
+
 
 class ExamScheduleScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -23,6 +26,7 @@ class ExamScheduleScreen extends StatefulWidget {
 }
 
 class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<Map<String, dynamic>> _exams = [];
   bool _isLoading = true;
   String _teacherName = 'Arjun Singh';
@@ -89,17 +93,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 
   List<Map<String, dynamic>> _seedExams() => [
         {
-          'name': 'Half Yearly Examination',
+          'name': 'Half Yearly - Grade 1',
           'class': 'Grade 1',
           'term': '-',
-          'start_date': '19/06/2026',
-          'status': 'Published',
+          'start_date': '15/09/2024',
+          'status': 'Active',
           'subject': 'All Subjects',
           'time': '10:00 AM',
           'room': 'Hall A',
           'duration': '3 hrs',
           'syllabus': 'Full Syllabus',
-          'academic_year': '2026-2027',
+          'academic_year': 'All Years',
         },
       ];
 
@@ -333,59 +337,6 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     );
   }
 
-  void _showExamActions(Map<String, dynamic> exam) {
-    final idx = _exams.indexOf(exam);
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20.r))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.all(20.r),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40.w,
-              height: 4.h,
-              margin: EdgeInsets.only(bottom: 16.h),
-              decoration: BoxDecoration(
-                color: const Color(0xFFCBD5E1),
-                borderRadius: BorderRadius.circular(4.r),
-              ),
-            ),
-            Text(
-              exam['name'] as String? ?? 'Exam',
-              style: GoogleFonts.outfit(
-                  fontSize: 16.sp, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 16.h),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined,
-                  color: Color(0xFF2563EB)),
-              title: Text('Edit Exam',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.pop(ctx);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded,
-                  color: Color(0xFFEF4444)),
-              title: Text('Delete Exam',
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFEF4444))),
-              onTap: () {
-                setState(() => _exams.removeAt(idx));
-                _saveExams();
-                Navigator.pop(ctx);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _onNavTap(int index) {
     if (index == 3) return;
@@ -403,8 +354,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final initials = _getInitials(_teacherName);
+    final bool isPushed = Navigator.canPop(context);
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: isPushed ? EduSphereDrawer(role: 'teacher', activeLabel: 'Examinations') : null,
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: widget.showAppBar
           ? AppBar(
@@ -412,17 +366,10 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
               elevation: 0,
               shadowColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
-              leading: Navigator.canPop(context)
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: Color(0xFF0F172A)),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  : IconButton(
-                      icon: const Icon(Icons.menu,
-                          color: Color(0xFF0F172A)),
-                      onPressed: widget.onOpenDrawer ?? () {},
-                    ),
+              leading: IconButton(
+                icon: const Icon(Icons.menu, color: Color(0xFF0F172A)),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
               title: Text(
                 'EduSphere',
                 style: GoogleFonts.outfit(
@@ -504,7 +451,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
           if (_isChatOpen) _buildChatWindow(),
         ],
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: isPushed 
+          ? TeacherBottomNavBar(activeIndex: 8)
+          : (widget.showAppBar ? _buildBottomNav() : null),
     );
   }
 
@@ -513,86 +462,64 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
   // ─────────────────────────────────────────────────────────
 
   Widget _buildChartsRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: _buildRadarCard()),
-        SizedBox(width: 12.w),
-        Expanded(child: _buildLineChartCard()),
-      ],
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 600) {
+        return Column(
+          children: [
+            _buildSubjectPerformanceCard(),
+            SizedBox(height: 16.h),
+            _buildAverageScoreTrendCard(),
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _buildSubjectPerformanceCard()),
+          SizedBox(width: 16.w),
+          Expanded(child: _buildAverageScoreTrendCard()),
+        ],
+      );
+    });
   }
 
-  /// Left card — Spider / Radar chart
-  Widget _buildRadarCard() {
+  /// Left card
+  Widget _buildSubjectPerformanceCard() {
     return Container(
-      padding: EdgeInsets.all(14.r),
+      padding: EdgeInsets.all(24.r),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(8.r),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEDE9FE),
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-                child: Icon(Icons.bar_chart_rounded,
-                    size: 16.sp, color: const Color(0xFF7C3AED)),
-              ),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Subject Performance',
-                      style: GoogleFonts.outfit(
-                        fontSize: 11.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      'Average marks distribution\nacross subjects',
-                      style: GoogleFonts.inter(
-                        fontSize: 8.5.sp,
-                        color: const Color(0xFF2563EB),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Subject Performance',
+            style: GoogleFonts.outfit(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
           ),
-          SizedBox(height: 12.h),
+          SizedBox(height: 4.h),
+          Text(
+            'Average marks distribution across subjects',
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: 32.h),
           SizedBox(
-            height: 170.h,
+            height: 200.h,
+            width: double.infinity,
             child: CustomPaint(
-              size: Size(double.infinity, 170.h),
-              painter: _RadarChartPainter(
-                labels: const [
-                  'Hindi',
-                  'English',
-                  'Science',
-                  'Mathematics',
-                  'Social Studies',
-                ],
-                values: const [0.85, 0.78, 0.70, 0.65, 0.72],
-                fillColor:
-                    const Color(0xFFEC4899).withValues(alpha: 0.3),
-                strokeColor: const Color(0xFFEC4899),
-                gridColor: const Color(0xFFE2E8F0),
+              painter: _SubjectPerformancePainter(
                 labelStyle: GoogleFonts.inter(
-                  fontSize: 8.sp,
-                  color: const Color(0xFF475569),
+                  fontSize: 10.sp,
+                  color: const Color(0xFF64748B),
                 ),
               ),
             ),
@@ -602,95 +529,71 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     );
   }
 
-  /// Right card — Line chart
-  Widget _buildLineChartCard() {
+  /// Right card
+  Widget _buildAverageScoreTrendCard() {
     return Container(
-      padding: EdgeInsets.all(14.r),
+      padding: EdgeInsets.all(24.r),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(8.r),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-                child: Icon(Icons.trending_up_rounded,
-                    size: 16.sp, color: const Color(0xFF059669)),
-              ),
-              SizedBox(width: 8.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Average Score Trend',
-                      style: GoogleFonts.outfit(
-                        fontSize: 11.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      'Class average performance\nover time',
-                      style: GoogleFonts.inter(
-                        fontSize: 8.5.sp,
-                        color: const Color(0xFF2563EB),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Average Score Trend',
+            style: GoogleFonts.outfit(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
           ),
-          SizedBox(height: 12.h),
+          SizedBox(height: 4.h),
+          Text(
+            'Class average performance over time',
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: 32.h),
           SizedBox(
-            height: 150.h,
+            height: 200.h,
+            width: double.infinity,
             child: CustomPaint(
-              size: Size(double.infinity, 150.h),
-              painter: _LineChartPainter(
-                yLabels: const ['100', '75', '50', '25', '0'],
-                xLabels: const [
-                  "May'01", "May'07", "May'13", "May'19", "May'25"
-                ],
-                dataPoints: const [0.80, 0.79, 0.82, 0.80, 0.83],
-                lineColor: const Color(0xFF2563EB),
+              painter: _AverageScoreTrendPainter(
+                yLabels: const ['2', '1.5', '1', '0.5', '0'],
+                xLabel: 'Recent',
+                dotColor: const Color(0xFF2563EB),
                 gridColor: const Color(0xFFE2E8F0),
                 labelStyle: GoogleFonts.inter(
-                  fontSize: 7.sp,
-                  color: const Color(0xFF94A3B8),
+                  fontSize: 10.sp,
+                  color: const Color(0xFF64748B),
                 ),
               ),
             ),
           ),
-          SizedBox(height: 8.h),
+          SizedBox(height: 16.h),
           // Legend
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 8.w,
-                height: 8.w,
+                width: 10.w,
+                height: 10.w,
                 decoration: const BoxDecoration(
                   color: Color(0xFF2563EB),
                   shape: BoxShape.circle,
                 ),
               ),
-              SizedBox(width: 4.w),
+              SizedBox(width: 8.w),
               Text(
                 'average',
                 style: GoogleFonts.inter(
-                  fontSize: 9.sp,
-                  color: const Color(0xFF475569),
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12.sp,
+                  color: const Color(0xFF3B82F6),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -984,14 +887,14 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         ...list.asMap().entries.map((entry) {
           final e = entry.value;
           final isLast = entry.key == list.length - 1;
-          final status = e['status'] as String? ?? 'Published';
-          final isPublished = status == 'Published';
-          final statusColor = isPublished
+          final status = e['status'] as String? ?? 'Active';
+          final isActive = status == 'Active';
+          final statusColor = isActive
               ? const Color(0xFF059669)
               : status == 'Draft'
                   ? const Color(0xFF64748B)
                   : const Color(0xFF0284C7);
-          final statusBg = isPublished
+          final statusBg = isActive
               ? const Color(0xFFD1FAE5)
               : status == 'Draft'
                   ? const Color(0xFFF1F5F9)
@@ -1090,9 +993,19 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                 SizedBox(
                   width: 32.w,
                   child: GestureDetector(
-                    onTap: () => _showExamActions(e),
+                    onTap: () {
+                      final examName = e['name'] as String? ??
+                          e['subject'] as String? ??
+                          'Untitled';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ExamDetailScreen(examName: examName),
+                        ),
+                      );
+                    },
                     child: Icon(
-                      Icons.more_vert_rounded,
+                      Icons.remove_red_eye_outlined,
                       color: const Color(0xFF64748B),
                       size: 18.sp,
                     ),
@@ -1419,225 +1332,115 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 // RADAR CHART PAINTER
 // ═══════════════════════════════════════════════════════════
 
-class _RadarChartPainter extends CustomPainter {
-  final List<String> labels;
-  final List<double> values; // 0.0 – 1.0
-  final Color fillColor;
-  final Color strokeColor;
-  final Color gridColor;
+class _SubjectPerformancePainter extends CustomPainter {
   final TextStyle labelStyle;
 
-  _RadarChartPainter({
-    required this.labels,
-    required this.values,
-    required this.fillColor,
-    required this.strokeColor,
-    required this.gridColor,
+  _SubjectPerformancePainter({
     required this.labelStyle,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final cy = size.height / 2;
-    // Leave margin for labels
-    const labelMargin = 22.0;
-    final maxRadius = math.min(cx, cy) - labelMargin;
-    final n = labels.length;
-    const rings = 4;
+    
+    // Draw the vertical line
+    final linePaint = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..strokeWidth = 2.0;
+      
+    // Leave some space at the top for the label
+    final topPadding = 20.0;
+    canvas.drawLine(
+      Offset(cx, topPadding),
+      Offset(cx, size.height),
+      linePaint,
+    );
 
-    // Draw grid rings
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    for (int r = 1; r <= rings; r++) {
-      final radius = maxRadius * r / rings;
-      final path = Path();
-      for (int i = 0; i < n; i++) {
-        final angle = 2 * math.pi * i / n - math.pi / 2;
-        final x = cx + radius * math.cos(angle);
-        final y = cy + radius * math.sin(angle);
-        if (i == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-      path.close();
-      canvas.drawPath(path, gridPaint);
-    }
-
-    // Draw axis lines
-    for (int i = 0; i < n; i++) {
-      final angle = 2 * math.pi * i / n - math.pi / 2;
-      canvas.drawLine(
-        Offset(cx, cy),
-        Offset(cx + maxRadius * math.cos(angle),
-            cy + maxRadius * math.sin(angle)),
-        gridPaint,
-      );
-    }
-
-    // Draw data polygon
-    final dataPath = Path();
-    for (int i = 0; i < n; i++) {
-      final angle = 2 * math.pi * i / n - math.pi / 2;
-      final r = maxRadius * (i < values.length ? values[i] : 0.5);
-      final x = cx + r * math.cos(angle);
-      final y = cy + r * math.sin(angle);
-      if (i == 0) {
-        dataPath.moveTo(x, y);
-      } else {
-        dataPath.lineTo(x, y);
-      }
-    }
-    dataPath.close();
-
-    canvas.drawPath(
-        dataPath, Paint()..color = fillColor..style = PaintingStyle.fill);
-    canvas.drawPath(
-        dataPath,
-        Paint()
-          ..color = strokeColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5);
-
-    // Draw dots at vertices
-    final dotPaint = Paint()..color = strokeColor;
-    for (int i = 0; i < n; i++) {
-      final angle = 2 * math.pi * i / n - math.pi / 2;
-      final r = maxRadius * (i < values.length ? values[i] : 0.5);
-      canvas.drawCircle(
-        Offset(cx + r * math.cos(angle), cy + r * math.sin(angle)),
-        3.0,
-        dotPaint,
-      );
-    }
-
-    // Draw labels
-    final tp = TextPainter(textDirection: TextDirection.ltr);
-    for (int i = 0; i < n; i++) {
-      final angle = 2 * math.pi * i / n - math.pi / 2;
-      final labelR = maxRadius + labelMargin - 4;
-      final lx = cx + labelR * math.cos(angle);
-      final ly = cy + labelR * math.sin(angle);
-
-      tp.text = TextSpan(text: labels[i], style: labelStyle);
-      tp.layout();
-      tp.paint(
-        canvas,
-        Offset(lx - tp.width / 2, ly - tp.height / 2),
-      );
-    }
+    // Draw the label
+    final tp = TextPainter(
+      text: TextSpan(text: 'Mathematics', style: labelStyle),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, Offset(cx - tp.width / 2, 0));
   }
 
   @override
-  bool shouldRepaint(covariant _RadarChartPainter old) => true;
+  bool shouldRepaint(covariant _SubjectPerformancePainter old) => false;
 }
 
 // ═══════════════════════════════════════════════════════════
-// LINE CHART PAINTER
+// AVERAGE SCORE TREND PAINTER
 // ═══════════════════════════════════════════════════════════
 
-class _LineChartPainter extends CustomPainter {
+class _AverageScoreTrendPainter extends CustomPainter {
   final List<String> yLabels;
-  final List<String> xLabels;
-  final List<double> dataPoints; // 0.0 – 1.0 (fraction of Y range)
-  final Color lineColor;
+  final String xLabel;
+  final Color dotColor;
   final Color gridColor;
   final TextStyle labelStyle;
 
-  _LineChartPainter({
+  _AverageScoreTrendPainter({
     required this.yLabels,
-    required this.xLabels,
-    required this.dataPoints,
-    required this.lineColor,
+    required this.xLabel,
+    required this.dotColor,
     required this.gridColor,
     required this.labelStyle,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    const leftPad = 28.0;
-    const bottomPad = 18.0;
-    const topPad = 6.0;
+    const leftPad = 30.0;
+    const bottomPad = 24.0;
+    const topPad = 10.0;
     final chartW = size.width - leftPad;
     final chartH = size.height - bottomPad - topPad;
 
     final tp = TextPainter(textDirection: TextDirection.ltr);
 
-    // Draw horizontal grid lines + Y labels
+    // Draw horizontal dashed grid lines + Y labels
     final gridPaint = Paint()
       ..color = gridColor
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < yLabels.length; i++) {
       final frac = i / (yLabels.length - 1);
       final y = topPad + frac * chartH;
 
-      canvas.drawLine(
-          Offset(leftPad, y), Offset(size.width, y), gridPaint);
+      // Draw dashed line
+      final path = Path();
+      path.moveTo(leftPad, y);
+      double currentX = leftPad;
+      const dashWidth = 4.0;
+      const dashSpace = 4.0;
+      while (currentX < size.width) {
+        path.moveTo(currentX, y);
+        currentX += dashWidth;
+        path.lineTo(currentX, y);
+        currentX += dashSpace;
+      }
+      canvas.drawPath(path, gridPaint);
 
+      // Draw label
       tp.text = TextSpan(text: yLabels[i], style: labelStyle);
       tp.layout();
-      tp.paint(
-          canvas, Offset(0, y - tp.height / 2));
+      tp.paint(canvas, Offset(leftPad - tp.width - 8, y - tp.height / 2));
     }
 
-    // Draw X labels
-    for (int i = 0; i < xLabels.length; i++) {
-      final frac = i / (xLabels.length - 1);
-      final x = leftPad + frac * chartW;
+    // Draw X label ("Recent")
+    tp.text = TextSpan(text: xLabel, style: labelStyle);
+    tp.layout();
+    final centerX = leftPad + chartW / 2;
+    tp.paint(canvas, Offset(centerX - tp.width / 2, size.height - tp.height));
 
-      tp.text = TextSpan(text: xLabels[i], style: labelStyle);
-      tp.layout();
-      tp.paint(canvas,
-          Offset(x - tp.width / 2, topPad + chartH + 4));
-    }
-
-    if (dataPoints.isEmpty) return;
-
-    // Compute actual pixel points
-    final pts = <Offset>[];
-    for (int i = 0; i < dataPoints.length; i++) {
-      final frac = i / (dataPoints.length - 1);
-      final x = leftPad + frac * chartW;
-      // dataPoints are 0.0–1.0 representing fraction of 100
-      // But y-axis is inverted (top=high)
-      final y = topPad + (1.0 - dataPoints[i]) * chartH;
-      pts.add(Offset(x, y));
-    }
-
-    // Draw line
-    final linePaint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 1; i < pts.length; i++) {
-      final prev = pts[i - 1];
-      final curr = pts[i];
-      final mid = (prev.dx + curr.dx) / 2;
-      path.cubicTo(mid, prev.dy, mid, curr.dy, curr.dx, curr.dy);
-    }
-    canvas.drawPath(path, linePaint);
-
-    // Draw dots
-    final dotFill = Paint()..color = lineColor;
-    final dotBg = Paint()..color = Colors.white;
-    for (final pt in pts) {
-      canvas.drawCircle(pt, 4.0, dotFill);
-      canvas.drawCircle(pt, 2.0, dotBg);
-    }
+    // Draw single dot on the top line (which is yLabels[0] -> 2 -> y = topPad)
+    final dotPaint = Paint()..color = dotColor;
+    canvas.drawCircle(Offset(centerX, topPad), 4.0, dotPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _LineChartPainter old) => true;
+  bool shouldRepaint(covariant _AverageScoreTrendPainter old) => false;
 }
 
 // ═══════════════════════════════════════════════════════════

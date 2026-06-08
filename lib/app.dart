@@ -1,9 +1,19 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'theme/colors.dart';
 import 'screens/welcome_screen.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
 
 class EduSphereApp extends StatelessWidget {
   const EduSphereApp({super.key});
@@ -18,6 +28,7 @@ class EduSphereApp extends StatelessWidget {
         return MaterialApp(
           title: 'EduSphere',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: AppScrollBehavior(),
           theme: ThemeData(
             useMaterial3: true,
             fontFamily: GoogleFonts.inter().fontFamily,
@@ -30,3 +41,4 @@ class EduSphereApp extends StatelessWidget {
     );
   }
 }
+

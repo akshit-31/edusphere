@@ -371,211 +371,216 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
           ),
 
           // Scrollable Table container
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 650.w,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Table Headers
-                  Container(
-                    color: const Color(0xFFF8FAFC),
-                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text('Admission No.',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                        ),
-                        Expanded(
-                          flex: 5,
-                          child: Text('Name',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text('Class',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                        ),
-                        Expanded(
-                          flex: 5,
-                          child: Text('Email',
-                              style: GoogleFonts.inter(
-                                  fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Center(
-                            child: Text('Status',
-                                style: GoogleFonts.inter(
-                                    fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Center(
-                            child: Text('Actions',
-                                style: GoogleFonts.inter(
-                                    fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Student Rows
-                  if (_isLoading)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32.h),
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF0066CC),
-                        ),
-                      ),
-                    )
-                  else if (paginated.isEmpty)
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32.h),
-                      child: Center(
-                        child: Text(
-                          'No students found',
-                          style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B), fontStyle: FontStyle.italic),
-                        ),
-                      ),
-                    )
-                  else
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: paginated.length,
-                      itemBuilder: (context, idx) {
-                        final student = paginated[idx];
-                        return Container(
-                          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                          decoration: const BoxDecoration(
-                            border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                          ),
-                          child: Row(
-                            children: [
-                              // Admission No
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  student.admissionNo,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final tableWidth = constraints.maxWidth > 850 ? constraints.maxWidth : 850.0;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Table Headers
+                      Container(
+                        color: const Color(0xFFF8FAFC),
+                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text('Admission No.',
                                   style: GoogleFonts.inter(
-                                    fontSize: 10.sp,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                ),
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                            ),
+                            Expanded(
+                              flex: 5,
+                              child: Text('Name',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('Class',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                            ),
+                            Expanded(
+                              flex: 6,
+                              child: Text('Email',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Center(
+                                child: Text('Status',
+                                    style: GoogleFonts.inter(
+                                        fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
                               ),
-                              // Name + Avatar
-                              Expanded(
-                                flex: 5,
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 28.w,
-                                      height: 28.h,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFEFF6FF),
-                                        shape: BoxShape.circle,
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Center(
+                                child: Text('Actions',
+                                    style: GoogleFonts.inter(
+                                        fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Student Rows
+                      if (_isLoading)
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32.h),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF0066CC),
+                            ),
+                          ),
+                        )
+                      else if (paginated.isEmpty)
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32.h),
+                          child: Center(
+                            child: Text(
+                              'No students found',
+                              style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B), fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: paginated.length,
+                          itemBuilder: (context, idx) {
+                            final student = paginated[idx];
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              decoration: const BoxDecoration(
+                                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                              ),
+                              child: Row(
+                                children: [
+                                  // Admission No
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      student.admissionNo,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF0F172A),
                                       ),
-                                      child: Center(
+                                    ),
+                                  ),
+                                  // Name + Avatar
+                                  Expanded(
+                                    flex: 5,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 28.w,
+                                          height: 28.h,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFEFF6FF),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              student.initials,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 9.sp,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFF1E6091),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w),
+                                        Expanded(
+                                          child: Text(
+                                            student.name,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.sp,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF475569),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Class
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      student.className,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                  // Email
+                                  Expanded(
+                                    flex: 6,
+                                    child: Text(
+                                      student.email,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                  // Status
+                                  Expanded(
+                                    flex: 3,
+                                    child: Center(
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFECFDF5),
+                                          borderRadius: BorderRadius.circular(6.r),
+                                        ),
                                         child: Text(
-                                          student.initials,
+                                          student.status,
                                           style: GoogleFonts.inter(
-                                            fontSize: 9.sp,
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFF1E6091),
+                                            fontSize: 8.sp,
+                                            fontWeight: FontWeight.w800,
+                                            color: const Color(0xFF10B981),
                                           ),
                                         ),
                                       ),
                                     ),
-                                    SizedBox(width: 8.w),
-                                    Expanded(
-                                      child: Text(
-                                        student.name,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 10.sp,
-                                          fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF475569),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Class
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  student.className,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10.sp,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF64748B),
                                   ),
-                                ),
-                              ),
-                              // Email
-                              Expanded(
-                                flex: 5,
-                                child: Text(
-                                  student.email,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10.sp,
-                                    color: const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ),
-                              // Status
-                              Expanded(
-                                flex: 3,
-                                child: Center(
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFECFDF5),
-                                      borderRadius: BorderRadius.circular(6.r),
-                                    ),
-                                    child: Text(
-                                      student.status,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 8.sp,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF10B981),
+                                  // Actions (Eye Icon)
+                                  Expanded(
+                                    flex: 2,
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.visibility_outlined,
+                                        size: 16.sp,
+                                        color: const Color(0xFF64748B),
                                       ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                              // Actions (Eye Icon)
-                              Expanded(
-                                flex: 2,
-                                child: Center(
-                                  child: Icon(
-                                    Icons.visibility_outlined,
-                                    size: 16.sp,
-                                    color: const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           // Pagination Footer (centered & wrapped in column to prevent overflows)

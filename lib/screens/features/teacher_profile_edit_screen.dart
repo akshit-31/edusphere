@@ -5,6 +5,8 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class TeacherProfileEditScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -39,6 +41,9 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
   final _bioCtrl        = TextEditingController(text: 'Passionate mathematics teacher with 6+ years of experience in teaching secondary and senior secondary students.');
   final _linkedinCtrl   = TextEditingController(text: 'https://linkedin.com/in/emma-johnson');
   final _websiteCtrl    = TextEditingController(text: 'https://www.emmaeducation.com');
+
+  // ── Photo ────────────────────────────────────────────────────────
+  String? _photoPath; // local file path or empty
 
   // ── Teaching ─────────────────────────────────────────────────────
   List<String> _subjects = ['Mathematics', 'Algebra', 'Calculus'];
@@ -107,6 +112,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
       _facebookCtrl.text = prefs.getString('teacher_facebook') ?? 'https://facebook.com/emma.johnson';
       _twitterCtrl.text = prefs.getString('teacher_twitter') ?? 'https://twitter.com/emma_edu';
       _instaCtrl.text = prefs.getString('teacher_insta') ?? 'https://instagram.com/emma_edu';
+      _photoPath = prefs.getString('teacher_photo_url');
     });
   }
 
@@ -143,6 +149,22 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
     await prefs.setString('teacher_facebook', _facebookCtrl.text);
     await prefs.setString('teacher_twitter', _twitterCtrl.text);
     await prefs.setString('teacher_insta', _instaCtrl.text);
+    if (_photoPath != null && _photoPath!.isNotEmpty) {
+      await prefs.setString('teacher_photo_url', _photoPath!);
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (file != null && mounted) {
+      setState(() => _photoPath = file.path);
+    }
   }
 
   @override
@@ -242,16 +264,32 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
         children: [
           // Profile Photo
           _card(Column(children: [
-            Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                CircleAvatar(radius: 48.r, backgroundImage: const NetworkImage('https://i.pravatar.cc/300?img=32')),
-                Container(
-                  padding: EdgeInsets.all(6.r),
-                  decoration: BoxDecoration(color: widget.theme.primary, shape: BoxShape.circle),
-                  child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14.sp),
-                ),
-              ],
+            GestureDetector(
+              onTap: _pickPhoto,
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  CircleAvatar(
+                    radius: 48.r,
+                    backgroundColor: const Color(0xFFE2E8F0),
+                    child: (_photoPath != null && _photoPath!.isNotEmpty)
+                        ? ClipOval(
+                            child: Image.file(
+                              File(_photoPath!),
+                              width: 96.r,
+                              height: 96.r,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Icon(Icons.person_rounded, size: 48.sp, color: const Color(0xFF94A3B8)),
+                  ),
+                  Container(
+                    padding: EdgeInsets.all(6.r),
+                    decoration: BoxDecoration(color: widget.theme.primary, shape: BoxShape.circle),
+                    child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14.sp),
+                  ),
+                ],
+              ),
             ),
             SizedBox(height: 8.h),
             Text('Tap to change photo', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textLight)),
