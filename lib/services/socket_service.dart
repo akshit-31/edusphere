@@ -42,7 +42,7 @@ class SocketService {
         .enableAutoConnect()
         .enableForceNew()
         .setReconnectionDelay(2000)
-        .setReconnectionAttempts(5)
+        .setReconnectionAttempts(30) // 30 attempts * 2s delay = 60s window (handles Render cold start)
         .build()
       );
 
