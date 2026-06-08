@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'theme/colors.dart';
 import 'screens/welcome_screen.dart';
+import 'widgets/ai_chatbot_overlay.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -35,6 +36,9 @@ class EduSphereApp extends StatelessWidget {
             colorScheme: ColorScheme.fromSeed(seedColor: AppColors.studentPrimary),
             scaffoldBackgroundColor: AppColors.background,
           ),
+          builder: (context, child) {
+            return AIChatbotOverlay(child: child!);
+          },
           home: const WelcomeScreen(),
         );
       },

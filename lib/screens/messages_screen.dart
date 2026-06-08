@@ -177,11 +177,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   String _communityFilter = 'All';
   String _firstName = 'Kavya';
 
-  // Chatbot State
-  bool _isChatOpen = false;
-  final List<Map<String, String>> _chatMessages = [];
-  final _chatInputCtrl = TextEditingController();
-  final ScrollController _chatScrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -213,8 +208,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
     _searchCtrl.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    _chatInputCtrl.dispose();
-    _chatScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -225,41 +218,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
       if (mounted) {
         setState(() {
           _firstName = savedName.trim().split(RegExp(r'\s+'))[0];
-          _initChat();
         });
       }
-    } catch (_) {
-      _initChat();
-    }
-  }
-
-  void _initChat() {
-    _chatMessages.clear();
-    _chatMessages.add({
-      'sender': 'bot',
-      'text': 'Hi $_firstName! I am Priya, your School Assistant. How can I help you in the Community today?'
-    });
-  }
-
-  void _toggleChat() {
-    setState(() {
-      _isChatOpen = !_isChatOpen;
-    });
-    if (_isChatOpen) {
-      _scrollToChatBottom();
-    }
-  }
-
-  void _scrollToChatBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_chatScrollCtrl.hasClients) {
-        _chatScrollCtrl.animateTo(
-          _chatScrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    } catch (_) {}
   }
 
   Future<void> _loadCommunityPosts() async {
@@ -1209,7 +1170,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   // --- Student Layout Helpers ---
 
   Widget _buildStudentListView() {
-    final bool isDesktop = MediaQuery.of(context).size.width > 900;
     Widget bodyContent = _buildCommunityFeedContent();
 
     return Scaffold(
@@ -1287,9 +1247,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 Expanded(child: bodyContent),
               ],
             ),
-            if (!_isChatOpen) _buildAssistantSpeechBubble(isDesktop),
-            _buildAssistantFAB(isDesktop),
-            if (_isChatOpen) _buildChatWindow(isDesktop),
+
           ],
         ),
       ),

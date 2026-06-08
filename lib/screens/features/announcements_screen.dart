@@ -68,28 +68,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<AnnouncementModel> _announcements = [];
   bool _isLoading = true;
-  String _firstName = 'Kavya';
 
   RealtimeChannel? _announcementsChannel;
 
-  // Chatbot State
-  bool _isChatOpen = false;
-  final List<Map<String, String>> _chatMessages = [];
-  final _chatInputCtrl = TextEditingController();
-  final ScrollController _chatScrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadStudentFirstName();
     _loadAnnouncements(showLoading: true);
     _connectRealTime();
   }
 
   @override
   void dispose() {
-    _chatInputCtrl.dispose();
-    _chatScrollCtrl.dispose();
     if (_announcementsChannel != null) {
       try {
         Supabase.instance.client.removeChannel(_announcementsChannel!);
@@ -154,49 +145,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return const Color(0xFF2563EB); // Default Blue
   }
 
-  Future<void> _loadStudentFirstName() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Kavya Singh';
-      if (mounted) {
-        setState(() {
-          _firstName = savedName.trim().split(RegExp(r'\s+'))[0];
-          _initChat();
-        });
-      }
-    } catch (_) {
-      _initChat();
-    }
-  }
 
-  void _initChat() {
-    _chatMessages.clear();
-    _chatMessages.add({
-      'sender': 'bot',
-      'text': 'Hi $_firstName! I am Priya, your School Assistant. How can I help you today?'
-    });
-  }
 
-  void _toggleChat() {
-    setState(() {
-      _isChatOpen = !_isChatOpen;
-    });
-    if (_isChatOpen) {
-      _scrollToBottom();
-    }
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_chatScrollCtrl.hasClients) {
-        _chatScrollCtrl.animateTo(
-          _chatScrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
 
   // --- Load Announcements ---
   Future<void> _loadAnnouncements({bool showLoading = true}) async {
@@ -763,7 +713,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   // --- Student Layout Helpers ---
 
   Widget _buildStudentLayout() {
-    final bool isDesktop = MediaQuery.of(context).size.width > 900;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: widget.showAppBar && Navigator.canPop(context)
@@ -842,12 +791,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ),
               ),
 
-              // Floating Assistant Speech Bubble & FAB Group
-              if (!_isChatOpen) _buildAssistantSpeechBubble(isDesktop),
-              _buildAssistantFAB(isDesktop),
-
-              // Chatbot overlay window
-              if (_isChatOpen) _buildChatWindow(isDesktop),
             ],
           ),
         ),
