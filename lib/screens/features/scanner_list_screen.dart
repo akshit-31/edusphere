@@ -4,11 +4,19 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
-import 'scanner_live_screen.dart';
+import 'prepare_scan_screen.dart';
 
 class ScannerListScreen extends StatefulWidget {
   final RoleTheme theme;
-  const ScannerListScreen({super.key, required this.theme});
+  final Function(String id, String name, String location)? onScannerSelected;
+  final bool showAppBar;
+
+  const ScannerListScreen({
+    super.key,
+    required this.theme,
+    this.onScannerSelected,
+    this.showAppBar = true,
+  });
 
   @override
   State<ScannerListScreen> createState() => _ScannerListScreenState();
@@ -93,6 +101,7 @@ class _ScannerListScreenState extends State<ScannerListScreen> {
             title: 'Attendance Scanners',
             subtitle: 'Monitor school checkpoint systems',
             theme: widget.theme,
+            showBackButton: widget.showAppBar,
           ),
           Expanded(
             child: _isLoading
@@ -151,15 +160,22 @@ class _ScannerListScreenState extends State<ScannerListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16.r),
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ScannerLiveScreen(
-                  theme: widget.theme,
-                  scannerId: id,
+            if (widget.onScannerSelected != null) {
+              widget.onScannerSelected!(id, name, location);
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PrepareScanScreen(
+                    theme: widget.theme,
+                    scannerId: id,
+                    scannerName: name,
+                    location: location,
+                    onBackToDetails: () => Navigator.pop(context),
+                  ),
                 ),
-              ),
-            ).then((_) => _loadScannersData());
+              ).then((_) => _loadScannersData());
+            }
           },
           child: Padding(
             padding: EdgeInsets.all(16.r),

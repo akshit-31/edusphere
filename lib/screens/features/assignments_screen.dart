@@ -469,6 +469,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     );
   }
 
+
+
   Widget _buildAssignmentCard(Map<String, dynamic> a) {
     final bool isSubmitted = a['isSubmitted'] as bool;
     final bool isOverdue = a['isOverdue'] as bool? ?? false;

@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
+import '../main_screen.dart';
+
 
 class ScheduleScreen extends StatefulWidget {
   final String role;
@@ -26,6 +28,7 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isLoading = true;
   String _selectedDay = 'Mon'; // Default, will resolve to today's day on load
   List<Map<String, dynamic>> _allEntries = [];
@@ -435,19 +438,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isPushed = Navigator.canPop(context);
+    final bool isTeacher = widget.role == 'teacher';
+
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Schedule') : null,
+      bottomNavigationBar: (isPushed && isTeacher) ? const TeacherBottomNavBar(activeIndex: 10) : null,
       backgroundColor: AppColors.background,
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: Navigator.canPop(context)
-                  ? const BackButton(color: Color(0xFF0F172A))
-                  : IconButton(
-                      icon: Icon(Icons.menu, size: 28.sp),
-                      onPressed: widget.onOpenDrawer,
-                    ),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
               title: Text(
                 'EduSphere',
                 style: GoogleFonts.outfit(
@@ -473,6 +480,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ? 'Your weekly timetable lectures'
                 : 'Your active classes & slots',
             theme: widget.theme,
+            showBackButton: widget.showAppBar,
           ),
           _buildDaySelector(),
           Expanded(

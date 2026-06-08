@@ -26,24 +26,111 @@ import 'features/assignments_screen.dart';
 import 'features/fee_ledger_screen.dart';
 import 'features/transport_screen.dart';
 import 'features/services_screen.dart';
+import 'features/scanner_feature_wrapper.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 
 class MainScreen extends StatefulWidget {
   final String role;
   final int initialIndex;
   const MainScreen({super.key, required this.role, this.initialIndex = 0});
+
+  // Global static state tracker for unified navigation across routes
+  static _MainScreenState? _activeState;
+
+  static void navigateTo(BuildContext context, int index) {
+    // 1. Pop all pushed views above MainScreen route
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    // 2. Trigger active state tab changes
+    _activeState?._navigateTo(index);
+  }
+
+  static void openDrawer() {
+    _activeState?._openDrawer();
+  }
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   String _userName = 'Alex Rivera';
+  String? _profilePhotoUrl;
   int _idx = 0;
+
+  String _getLabelForIndex(int index, bool isDesktop) {
+    if (widget.role == 'teacher') {
+      if (isDesktop) {
+        switch (index) {
+          case 0: return 'Dashboard';
+          case 1: return 'Academic Calendar';
+          case 2: return 'Students';
+          case 3: return 'Attendance';
+          case 4: return 'QR Scanner';
+          case 5: return 'Assignments';
+          case 6: return 'Academic';
+          case 7: return 'Examinations';
+          case 8: return 'Marks Entry';
+          case 9: return 'My Schedule';
+          case 10: return 'Announcements';
+          case 11: return 'Community';
+          case 12: return 'My Profile';
+          default: return 'Dashboard';
+        }
+      } else {
+        switch (index) {
+          case 0: return 'Dashboard';
+          case 1: return 'Academic Calendar';
+          case 2: return 'Students';
+          case 3: return 'Attendance';
+          case 4: return 'More';
+          case 5: return 'QR Scanner';
+          case 6: return 'Assignments';
+          case 7: return 'Academic';
+          case 8: return 'Examinations';
+          case 9: return 'Marks Entry';
+          case 10: return 'My Schedule';
+          case 11: return 'Announcements';
+          case 12: return 'Community';
+          case 13: return 'My Profile';
+          default: return 'Dashboard';
+        }
+      }
+    } else {
+      // student role
+      switch (index) {
+        case 0: return 'Dashboard';
+        case 1: return 'Academic Calendar';
+        case 2: return 'Assignments';
+        case 3: return 'Academic';
+        case 4: return 'Fees';
+        case 5: return 'Transport';
+        case 6: return 'Announcements';
+        case 7: return 'Messages';
+        case 8: return 'Community';
+        case 9: return 'Services';
+        case 10: return 'My Profile';
+        default: return 'Dashboard';
+      }
+    }
+  }
+
+  void _navigateTo(int index) {
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+    setState(() {
+      _idx = index;
+      _drawerActiveLabel = _getLabelForIndex(index, isDesktop);
+    });
+  }
 
   @override
   void initState() {
     super.initState();
+    if (widget.role == 'teacher') {
+      MainScreen._activeState = this;
+    }
     _idx = widget.initialIndex;
     _loadUserName();
     _initSocketConnection();
@@ -51,6 +138,9 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    if (MainScreen._activeState == this) {
+      MainScreen._activeState = null;
+    }
     try {
       SocketService().off('NEW_NOTIFICATION');
       SocketService().off('attendance:qr-scan');
@@ -129,9 +219,14 @@ class _MainScreenState extends State<MainScreen> {
                   (widget.role == 'student' ? prefs.getString('student_name') : null) ??
                   kCredentials[widget.role]?['name'] ?? 
                   'EduSphere User';
+      _profilePhotoUrl = prefs.getString('${widget.role}_photo_url');
     });
   }
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  void _openDrawer() {
+    _scaffoldKey.currentState?.openDrawer();
+  }
 
   RoleTheme get _theme => roleThemes[widget.role]!;
 
@@ -151,41 +246,85 @@ class _MainScreenState extends State<MainScreen> {
     final screens = widget.role == 'teacher'
         ? (isDesktop
             ? [
-                _dashboard(),
-                StudentDirectoryScreen(
-                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-                  showAppBar: false,
-                ),
-                MessagesScreen(
-                  theme: _theme,
-                  isActive: _idx == 2,
-                  onBack: () => setState(() => _idx = 0),
-                  showAppBar: isDesktop,
-                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-                ),
-                ProfileScreen(
-                  role: widget.role,
-                  theme: _theme,
-                  onBack: () => setState(() => _idx = 0),
-                  showAppBar: isDesktop,
-                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-                ),
-              ]
-            : [
-                _dashboard(),
+                _dashboard(), // Index 0: Dashboard
                 AcademicCalendarScreen(
                   onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
                   showAppBar: false,
-                ),
+                ), // Index 1: Academic Calendar
                 StudentDirectoryScreen(
                   onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
                   showAppBar: false,
-                ),
+                ), // Index 2: Students
                 TeacherAttendanceScreen(
                   onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
                   showAppBar: false,
-                ),
-                TeacherMoreScreen(theme: _theme, onNavigate: (int index) => setState(() => _idx = index)),
+                ), // Index 3: Attendance
+                ScannerFeatureWrapper(theme: _theme, showAppBar: false), // Index 4: QR Scanner
+                const CreateAssignmentScreen(showAppBar: false), // Index 5: Assignments
+                AcademicScreen(
+                  theme: _theme,
+                  role: 'teacher',
+                  onBack: () => _navigateTo(0),
+                  showAppBar: false,
+                ), // Index 6: Academic
+                const ExamScheduleScreen(showAppBar: false), // Index 7: Examinations
+                ExamMarksEntryScreen(theme: _theme, showAppBar: false), // Index 8: Marks Entry
+                ScheduleScreen(role: 'teacher', theme: _theme, showAppBar: false), // Index 9: My Schedule
+                AnnouncementsScreen(theme: _theme, role: 'teacher', showAppBar: false), // Index 10: Announcements
+                CommunityScreen(
+                  theme: _theme,
+                  onBack: () => _navigateTo(0),
+                  showAppBar: false,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                ), // Index 11: Community
+                ProfileScreen(
+                  role: widget.role,
+                  theme: _theme,
+                  onBack: () => _navigateTo(0),
+                  showAppBar: false,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                ), // Index 12: My Profile
+              ]
+            : [
+                _dashboard(), // Index 0: Dashboard
+                AcademicCalendarScreen(
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                  showAppBar: false,
+                ), // Index 1: Academic Calendar
+                StudentDirectoryScreen(
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                  showAppBar: false,
+                ), // Index 2: Students
+                TeacherAttendanceScreen(
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                  showAppBar: false,
+                ), // Index 3: Attendance
+                TeacherMoreScreen(theme: _theme, onNavigate: (int index) => _navigateTo(index)), // Index 4: More
+                ScannerFeatureWrapper(theme: _theme, showAppBar: false), // Index 5: QR Scanner
+                const CreateAssignmentScreen(showAppBar: false), // Index 6: Assignments
+                AcademicScreen(
+                  theme: _theme,
+                  role: 'teacher',
+                  onBack: () => _navigateTo(4),
+                  showAppBar: false,
+                ), // Index 7: Academic
+                const ExamScheduleScreen(showAppBar: false), // Index 8: Examinations
+                ExamMarksEntryScreen(theme: _theme, showAppBar: false), // Index 9: Marks Entry
+                ScheduleScreen(role: 'teacher', theme: _theme, showAppBar: false), // Index 10: My Schedule
+                AnnouncementsScreen(theme: _theme, role: 'teacher', showAppBar: false), // Index 11: Announcements
+                CommunityScreen(
+                  theme: _theme,
+                  onBack: () => _navigateTo(4),
+                  showAppBar: false,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                ), // Index 12: Community
+                ProfileScreen(
+                  role: widget.role,
+                  theme: _theme,
+                  onBack: () => _navigateTo(4),
+                  showAppBar: false,
+                  onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+                ), // Index 13: My Profile
               ])
         : [
             _dashboard(),
@@ -230,7 +369,7 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF0F4F8),
-      drawer: !isDesktop ? _buildDrawer() : null,
+      drawer: !isDesktop ? EduSphereDrawer(role: widget.role, activeLabel: _drawerActiveLabel) : null,
       appBar: (!isDesktop && (widget.role == 'teacher' || (widget.role == 'student' && _idx != 7)))
           ? AppBar(
               backgroundColor: Colors.white,
@@ -255,35 +394,155 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: isDesktop ? null : Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, -4))],
-        ),
-        child: SafeArea(
+      bottomNavigationBar: isDesktop ? null : SafeArea(
+        child: Container(
+          margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30.r),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              )
+            ],
+          ),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
+            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 if (widget.role == 'teacher') ...[
-                  _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
-                  _NavItem(icon: Icons.calendar_today_rounded, label: 'Academic Calendar', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
-                  _NavItem(icon: Icons.people_outline_rounded, label: 'Students', selected: _idx == 2, color: _theme.primary, onTap: () => setState(() => _idx = 2)),
-                  _NavItem(icon: Icons.event_available_outlined, label: 'Attendance', selected: _idx == 3, color: _theme.primary, onTap: () => setState(() => _idx = 3)),
-                  _NavItem(icon: Icons.more_horiz_rounded, label: 'More', selected: _idx == 4, color: _theme.primary, onTap: () => setState(() => _idx = 4)),
+                  _NavItem(
+                    icon: Icons.grid_view_rounded,
+                    label: 'Dashboard',
+                    selected: _idx == 0,
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(0),
+                  ),
+                  (() {
+                    final config = getAcademicTabConfig(_idx);
+                    return _NavItem(
+                      icon: config.icon,
+                      label: config.label,
+                      selected: _idx == 1 || _idx == 2 || _idx == 6 || _idx == 7 || _idx == 8 || _idx == 9 || _idx == 10 || _idx == 11 || _idx == 12,
+                      color: _theme.primary,
+                      badgeCount: config.badgeCount,
+                      onTap: () => _navigateTo(7),
+                    );
+                  })(),
+                  _NavItem(
+                    icon: Icons.event_available_rounded,
+                    label: 'Attendance',
+                    selected: _idx == 3,
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(3),
+                  ),
+                  _NavItem(
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'QR Scanner',
+                    selected: _idx == 5,
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(5),
+                  ),
+                  _NavItem(
+                    customIcon: Container(
+                      width: 26.w,
+                      height: 26.h,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: (_idx == 13) ? _theme.primary : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(13.r),
+                        child: (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty)
+                            ? (_profilePhotoUrl!.startsWith('http')
+                                ? Image.network(
+                                    _profilePhotoUrl!,
+                                    fit: BoxFit.cover,
+                                    width: 24.w,
+                                    height: 24.h,
+                                    errorBuilder: (_, __, ___) => CircleAvatar(
+                                      radius: 12.r,
+                                      backgroundColor: const Color(0xFFE2E8F0),
+                                      child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                                    ),
+                                  )
+                                : Image.file(
+                                    File(_profilePhotoUrl!),
+                                    fit: BoxFit.cover,
+                                    width: 24.w,
+                                    height: 24.h,
+                                    errorBuilder: (_, __, ___) => CircleAvatar(
+                                      radius: 12.r,
+                                      backgroundColor: const Color(0xFFE2E8F0),
+                                      child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                                    ),
+                                  ))
+                            : CircleAvatar(
+                                radius: 12.r,
+                                backgroundColor: const Color(0xFFE2E8F0),
+                                child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                              ),
+                      ),
+                    ),
+                    label: 'My Profile',
+                    selected: _idx == 13,
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(13),
+                  ),
                 ] else ...[
-                  _NavItem(icon: Icons.home_rounded, label: 'Home', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
+                  _NavItem(
+                    icon: Icons.home_rounded,
+                    label: 'Home',
+                    selected: _idx == 0,
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(0),
+                  ),
                   if (widget.role == 'student')
-                    _NavItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 3, color: _theme.primary, onTap: () => setState(() => _idx = 3)),
+                    _NavItem(
+                      icon: Icons.school_rounded,
+                      label: 'Academic',
+                      selected: _idx == 3,
+                      color: _theme.primary,
+                      onTap: () => _navigateTo(3),
+                    ),
                   _NavItem(
                     icon: widget.role == 'student' ? Icons.group_outlined : Icons.chat_bubble_rounded,
                     label: widget.role == 'student' ? 'Community' : 'Messages',
                     selected: _idx == (widget.role == 'student' ? 8 : 2),
                     color: _theme.primary,
-                    onTap: () => setState(() => _idx = widget.role == 'student' ? 8 : 2),
+                    onTap: () => _navigateTo(widget.role == 'student' ? 8 : 2),
                   ),
-                  _NavItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == (widget.role == 'student' ? 10 : 3), color: _theme.primary, onTap: () => setState(() => _idx = widget.role == 'student' ? 10 : 3)),
+                  _NavItem(
+                    customIcon: Container(
+                      width: 26.w,
+                      height: 26.h,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _idx == (widget.role == 'student' ? 10 : 3) ? _theme.primary : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(13.r),
+                        child: CircleAvatar(
+                          radius: 12.r,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          child: const Icon(Icons.person, size: 16, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                    ),
+                    label: 'My Profile',
+                    selected: _idx == (widget.role == 'student' ? 10 : 3),
+                    color: _theme.primary,
+                    onTap: () => _navigateTo(widget.role == 'student' ? 10 : 3),
+                  ),
                 ],
               ],
             ),
@@ -327,38 +586,57 @@ class _MainScreenState extends State<MainScreen> {
           ),
           SizedBox(height: 40.h),
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               child: Column(
                 children: [
                   if (widget.role == 'student') ...[
-                    _SidebarItem(icon: Icons.dashboard_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
+                    _SidebarItem(icon: Icons.dashboard_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => _navigateTo(0)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.calendar_month_outlined, label: 'Academic Calendar', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
+                    _SidebarItem(icon: Icons.calendar_month_outlined, label: 'Academic Calendar', selected: _idx == 1, color: _theme.primary, onTap: () => _navigateTo(1)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.checklist_rounded, label: 'Assignments', selected: _idx == 2, color: _theme.primary, onTap: () => setState(() => _idx = 2)),
+                    _SidebarItem(icon: Icons.checklist_rounded, label: 'Assignments', selected: _idx == 2, color: _theme.primary, onTap: () => _navigateTo(2)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 3, color: _theme.primary, onTap: () => setState(() => _idx = 3)),
+                    _SidebarItem(icon: Icons.school_rounded, label: 'Academic', selected: _idx == 3, color: _theme.primary, onTap: () => _navigateTo(3)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.attach_money_rounded, label: 'Fees', selected: _idx == 4, color: _theme.primary, onTap: () => setState(() => _idx = 4)),
+                    _SidebarItem(icon: Icons.attach_money_rounded, label: 'Fees', selected: _idx == 4, color: _theme.primary, onTap: () => _navigateTo(4)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.directions_bus_rounded, label: 'Transport', selected: _idx == 5, color: _theme.primary, onTap: () => setState(() => _idx = 5)),
+                    _SidebarItem(icon: Icons.directions_bus_rounded, label: 'Transport', selected: _idx == 5, color: _theme.primary, onTap: () => _navigateTo(5)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.notifications_none_rounded, label: 'Announcements', selected: _idx == 6, color: _theme.primary, onTap: () => setState(() => _idx = 6)),
+                    _SidebarItem(icon: Icons.notifications_none_rounded, label: 'Announcements', selected: _idx == 6, color: _theme.primary, onTap: () => _navigateTo(6)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.group_outlined, label: 'Community', selected: _idx == 8, color: _theme.primary, onTap: () => setState(() => _idx = 8)),
+                    _SidebarItem(icon: Icons.group_outlined, label: 'Community', selected: _idx == 8, color: _theme.primary, onTap: () => _navigateTo(8)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.room_service_outlined, label: 'Services', selected: _idx == 9, color: _theme.primary, onTap: () => setState(() => _idx = 9)),
+                    _SidebarItem(icon: Icons.room_service_outlined, label: 'Services', selected: _idx == 9, color: _theme.primary, onTap: () => _navigateTo(9)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == 10, color: _theme.primary, onTap: () => setState(() => _idx = 10)),
+                    _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == 10, color: _theme.primary, onTap: () => _navigateTo(10)),
                   ] else if (widget.role == 'teacher') ...[
-                    _SidebarItem(icon: Icons.home_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => setState(() => _idx = 0)),
+                    _SidebarItem(icon: Icons.dashboard_rounded, label: 'Dashboard', selected: _idx == 0, color: _theme.primary, onTap: () => _navigateTo(0)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.class_rounded, label: 'Class Management', selected: _idx == 1, color: _theme.primary, onTap: () => setState(() => _idx = 1)),
+                    _SidebarItem(icon: Icons.calendar_month_outlined, label: 'Academic Calendar', selected: _idx == 1, color: _theme.primary, onTap: () => _navigateTo(1)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.chat_bubble_rounded, label: 'Messages', selected: _idx == 2, color: _theme.primary, onTap: () => setState(() => _idx = 2)),
+                    _SidebarItem(icon: Icons.people_outline_rounded, label: 'Students', selected: _idx == 2, color: _theme.primary, onTap: () => _navigateTo(2)),
                     SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.person_rounded, label: 'My Profile', selected: _idx == 3, color: _theme.primary, onTap: () => setState(() => _idx = 3)),
+                    _SidebarItem(icon: Icons.calendar_today_outlined, label: 'Attendance', selected: _idx == 3, color: _theme.primary, onTap: () => _navigateTo(3)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.qr_code_scanner_rounded, label: 'QR Scanner', selected: _idx == 4, color: _theme.primary, onTap: () => _navigateTo(4)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.check_box_outlined, label: 'Assignments', selected: _idx == 5, color: _theme.primary, onTap: () => _navigateTo(5)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.menu_book_outlined, label: 'Academic', selected: _idx == 6, color: _theme.primary, onTap: () => _navigateTo(6)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.description_outlined, label: 'Examinations', selected: _idx == 7, color: _theme.primary, onTap: () => _navigateTo(7)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.assignment_turned_in_outlined, label: 'Marks Entry', selected: _idx == 8, color: _theme.primary, onTap: () => _navigateTo(8)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.access_time_rounded, label: 'My Schedule', selected: _idx == 9, color: _theme.primary, onTap: () => _navigateTo(9)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.notifications_none_rounded, label: 'Announcements', selected: _idx == 10, color: _theme.primary, onTap: () => _navigateTo(10)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.group_outlined, label: 'Community', selected: _idx == 11, color: _theme.primary, onTap: () => _navigateTo(11)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(icon: Icons.person_outline_rounded, label: 'My Profile', selected: _idx == 12, color: _theme.primary, onTap: () => _navigateTo(12)),
                   ],
                 ],
               ),
@@ -396,329 +674,6 @@ class _MainScreenState extends State<MainScreen> {
   // ── Drawer active item tracker ──
   String _drawerActiveLabel = 'Dashboard';
 
-  String _getDrawerInitials(String name) {
-    try {
-      final parts = name.trim().split(RegExp(r'\s+'));
-      if (parts.length >= 2) {
-        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-      } else if (parts.isNotEmpty && parts[0].isNotEmpty) {
-        return parts[0][0].toUpperCase();
-      }
-    } catch (_) {}
-    return 'U';
-  }
-
-  Widget _buildDrawer() {
-    final initials = _getDrawerInitials(_userName);
-    const activeBlue = Color(0xFF0D7DDC);
-    const inactiveIcon = Color(0xFF4A6FA5);
-    const inactiveText = Color(0xFF35526B);
-
-    return Drawer(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Logo / Brand ──
-            Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 14.h),
-              child: Text(
-                'EduSphere',
-                style: GoogleFonts.inter(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ),
-            Divider(height: 1.h, thickness: 1, color: const Color(0xFFEDF2F7)),
-            SizedBox(height: 8.h),
-
-            // ── Menu Items ──
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                child: Column(
-                  children: widget.role == 'teacher'
-                      ? [
-                          _drawerItem(
-                            icon: Icons.grid_view_rounded,
-                            label: 'Dashboard',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() { _drawerActiveLabel = 'Dashboard'; _idx = 0; });
-                              Navigator.pop(context);
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.calendar_month_outlined,
-                            label: 'Academic Calendar',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() { _drawerActiveLabel = 'Academic Calendar'; _idx = 1; });
-                              Navigator.pop(context);
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.people_outline_rounded,
-                            label: 'Students',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() { _drawerActiveLabel = 'Students'; _idx = 2; });
-                              Navigator.pop(context);
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.calendar_today_outlined,
-                            label: 'Attendance',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'Attendance');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const TeacherAttendanceScreen()));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.check_box_outlined,
-                            label: 'Assignments',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'Assignments');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateAssignmentScreen()));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.menu_book_outlined,
-                            label: 'Academic',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'Academic');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => AcademicScreen(theme: _theme)));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.description_outlined,
-                            label: 'Examinations',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () async {
-                              setState(() => _drawerActiveLabel = 'Examinations');
-                              Navigator.pop(context);
-                              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ExamScheduleScreen()));
-                              if (res is int && mounted) { setState(() => _idx = res); }
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.assignment_turned_in_outlined,
-                            label: 'Marks Entry',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () async {
-                              setState(() => _drawerActiveLabel = 'Marks Entry');
-                              Navigator.pop(context);
-                              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => ExamMarksEntryScreen(theme: _theme)));
-                              if (res is int && mounted) { setState(() => _idx = res); }
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.access_time_rounded,
-                            label: 'My Schedule',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'My Schedule');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => ScheduleScreen(role: 'teacher', theme: _theme)));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.notifications_none_rounded,
-                            label: 'Announcements',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'Announcements');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => AnnouncementsScreen(theme: _theme)));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.group_outlined,
-                            label: 'Community',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () {
-                              setState(() => _drawerActiveLabel = 'Community');
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => CommunityScreen(theme: _theme, showAppBar: true, onBack: () => Navigator.pop(context)),
-                              ));
-                            },
-                          ),
-                          _drawerItem(
-                            icon: Icons.person_outline_rounded,
-                            label: 'My Profile',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () async {
-                              setState(() => _drawerActiveLabel = 'My Profile');
-                              Navigator.pop(context);
-                              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(role: 'teacher', theme: _theme)));
-                              if (res is int && mounted) { setState(() => _idx = res); }
-                            },
-                          ),
-                        ]
-                      : [
-                          _drawerItem(icon: Icons.dashboard_rounded, label: 'Dashboard', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Dashboard'; _idx = 0; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.calendar_month_outlined, label: 'Academic Calendar', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Academic Calendar'; _idx = 1; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.checklist_rounded, label: 'Assignments', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Assignments'; _idx = 2; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.school_rounded, label: 'Academic', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Academic'; _idx = 3; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.attach_money_rounded, label: 'Fees', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Fees'; _idx = 4; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.directions_bus_rounded, label: 'Transport', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Transport'; _idx = 5; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.notifications_none_rounded, label: 'Announcements', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Announcements'; _idx = 6; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.group_outlined, label: 'Community', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Community'; _idx = 8; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.room_service_outlined, label: 'Services', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'Services'; _idx = 9; }); Navigator.pop(context); }),
-                          _drawerItem(icon: Icons.person_rounded, label: 'My Profile', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
-                            onTap: () { setState(() { _drawerActiveLabel = 'My Profile'; _idx = 10; }); Navigator.pop(context); }),
-                        ],
-                ),
-              ),
-            ),
-
-            // ── Divider + Logout ──
-            Divider(height: 1.h, thickness: 1, color: const Color(0xFFEDF2F7)),
-            _drawerItem(
-              icon: Icons.logout_rounded,
-              label: 'Logout',
-              activeBlue: activeBlue,
-              inactiveIcon: const Color(0xFF4A6FA5),
-              inactiveText: const Color(0xFF35526B),
-              forceInactive: true,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-
-            // ── Profile Card ──
-            Container(
-              margin: EdgeInsets.fromLTRB(12.w, 4.h, 12.w, 12.h),
-              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4F7FB),
-                borderRadius: BorderRadius.circular(14.r),
-                border: Border.all(color: const Color(0xFFE2EBF5), width: 1),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 19.r,
-                    backgroundColor: activeBlue.withValues(alpha: 0.15),
-                    child: Text(
-                      initials,
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w800,
-                        color: activeBlue,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _userName,
-                          style: GoogleFonts.inter(
-                            fontSize: 13.sp,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 1.h),
-                        Text(
-                          widget.role.toUpperCase(),
-                          style: GoogleFonts.inter(
-                            fontSize: 10.sp,
-                            fontWeight: FontWeight.w700,
-                            color: activeBlue,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  /// Premium drawer item — delegates to _PremiumDrawerItem for hover tracking
-  Widget _drawerItem({
-    required IconData icon,
-    required String label,
-    required Color activeBlue,
-    required Color inactiveIcon,
-    required Color inactiveText,
-    required VoidCallback onTap,
-    bool forceInactive = false,
-  }) {
-    final isActive = !forceInactive && _drawerActiveLabel == label;
-    return _PremiumDrawerItem(
-      icon: icon,
-      label: label,
-      isActive: isActive,
-      activeBlue: activeBlue,
-      inactiveIcon: inactiveIcon,
-      inactiveText: inactiveText,
-      onTap: onTap,
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -860,37 +815,92 @@ class _SidebarItem extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? customIcon;
   final String label;
   final bool selected;
   final Color color;
   final VoidCallback onTap;
-  const _NavItem({required this.icon, required this.label, required this.selected, required this.color, required this.onTap});
+  final int? badgeCount;
+
+  const _NavItem({
+    this.icon,
+    this.customIcon,
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+    this.badgeCount,
+  });
 
   @override
   Widget build(BuildContext context) {
+    Widget iconWidget = customIcon ?? Icon(
+      icon,
+      color: selected ? color : const Color(0xFF94A3B8),
+      size: 24.sp,
+    );
+
+    if (badgeCount != null && badgeCount! > 0) {
+      iconWidget = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          iconWidget,
+          Positioned(
+            top: -4,
+            right: -6,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
+              decoration: const BoxDecoration(
+                color: Color(0xFFEF4444), // Red badge
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$badgeCount',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 8.sp,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 8.h),
+          padding: EdgeInsets.symmetric(vertical: 6.h),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.1) : Colors.transparent,
+            color: selected ? color.withValues(alpha: 0.08) : Colors.transparent,
             borderRadius: BorderRadius.circular(16.r),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: selected ? color : AppColors.textLight, size: 24.sp),
+              // Horizontal indicator dash
+              Container(
+                width: 16.w,
+                height: 3.h,
+                decoration: BoxDecoration(
+                  color: selected ? color : Colors.transparent,
+                  borderRadius: BorderRadius.circular(1.5.r),
+                ),
+              ),
+              SizedBox(height: 4.h),
+              iconWidget,
               SizedBox(height: 2.h),
               Text(
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 10.sp,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? color : AppColors.textLight,
+                  fontSize: 9.sp,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? color : const Color(0xFF94A3B8),
                 ),
               ),
             ],
@@ -900,3 +910,519 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// PUBLIC TEACHER BOTTOM NAVBAR — for use in pushed sub-pages
+// ═══════════════════════════════════════════════════════════════
+
+class TeacherBottomNavBar extends StatefulWidget {
+  final int activeIndex;
+  const TeacherBottomNavBar({super.key, required this.activeIndex});
+
+  @override
+  State<TeacherBottomNavBar> createState() => _TeacherBottomNavBarState();
+}
+
+class _TeacherBottomNavBarState extends State<TeacherBottomNavBar> {
+  String? _photoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhoto();
+  }
+
+  Future<void> _loadPhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final url = prefs.getString('teacher_photo_url');
+    if (mounted) setState(() => _photoUrl = url);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).size.width > 900) {
+      return const SizedBox.shrink();
+    }
+
+    const Color primaryColor = Color(0xFF0D7DDC); // Theme primary color
+
+    return SafeArea(
+      child: Container(
+        margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            )
+          ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.grid_view_rounded,
+                label: 'Dashboard',
+                selected: widget.activeIndex == 0,
+                color: primaryColor,
+                onTap: () => MainScreen.navigateTo(context, 0),
+              ),
+              (() {
+                final config = getAcademicTabConfig(widget.activeIndex);
+                return _NavItem(
+                  icon: config.icon,
+                  label: config.label,
+                  selected: widget.activeIndex == 1 || widget.activeIndex == 2 || widget.activeIndex == 6 || widget.activeIndex == 7 || widget.activeIndex == 8 || widget.activeIndex == 9 || widget.activeIndex == 10 || widget.activeIndex == 11 || widget.activeIndex == 12,
+                  color: primaryColor,
+                  badgeCount: config.badgeCount,
+                  onTap: () => MainScreen.navigateTo(context, 7),
+                );
+              })(),
+              _NavItem(
+                icon: Icons.event_available_rounded,
+                label: 'Attendance',
+                selected: widget.activeIndex == 3,
+                color: primaryColor,
+                onTap: () => MainScreen.navigateTo(context, 3),
+              ),
+              _NavItem(
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'QR Scanner',
+                selected: widget.activeIndex == 5,
+                color: primaryColor,
+                onTap: () => MainScreen.navigateTo(context, 5),
+              ),
+              _NavItem(
+                customIcon: Container(
+                  width: 26.w,
+                  height: 26.h,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: (widget.activeIndex == 13) ? primaryColor : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13.r),
+                    child: (_photoUrl != null && _photoUrl!.isNotEmpty)
+                        ? (_photoUrl!.startsWith('http')
+                            ? Image.network(
+                                _photoUrl!,
+                                fit: BoxFit.cover,
+                                width: 24.w,
+                                height: 24.h,
+                                errorBuilder: (_, __, ___) => CircleAvatar(
+                                  radius: 12.r,
+                                  backgroundColor: const Color(0xFFE2E8F0),
+                                  child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                                ),
+                              )
+                            : Image.file(
+                                File(_photoUrl!),
+                                fit: BoxFit.cover,
+                                width: 24.w,
+                                height: 24.h,
+                                errorBuilder: (_, __, ___) => CircleAvatar(
+                                  radius: 12.r,
+                                  backgroundColor: const Color(0xFFE2E8F0),
+                                  child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                                ),
+                              ))
+                        : CircleAvatar(
+                            radius: 12.r,
+                            backgroundColor: const Color(0xFFE2E8F0),
+                            child: Icon(Icons.person_rounded, size: 14.sp, color: const Color(0xFF64748B)),
+                          ),
+                  ),
+                ),
+                label: 'My Profile',
+                selected: widget.activeIndex == 13,
+                color: primaryColor,
+                onTap: () => MainScreen.navigateTo(context, 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Helper models and mapping function for dynamic Academic bottom tab:
+class AcademicTabConfig {
+  final IconData icon;
+  final String label;
+  final int? badgeCount;
+  AcademicTabConfig({required this.icon, required this.label, this.badgeCount});
+}
+
+AcademicTabConfig getAcademicTabConfig(int index) {
+  switch (index) {
+    case 1:
+      return AcademicTabConfig(
+        icon: Icons.calendar_month_outlined,
+        label: 'Calendar',
+      );
+    case 2:
+      return AcademicTabConfig(
+        icon: Icons.people_outline_rounded,
+        label: 'Students',
+      );
+    case 6:
+      return AcademicTabConfig(
+        icon: Icons.check_box_outlined,
+        label: 'Assignments',
+      );
+    case 8:
+      return AcademicTabConfig(
+        icon: Icons.description_outlined,
+        label: 'Exams',
+      );
+    case 9:
+      return AcademicTabConfig(
+        icon: Icons.assignment_turned_in_outlined,
+        label: 'Marks Entry',
+      );
+    case 10:
+      return AcademicTabConfig(
+        icon: Icons.access_time_rounded,
+        label: 'Schedule',
+      );
+    case 11:
+      return AcademicTabConfig(
+        icon: Icons.notifications_none_rounded,
+        label: 'Announcements',
+      );
+    case 12:
+      return AcademicTabConfig(
+        icon: Icons.group_outlined,
+        label: 'Community',
+      );
+    case 7:
+    default:
+      return AcademicTabConfig(
+        icon: Icons.menu_book_outlined,
+        label: 'Academic',
+      );
+  }
+}
+
+
+class EduSphereDrawer extends StatefulWidget {
+  final String role;
+  final String? activeLabel;
+  const EduSphereDrawer({super.key, required this.role, this.activeLabel});
+
+  @override
+  State<EduSphereDrawer> createState() => _EduSphereDrawerState();
+}
+
+class _EduSphereDrawerState extends State<EduSphereDrawer> {
+  String _userName = 'EduSphere User';
+  String _initials = 'ES';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('${widget.role}_name') ?? 
+                 (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
+                 (widget.role == 'student' ? prefs.getString('student_name') : null) ??
+                 'EduSphere User';
+    
+    // Get initials
+    String ini = 'ES';
+    try {
+      final parts = name.trim().split(RegExp(r'\s+'));
+      if (parts.length >= 2) {
+        ini = '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      } else if (parts.isNotEmpty && parts[0].isNotEmpty) {
+        ini = parts[0][0].toUpperCase();
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _userName = name;
+        _initials = ini;
+      });
+    }
+  }
+
+  Widget _drawerItem({
+    required IconData icon,
+    required String label,
+    required Color activeBlue,
+    required Color inactiveIcon,
+    required Color inactiveText,
+    bool forceInactive = false,
+    required VoidCallback onTap,
+  }) {
+    final isActive = !forceInactive && widget.activeLabel == label;
+    return _PremiumDrawerItem(
+      icon: icon,
+      label: label,
+      isActive: isActive,
+      activeBlue: activeBlue,
+      inactiveIcon: inactiveIcon,
+      inactiveText: inactiveText,
+      onTap: onTap,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+    const activeBlue = Color(0xFF0D7DDC);
+    const inactiveIcon = Color(0xFF4A6FA5);
+    const inactiveText = Color(0xFF35526B);
+
+    return Drawer(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 14.h),
+              child: Text(
+                'EduSphere',
+                style: GoogleFonts.inter(
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            Divider(height: 1.h, thickness: 1, color: const Color(0xFFEDF2F7)),
+            SizedBox(height: 8.h),
+
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+                child: Column(
+                  children: widget.role == 'teacher'
+                      ? [
+                          _drawerItem(
+                            icon: Icons.grid_view_rounded,
+                            label: 'Dashboard',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 0),
+                          ),
+                          _drawerItem(
+                            icon: Icons.calendar_month_outlined,
+                            label: 'Academic Calendar',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 1),
+                          ),
+                          _drawerItem(
+                            icon: Icons.people_outline_rounded,
+                            label: 'Students',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 2),
+                          ),
+                          _drawerItem(
+                            icon: Icons.calendar_today_outlined,
+                            label: 'Attendance',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 3),
+                          ),
+                          _drawerItem(
+                            icon: Icons.qr_code_scanner_rounded,
+                            label: 'QR Scanner',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 4 : 5),
+                          ),
+                          _drawerItem(
+                            icon: Icons.check_box_outlined,
+                            label: 'Assignments',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 5 : 6),
+                          ),
+                          _drawerItem(
+                            icon: Icons.menu_book_outlined,
+                            label: 'Academic',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 6 : 7),
+                          ),
+                          _drawerItem(
+                            icon: Icons.description_outlined,
+                            label: 'Examinations',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 7 : 8),
+                          ),
+                          _drawerItem(
+                            icon: Icons.assignment_turned_in_outlined,
+                            label: 'Marks Entry',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 8 : 9),
+                          ),
+                          _drawerItem(
+                            icon: Icons.access_time_rounded,
+                            label: 'My Schedule',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 9 : 10),
+                          ),
+                          _drawerItem(
+                            icon: Icons.notifications_none_rounded,
+                            label: 'Announcements',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 10 : 11),
+                          ),
+                          _drawerItem(
+                            icon: Icons.group_outlined,
+                            label: 'Community',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 11 : 12),
+                          ),
+                          _drawerItem(
+                            icon: Icons.person_outline_rounded,
+                            label: 'My Profile',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 12 : 13),
+                          ),
+                        ]
+                      : [
+                          _drawerItem(icon: Icons.grid_view_rounded, label: 'Dashboard', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 0)),
+                          _drawerItem(icon: Icons.calendar_month_outlined, label: 'Academic Calendar', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 1)),
+                          _drawerItem(icon: Icons.checklist_rounded, label: 'Assignments', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 2)),
+                          _drawerItem(icon: Icons.school_rounded, label: 'Academic', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 3)),
+                          _drawerItem(icon: Icons.attach_money_rounded, label: 'Fees', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 4)),
+                          _drawerItem(icon: Icons.directions_bus_rounded, label: 'Transport', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 5)),
+                          _drawerItem(icon: Icons.notifications_none_rounded, label: 'Announcements', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 6)),
+                          _drawerItem(icon: Icons.group_outlined, label: 'Community', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 8)),
+                          _drawerItem(icon: Icons.room_service_outlined, label: 'Services', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 9)),
+                          _drawerItem(icon: Icons.person_rounded, label: 'My Profile', activeBlue: activeBlue, inactiveIcon: inactiveIcon, inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(context, 10)),
+                        ],
+                ),
+              ),
+            ),
+
+            Divider(height: 1.h, thickness: 1, color: const Color(0xFFEDF2F7)),
+            _drawerItem(
+              icon: Icons.logout_rounded,
+              label: 'Logout',
+              activeBlue: activeBlue,
+              inactiveIcon: const Color(0xFF4A6FA5),
+              inactiveText: const Color(0xFF35526B),
+              forceInactive: true,
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+
+            Container(
+              margin: EdgeInsets.fromLTRB(12.w, 4.h, 12.w, 12.h),
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F7FB),
+                borderRadius: BorderRadius.circular(14.r),
+                border: Border.all(color: const Color(0xFFE2EBF5), width: 1),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 19.r,
+                    backgroundColor: activeBlue.withValues(alpha: 0.15),
+                    child: Text(
+                      _initials,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w800,
+                        color: activeBlue,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _userName,
+                          style: GoogleFonts.inter(
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 1.h),
+                        Text(
+                          widget.role.toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 10.sp,
+                            fontWeight: FontWeight.w700,
+                            color: activeBlue,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+

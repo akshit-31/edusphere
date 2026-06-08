@@ -5,14 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../welcome_screen.dart';
 
-import 'create_assignment_screen.dart';
-import 'exam_marks_entry_screen.dart';
-import 'schedule_screen.dart';
-import 'announcements_screen.dart';
-import 'exam_schedule_screen.dart';
-import '../messages_screen.dart';
-import '../profile_screen.dart';
-import '../academic_screen.dart';
 
 class TeacherMoreScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -110,90 +102,49 @@ class _TeacherMoreScreenState extends State<TeacherMoreScreen> {
                       onTap: () => widget.onNavigate(3),
                     ),
                     _buildMenuItem(
+                      icon: Icons.qr_code_scanner_rounded,
+                      label: 'QR Scanner',
+                      onTap: () => widget.onNavigate(5),
+                    ),
+                    _buildMenuItem(
                       icon: Icons.check_box_outlined,
                       label: 'Assignments',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CreateAssignmentScreen()),
-                      ),
+                      onTap: () => widget.onNavigate(6),
                     ),
                     _buildMenuItem(
                       icon: Icons.menu_book_outlined,
                       label: 'Academic',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AcademicScreen(theme: widget.theme, role: 'teacher'),
-                        ),
-                      ),
+                      onTap: () => widget.onNavigate(7),
                     ),
                     _buildMenuItem(
                       icon: Icons.description_outlined,
                       label: 'Examinations',
-                      onTap: () async {
-                        final res = await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ExamScheduleScreen()),
-                        );
-                        if (res is int && context.mounted) {
-                          widget.onNavigate(res);
-                        }
-                      },
+                      onTap: () => widget.onNavigate(8),
                     ),
                     _buildMenuItem(
                       icon: Icons.assignment_turned_in_outlined,
                       label: 'Marks Entry',
-                      onTap: () async {
-                        final res = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ExamMarksEntryScreen(theme: widget.theme),
-                          ),
-                        );
-                        if (res is int && context.mounted) {
-                          widget.onNavigate(res);
-                        }
-                      },
+                      onTap: () => widget.onNavigate(9),
                     ),
                     _buildMenuItem(
                       icon: Icons.access_time_rounded,
                       label: 'My Schedule',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ScheduleScreen(role: 'teacher', theme: widget.theme),
-                        ),
-                      ),
+                      onTap: () => widget.onNavigate(10),
                     ),
                     _buildMenuItem(
                       icon: Icons.notifications_none_rounded,
                       label: 'Announcements',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AnnouncementsScreen(theme: widget.theme, role: 'teacher'),
-                        ),
-                      ),
+                      onTap: () => widget.onNavigate(11),
                     ),
                     _buildMenuItem(
                       icon: Icons.group_outlined,
                       label: 'Community',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MessagesScreen(theme: widget.theme, isActive: true),
-                        ),
-                      ),
+                      onTap: () => widget.onNavigate(12),
                     ),
                     _buildMenuItem(
                       icon: Icons.person_outline_rounded,
                       label: 'My Profile',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProfileScreen(role: 'teacher', theme: widget.theme),
-                        ),
-                      ),
+                      onTap: () => widget.onNavigate(13),
                     ),
                     
                     Padding(

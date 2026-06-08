@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
+import '../main_screen.dart';
 
 class ExamApprovalScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -14,6 +15,7 @@ class ExamApprovalScreen extends StatefulWidget {
 }
 
 class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTickerProviderStateMixin {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late TabController _tabController;
   bool _loading = false;
 
@@ -313,14 +315,33 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    final bool isPushed = Navigator.canPop(context);
+    final bool isTeacher = widget.theme.label.toLowerCase() == 'teacher';
+
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic') : null,
       backgroundColor: AppColors.background,
+      bottomNavigationBar: (isPushed && isTeacher) ? const TeacherBottomNavBar(activeIndex: 7) : null,
       body: Column(
         children: [
           PageHeader(
             title: 'Approvals',
             subtitle: 'Review & verify exam results',
             theme: widget.theme,
+            leading: (isPushed && isTeacher)
+                ? GestureDetector(
+                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                    child: Container(
+                      width: 40.w, height: 40.w,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      child: Icon(Icons.menu, color: Colors.white, size: 20.sp),
+                    ),
+                  )
+                : null,
           ),
           
           // Tab bar selection (Pending Approval / Reviewed)

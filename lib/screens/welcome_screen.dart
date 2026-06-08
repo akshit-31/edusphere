@@ -71,6 +71,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             await prefs.setString('teacher_mobile', phoneVal);
             await prefs.setString('teacher_joining', joinVal.toString().split(' ')[0].split('T')[0]);
             await prefs.setString('teacher_emp_id', empIdVal);
+            if (qualVal.isNotEmpty) {
+              await prefs.setString('teacher_qual', qualVal);
+            }
             
             await prefs.setString('${role}_name', fullName.isNotEmpty ? fullName : 'Emma Johnson');
             await prefs.setString('${role}_email', emailVal);
@@ -100,6 +103,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             await prefs.setString('student_guardian', '—');
             await prefs.setString('student_phone', phoneVal);
             await prefs.setString('student_admission', data['joiningDate']?.toString().split(' ')[0].split('T')[0] ?? '');
+            if (admVal.isNotEmpty) {
+              await prefs.setString('student_admission_id', admVal);
+              await prefs.setString('student_admission_no', admVal);
+            }
             
             await prefs.setString('${role}_name', fullName.isNotEmpty ? fullName : 'Alex Rivera');
             await prefs.setString('${role}_email', emailVal);

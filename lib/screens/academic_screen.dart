@@ -12,7 +12,6 @@ import 'features/exam_schedule_screen.dart';
 import 'features/exam_terms_screen.dart';
 import 'features/exam_report_card_screen.dart';
 import 'features/exam_marks_entry_screen.dart';
-import 'features/teacher_more_screen.dart';
 import 'main_screen.dart';
 import 'welcome_screen.dart';
 import 'profile_screen.dart';
@@ -73,7 +72,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
   bool _hasAttendanceData = false;
 
   // ── Selected day for timetable ──
-  int _selectedTimetableDay = DateTime.now().weekday == 7 ? 1 : DateTime.now().weekday;
+  int _selectedTimetableDay = DateTime.now().weekday;
 
   final Map<int, List<Map<String, dynamic>>> _mockTimetable = {
     1: [ // Monday
@@ -676,9 +675,38 @@ class _AcademicScreenState extends State<AcademicScreen> {
   }
 
   Widget _buildStudentHeader() {
+    final canGoBack = widget.onBack != null || Navigator.canPop(context);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        if (canGoBack) ...[
+          GestureDetector(
+            onTap: () {
+              if (widget.onBack != null) {
+                widget.onBack!();
+              } else {
+                Navigator.maybePop(context);
+              }
+            },
+            child: Container(
+              padding: EdgeInsets.all(10.r),
+              margin: EdgeInsets.only(right: 12.w),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: const Color(0xFFE2EAF4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6.r,
+                  )
+                ],
+              ),
+              child: Icon(Icons.arrow_back_ios_new_rounded, color: const Color(0xFF0F2547), size: 16.sp),
+            ),
+          ),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,7 +716,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 26.sp,
+                  fontSize: 24.sp,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF0F2547),
                 ),
@@ -701,7 +729,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 13.5.sp,
+                  fontSize: 13.sp,
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF6B7A90),
                 ),
@@ -926,11 +954,11 @@ class _AcademicScreenState extends State<AcademicScreen> {
           // Horizontal Day Selector
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(), // Ensures scrolling is always active & responsive
             child: Row(
-              children: [1, 2, 3, 4, 5, 6].map((dayNum) {
+              children: [1, 2, 3, 4, 5, 6, 7].map((dayNum) {
                 final Map<int, String> dayNames = {
-                  1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat'
+                  1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'
                 };
                 final isSelected = _selectedTimetableDay == dayNum;
                 return GestureDetector(
@@ -941,7 +969,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                   },
                   child: Container(
                     margin: EdgeInsets.only(right: 8.w),
-                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h), // Increased padding slightly for easier touch target
                     decoration: BoxDecoration(
                       color: isSelected ? const Color(0xFF0076F6) : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12.r),
@@ -1436,7 +1464,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
               ],
             )
           : null,
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      bottomNavigationBar: widget.showAppBar ? _buildBottomNavigationBar() : null,
     );
   }
 
@@ -1921,7 +1949,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
           title: 'Exam Management',
           subtitle: 'Create and schedule exams, assign subjects and marks structure.',
           buttonLabel: 'Go to Exams',
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExamScheduleScreen())),
+          onPressed: () => MainScreen.navigateTo(context, 8),
         ),
         SizedBox(height: 16.h),
 
@@ -2443,7 +2471,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                 label: 'Examinations',
                 isSelected: false,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ExamScheduleScreen()));
+                  MainScreen.navigateTo(context, 8);
                 },
               ),
               _buildBottomNavItem(
@@ -2451,7 +2479,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                 label: 'Marks Entry',
                 isSelected: false,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => ExamMarksEntryScreen(theme: widget.theme)));
+                  MainScreen.navigateTo(context, 9);
                 },
               ),
               _buildBottomNavItem(
@@ -2459,7 +2487,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                 label: 'More',
                 isSelected: false,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => TeacherMoreScreen(theme: widget.theme, onNavigate: (i) {})));
+                  MainScreen.navigateTo(context, 4);
                 },
               ),
             ],

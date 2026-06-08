@@ -7,6 +7,7 @@ import '../../widgets/common_widgets.dart';
 import 'exam_report_card_screen.dart';
 import 'exam_marks_entry_screen.dart';
 import 'exam_approval_screen.dart';
+import '../main_screen.dart';
 
 class ExamTermsScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -17,6 +18,7 @@ class ExamTermsScreen extends StatefulWidget {
 }
 
 class _ExamTermsScreenState extends State<ExamTermsScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _loading = false;
 
   // List of academic terms fetched from terms table
@@ -200,14 +202,31 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isPushed = Navigator.canPop(context);
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: (isPushed && _isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic') : null,
       backgroundColor: AppColors.background,
+      bottomNavigationBar: _isTeacher ? const TeacherBottomNavBar(activeIndex: 7) : null,
       body: Column(
         children: [
           PageHeader(
             title: 'Academic Terms',
             subtitle: _isTeacher ? 'View performance & manage exams' : 'View your term report cards',
             theme: widget.theme,
+            leading: (isPushed && _isTeacher)
+                ? GestureDetector(
+                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                    child: Container(
+                      width: 40.w, height: 40.w,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      child: Icon(Icons.menu, color: Colors.white, size: 20.sp),
+                    ),
+                  )
+                : null,
           ),
           
           Expanded(

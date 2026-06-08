@@ -142,6 +142,10 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
               .eq('userId', _studentId)
               .maybeSingle();
           studentProfile ??= await Supabase.instance.client
+                .from('Student')
+                .select('id, currentClassId, academicYearId')
+                .eq('id', _studentId)
+                .maybeSingle();
               .from('Student')
               .select('id, currentClassId, academicYearId')
               .eq('id', _studentId)
