@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/ai_chatbot_overlay.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -18,6 +19,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _obscure = true;
   String? _error;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AIChatbotOverlay.visible.value = false;
+    });
+  }
 
   void _handleSignIn() async {
     final email = _emailCtrl.text.trim();

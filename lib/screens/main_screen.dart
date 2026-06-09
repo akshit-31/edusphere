@@ -30,6 +30,7 @@ import 'features/scanner_feature_wrapper.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import '../widgets/ai_chatbot_overlay.dart';
 
 class MainScreen extends StatefulWidget {
   final String role;
@@ -40,10 +41,16 @@ class MainScreen extends StatefulWidget {
   static _MainScreenState? _activeState;
 
   static void navigateTo(BuildContext context, int index) {
-    // 1. Pop all pushed views above MainScreen route
+    // 1. Close drawer if open
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold != null && scaffold.isDrawerOpen) {
+      scaffold.closeDrawer();
+    }
+
+    // 2. Pop all pushed views above MainScreen route
     Navigator.of(context).popUntil((route) => route.isFirst);
 
-    // 2. Trigger active state tab changes
+    // 3. Trigger active state tab changes
     _activeState?._navigateTo(index);
   }
 
@@ -128,9 +135,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.role == 'teacher') {
-      MainScreen._activeState = this;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AIChatbotOverlay.visible.value = true;
+    });
+    MainScreen._activeState = this;
     _idx = widget.initialIndex;
     _loadUserName();
     _initSocketConnection();
