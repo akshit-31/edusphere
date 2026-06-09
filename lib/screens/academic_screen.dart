@@ -71,6 +71,25 @@ class _AcademicScreenState extends State<AcademicScreen> {
   List<Map<String, dynamic>> _attendanceRecords = [];
   double _attendanceRate = 100.0;
   bool _hasAttendanceData = false;
+  bool _isRefreshButtonPressed = false;
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+
+  Future<void> _handleRefreshButtonClick() async {
+    if (_isRefreshButtonPressed) return;
+    setState(() => _isRefreshButtonPressed = true);
+    
+    // Visually trigger the page's pull-to-refresh spinner.
+    // This will automatically execute _loadStudentOverviewData(showLoading: false) via onRefresh.
+    _refreshIndicatorKey.currentState?.show();
+    
+    // Keep the button blue for a short duration so it's noticeable
+    await Future.delayed(const Duration(milliseconds: 400));
+    
+    if (mounted) {
+      setState(() => _isRefreshButtonPressed = false);
+    }
+  }
+
 
   // ── Selected day for timetable ──
   int _selectedTimetableDay = DateTime.now().weekday;
@@ -655,7 +674,8 @@ class _AcademicScreenState extends State<AcademicScreen> {
                   children: [
               // Main scroll content
               RefreshIndicator(
-                onRefresh: _loadStudentOverviewData,
+                key: _refreshIndicatorKey,
+                onRefresh: () => _loadStudentOverviewData(showLoading: false),
                 color: const Color(0xFF0076F6),
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -770,16 +790,19 @@ class _AcademicScreenState extends State<AcademicScreen> {
         SizedBox(width: 12.w),
         // Refresh Button
         GestureDetector(
-          onTap: _loadStudentOverviewData,
-          child: Container(
+          onTap: _handleRefreshButtonClick,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _isRefreshButtonPressed ? const Color(0xFF0076F6) : Colors.white,
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: const Color(0xFFE2EAF4)),
+              border: Border.all(color: _isRefreshButtonPressed ? const Color(0xFF0076F6) : const Color(0xFFE2EAF4)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
+                  color: _isRefreshButtonPressed 
+                      ? const Color(0xFF0076F6).withValues(alpha: 0.3) 
+                      : Colors.black.withValues(alpha: 0.02),
                   blurRadius: 6.r,
                 )
               ],
@@ -787,14 +810,17 @@ class _AcademicScreenState extends State<AcademicScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.refresh_rounded, color: const Color(0xFF0F2547), size: 16.sp),
+                Icon(Icons.refresh_rounded, 
+                  color: _isRefreshButtonPressed ? Colors.white : const Color(0xFF0F2547), 
+                  size: 16.sp
+                ),
                 SizedBox(width: 6.w),
                 Text(
                   'Refresh',
                   style: GoogleFonts.inter(
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F2547),
+                    color: _isRefreshButtonPressed ? Colors.white : const Color(0xFF0F2547),
                   ),
                 ),
               ],

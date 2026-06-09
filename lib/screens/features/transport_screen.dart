@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -31,15 +32,52 @@ class _TransportScreenState extends State<TransportScreen> {
 
   RealtimeChannel? _transportChannel;
 
+  // Real-time map simulation state
+  LatLng _busLocation = const LatLng(28.70410, 77.10250);
+  Timer? _simulationTimer;
+  int _routeIndex = 0;
+  
+  final List<LatLng> _busRoute = const [
+    LatLng(28.70410, 77.10250),
+    LatLng(28.70430, 77.10270),
+    LatLng(28.70450, 77.10290),
+    LatLng(28.70470, 77.10310),
+    LatLng(28.70490, 77.10330),
+    LatLng(28.70510, 77.10350),
+    LatLng(28.70530, 77.10370),
+    LatLng(28.70550, 77.10390),
+    LatLng(28.70570, 77.10410),
+    LatLng(28.70590, 77.10430),
+    LatLng(28.70610, 77.10450),
+    LatLng(28.70630, 77.10470),
+    LatLng(28.70650, 77.10490),
+    LatLng(28.70670, 77.10510),
+    LatLng(28.70690, 77.10530),
+  ];
+
+
   @override
   void initState() {
     super.initState();
     _loadTransportAllocation();
     _connectRealTime();
+    _startBusSimulation();
+  }
+
+  void _startBusSimulation() {
+    _busLocation = _busRoute.first;
+    _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _routeIndex = (_routeIndex + 1) % _busRoute.length;
+        _busLocation = _busRoute[_routeIndex];
+      });
+    });
   }
 
   @override
   void dispose() {
+    _simulationTimer?.cancel();
     if (_transportChannel != null) {
       try {
         Supabase.instance.client.removeChannel(_transportChannel!);
@@ -695,29 +733,55 @@ class _TransportScreenState extends State<TransportScreen> {
                         Positioned.fill(
                           child: FlutterMap(
                             options: const MapOptions(
-                              initialCenter: LatLng(28.7041, 77.1025),
-                              initialZoom: 14.0,
+                              initialCenter: LatLng(28.7055, 77.1039),
+                              initialZoom: 15.5,
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.example.app',
+                                urlTemplate: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.edusphere.transport',
+                              ),
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: _busRoute,
+                                    color: const Color(0xFF0076F6),
+                                    strokeWidth: 4.0,
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: _busRoute.last, // School destination
+                                    width: 32.w,
+                                    height: 32.w,
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF0F2547),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+                                      ),
+                                      child: Icon(Icons.school, color: Colors.white, size: 16.sp),
+                                    ),
+                                  ),
+                                  Marker(
+                                    point: _busLocation, // Live Bus Location
+                                    width: 40.w,
+                                    height: 40.w,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+                                      ),
+                                      child: Icon(Icons.directions_bus_filled_outlined, color: Colors.white, size: 20.sp),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 16.h,
-                          right: 80.w,
-                          child: Container(
-                            width: 36.w,
-                            height: 36.w,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF10B981),
-                              shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
-                            ),
-                            child: Icon(Icons.directions_bus_filled_outlined, color: Colors.white, size: 20.sp),
                           ),
                         ),
                       ],

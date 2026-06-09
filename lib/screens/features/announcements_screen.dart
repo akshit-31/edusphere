@@ -827,22 +827,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             ],
           ),
         ),
-        Container(
-          width: 44.w,
-          height: 44.w,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12.r),
-            border: Border.all(color: const Color(0xFFE2EAF4), width: 1.5.w),
-          ),
-          child: IconButton(
-            icon: Icon(Icons.filter_alt_outlined, color: const Color(0xFF1A6FDB), size: 20.sp),
-            onPressed: () {
-              // Simulating filter menu
-              showToast(context, 'Filtering announcements...');
-            },
-          ),
-        ),
       ],
     );
   }
