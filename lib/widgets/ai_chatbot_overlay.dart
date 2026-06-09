@@ -9,6 +9,8 @@ class AIChatbotOverlay extends StatefulWidget {
   final Widget child;
   const AIChatbotOverlay({super.key, required this.child});
 
+  static final ValueNotifier<bool> visible = ValueNotifier<bool>(false);
+
   @override
   State<AIChatbotOverlay> createState() => _AIChatbotOverlayState();
 }
@@ -38,6 +40,7 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
   void initState() {
     super.initState();
     _loadStudentDataAndPrefetch();
+    AIChatbotOverlay.visible.addListener(_onVisibilityChanged);
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       if (event == AuthChangeEvent.signedIn) {
@@ -57,12 +60,19 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
     }
   }
 
+  void _onVisibilityChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   void dispose() {
     _chatInputCtrl.dispose();
     _chatScrollCtrl.dispose();
     _authSub?.cancel();
     _stopRefreshTimer();
+    AIChatbotOverlay.visible.removeListener(_onVisibilityChanged);
     super.dispose();
   }
 
@@ -83,12 +93,22 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
   Future<void> _loadStudentDataAndPrefetch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedEmail = prefs.getString('student_email') ?? prefs.getString('user_email');
-      final savedName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Tanvi Singh';
+      final role = prefs.getString('user_role') ?? 'student';
+      final savedEmail = prefs.getString('${role}_email') ??
+                         prefs.getString('student_email') ?? 
+                         prefs.getString('teacher_email') ?? 
+                         prefs.getString('user_email');
+      final savedName = prefs.getString('${role}_name') ??
+                        prefs.getString('student_name') ?? 
+                        prefs.getString('teacher_name') ?? 
+                        prefs.getString('user_name') ?? 
+                        'User';
       _firstName = savedName.trim().split(RegExp(r'\s+'))[0];
 
       if (_chatMessages.isEmpty) {
         _initChat();
+      } else if (_chatMessages.length == 1 && _chatMessages[0]['sender'] == 'bot') {
+        _chatMessages[0]['text'] = 'Hi $_firstName! I am Priya, your EduSphere Assistant. How can I help you today?';
       }
 
       if (savedEmail == null) return;
@@ -104,7 +124,12 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
 
       if (userRes != null) {
         final userId = userRes['id'] as String;
+        final oldFirstName = _firstName;
         _firstName = userRes['firstName'] as String? ?? _firstName;
+
+        if (_firstName != oldFirstName && _chatMessages.length == 1 && _chatMessages[0]['sender'] == 'bot') {
+          _chatMessages[0]['text'] = 'Hi $_firstName! I am Priya, your EduSphere Assistant. How can I help you today?';
+        }
 
         // 2. Fetch student detail
         final studentRes = await supabase
@@ -306,7 +331,7 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
 
   bool get _shouldShowChatbot {
     try {
-      return Supabase.instance.client.auth.currentUser != null;
+      return AIChatbotOverlay.visible.value && Supabase.instance.client.auth.currentUser != null;
     } catch (_) {
       return false;
     }
