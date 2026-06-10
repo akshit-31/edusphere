@@ -1155,6 +1155,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                 
                                 String finalContentBody = bodyCtrl.text.trim();
                                 if (category == 'Poll') {
+                                  finalContentBody += '${finalContentBody.isNotEmpty ? '\n\n' : ''}**Poll Question:** ${pollQuestionCtrl.text.trim()}';
                                   final suffix = '**Poll Question:** ${pollQuestionCtrl.text.trim()}';
                                   finalContentBody = finalContentBody.isNotEmpty
                                       ? '$finalContentBody\n\n$suffix'
