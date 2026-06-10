@@ -13,6 +13,7 @@ import 'features/settings_screen.dart';
 import '../widgets/common_widgets.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'main_screen.dart';
+import '../services/api_service.dart';
 
 
 // ── CUSTOM QR SIMULATOR PAINTER ──
@@ -433,6 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           String mother = '—';
           String guardianPhone = '—';
           
+
           for (var sp in parentsList) {
             final spMap = sp as Map<String, dynamic>;
             final rel = spMap['relationship'] as String?;
