@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -7,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
+import '../../services/api_service.dart';
 
 class TransportScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -31,15 +33,52 @@ class _TransportScreenState extends State<TransportScreen> {
 
   RealtimeChannel? _transportChannel;
 
+  // Real-time map simulation state
+  LatLng _busLocation = const LatLng(28.70410, 77.10250);
+  Timer? _simulationTimer;
+  int _routeIndex = 0;
+  
+  final List<LatLng> _busRoute = const [
+    LatLng(28.70410, 77.10250),
+    LatLng(28.70430, 77.10270),
+    LatLng(28.70450, 77.10290),
+    LatLng(28.70470, 77.10310),
+    LatLng(28.70490, 77.10330),
+    LatLng(28.70510, 77.10350),
+    LatLng(28.70530, 77.10370),
+    LatLng(28.70550, 77.10390),
+    LatLng(28.70570, 77.10410),
+    LatLng(28.70590, 77.10430),
+    LatLng(28.70610, 77.10450),
+    LatLng(28.70630, 77.10470),
+    LatLng(28.70650, 77.10490),
+    LatLng(28.70670, 77.10510),
+    LatLng(28.70690, 77.10530),
+  ];
+
+
   @override
   void initState() {
     super.initState();
     _loadTransportAllocation();
     _connectRealTime();
+    _startBusSimulation();
+  }
+
+  void _startBusSimulation() {
+    _busLocation = _busRoute.first;
+    _simulationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _routeIndex = (_routeIndex + 1) % _busRoute.length;
+        _busLocation = _busRoute[_routeIndex];
+      });
+    });
   }
 
   @override
   void dispose() {
+    _simulationTimer?.cancel();
     if (_transportChannel != null) {
       try {
         Supabase.instance.client.removeChannel(_transportChannel!);
@@ -84,78 +123,38 @@ class _TransportScreenState extends State<TransportScreen> {
       final savedName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Kavya Singh';
       _firstName = savedName.trim().split(RegExp(r'\s+'))[0];
       
-      final savedEmail = prefs.getString('student_email') ?? prefs.getString('user_email') ?? 'student1@demoschool.com';
+      _studentId = prefs.getString('student_id') ?? '';
 
-      // 1. Fetch User details
-      final userRes = await Supabase.instance.client
-          .from('User')
-          .select()
-          .eq('email', savedEmail)
-          .maybeSingle();
-
-      if (userRes != null) {
-        final userId = userRes['id'] as String;
-        final firstName = userRes['firstName'] as String? ?? _firstName;
-        _firstName = firstName;
-
-        // 2. Fetch Student details
-        final studentRes = await Supabase.instance.client
-            .from('Student')
-            .select()
-            .eq('userId', userId)
-            .maybeSingle();
-
-        if (studentRes != null) {
-          _studentId = studentRes['id'] as String;
-
-          // 3. Fetch TransportAllocation details (joined with Route and Stop)
-          final allocationRes = await Supabase.instance.client
-              .from('TransportAllocation')
-              .select('*, TransportRoute(*), RouteStop(*)')
-              .eq('studentId', _studentId)
-              .eq('status', 'ACTIVE')
-              .maybeSingle();
-
-          if (allocationRes != null) {
-            final routeData = allocationRes['TransportRoute'];
-            final stopData = allocationRes['RouteStop'];
-
-            if (routeData != null) {
-              _routeName = routeData['name'] as String? ?? 'Route 1 - City Center';
-            }
-            if (stopData != null) {
-              _stopName = stopData['name'] as String? ?? 'Stop A';
-
-              final timeVal = stopData['arrivalTime'];
-              if (timeVal != null) {
-                _arrivalTime = _formatArrivalTime(timeVal.toString());
-              }
-            }
-          } else {
-            // Default reference values matching the image
-            _routeName = 'Route 1 - City Center';
-            _stopName = 'Stop A';
-            _arrivalTime = '07:00 AM';
+      final response = await ApiService.instance.get('transport/allocations/my');
+      if (response != null && response['success'] == true && response['allocation'] != null) {
+        final allocation = response['allocation'] as Map<String, dynamic>;
+        _isTransportAssigned = true;
+        
+        final routeObj = allocation['route'] as Map<String, dynamic>?;
+        if (routeObj != null) {
+          _routeName = routeObj['name'] as String? ?? 'Route 1 - City Center';
+        }
+        
+        final stopObj = allocation['stop'] as Map<String, dynamic>?;
+        if (stopObj != null) {
+          _stopName = stopObj['name'] as String? ?? 'Stop A';
+          final timeVal = stopObj['arrivalTime'];
+          if (timeVal != null) {
+            _arrivalTime = _formatArrivalTime(timeVal.toString());
           }
-          _isTransportAssigned = true;
-        } else {
-          _routeName = 'Route 1 - City Center';
-          _stopName = 'Stop A';
-          _arrivalTime = '07:00 AM';
-          _isTransportAssigned = true;
         }
       } else {
+        _isTransportAssigned = false;
         _routeName = 'Route 1 - City Center';
         _stopName = 'Stop A';
         _arrivalTime = '07:00 AM';
-        _isTransportAssigned = true;
       }
     } catch (e) {
       debugPrint('Error loading transport allocation: $e');
+      _isTransportAssigned = false;
       _routeName = 'Route 1 - City Center';
       _stopName = 'Stop A';
       _arrivalTime = '07:00 AM';
-      _isTransportAssigned = true;
     } finally {
       if (mounted) {
         setState(() {
@@ -191,43 +190,37 @@ class _TransportScreenState extends State<TransportScreen> {
 
   Future<void> _createSupabaseAllocation() async {
     try {
-      final routes = await Supabase.instance.client
-          .from('TransportRoute')
-          .select()
-          .limit(1);
-      final stops = await Supabase.instance.client
-          .from('RouteStop')
-          .select()
-          .limit(1);
-
+      final routesRes = await ApiService.instance.get('transport/routes');
+      final routes = routesRes['routes'] as List<dynamic>? ?? [];
+      
       String? routeId;
       String? stopId;
 
-      if (routes.isNotEmpty) routeId = routes.first['id'] as String;
-      if (stops.isNotEmpty) stopId = stops.first['id'] as String;
+      if (routes.isNotEmpty) {
+        final routeObj = routes.first as Map<String, dynamic>;
+        routeId = routeObj['id'] as String?;
+        final stops = routeObj['stops'] as List<dynamic>? ?? [];
+        if (stops.isNotEmpty) {
+          stopId = (stops.first as Map<String, dynamic>)['id'] as String?;
+        }
+      }
 
       if (_studentId.isNotEmpty && routeId != null && stopId != null) {
         String? academicYearId;
         try {
-          final academicYears = await Supabase.instance.client
-              .from('AcademicYear')
-              .select()
-              .eq('isCurrent', true)
-              .limit(1);
-          if (academicYears.isNotEmpty) {
-            academicYearId = academicYears.first['id'] as String;
+          final profileRes = await ApiService.instance.get('students/me');
+          if (profileRes != null && profileRes['success'] == true && profileRes['student'] != null) {
+            academicYearId = profileRes['student']['academicYearId'] as String?;
           }
         } catch (_) {}
 
-        await Supabase.instance.client
-            .from('TransportAllocation')
-            .upsert({
-              'studentId': _studentId,
-              'routeId': routeId,
-              'stopId': stopId,
-              'academicYearId': academicYearId,
-              'status': 'ACTIVE',
-            });
+        await ApiService.instance.post('transport/allocate', body: {
+          'studentId': _studentId,
+          'routeId': routeId,
+          'stopId': stopId,
+          'academicYearId': academicYearId,
+          'status': 'ACTIVE',
+        });
 
         await _loadTransportAllocation();
       } else {
@@ -239,7 +232,7 @@ class _TransportScreenState extends State<TransportScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error creating supabase allocation: $e');
+      debugPrint('Error creating transport allocation: $e');
       setState(() {
         _isTransportAssigned = true;
         _routeName = 'Route 1 - City Center';
@@ -695,29 +688,55 @@ class _TransportScreenState extends State<TransportScreen> {
                         Positioned.fill(
                           child: FlutterMap(
                             options: const MapOptions(
-                              initialCenter: LatLng(28.7041, 77.1025),
-                              initialZoom: 14.0,
+                              initialCenter: LatLng(28.7055, 77.1039),
+                              initialZoom: 15.5,
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.example.app',
+                                urlTemplate: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.edusphere.transport',
+                              ),
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: _busRoute,
+                                    color: const Color(0xFF0076F6),
+                                    strokeWidth: 4.0,
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: _busRoute.last, // School destination
+                                    width: 32.w,
+                                    height: 32.w,
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF0F2547),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+                                      ),
+                                      child: Icon(Icons.school, color: Colors.white, size: 16.sp),
+                                    ),
+                                  ),
+                                  Marker(
+                                    point: _busLocation, // Live Bus Location
+                                    width: 40.w,
+                                    height: 40.w,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+                                      ),
+                                      child: Icon(Icons.directions_bus_filled_outlined, color: Colors.white, size: 20.sp),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 16.h,
-                          right: 80.w,
-                          child: Container(
-                            width: 36.w,
-                            height: 36.w,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF10B981),
-                              shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
-                            ),
-                            child: Icon(Icons.directions_bus_filled_outlined, color: Colors.white, size: 20.sp),
                           ),
                         ),
                       ],
