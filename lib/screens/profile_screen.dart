@@ -1192,7 +1192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           SizedBox(height: isDesktop ? 24.h : 16.h),
-          Divider(color: const Color(0xFFE2EAF4), height: 1),
+          const Divider(color: Color(0xFFE2EAF4), height: 1),
           SizedBox(height: isDesktop ? 24.h : 16.h),
           if (isDesktop)
             Row(
