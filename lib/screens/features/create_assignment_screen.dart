@@ -751,7 +751,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                       SizedBox(width: 4.w),
                       Text(
                         hasGrade
-                            ? 'Grade: ${sub['grade']} ($status)'
+                             ? 'Grade: ${sub['grade']} ($status)'
                             : 'Evaluation Pending',
                         style: GoogleFonts.inter(
                           fontSize: 11.sp,

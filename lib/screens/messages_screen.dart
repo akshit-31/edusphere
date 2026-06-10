@@ -361,6 +361,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     ];
   }
 
+  // ignore: unused_element
   Future<void> _refreshCommunityPostsSilently() async {
     // No-op: community posts are loaded once on init
   }
@@ -457,6 +458,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   // Messages are handled in-memory only via optimistic UI updates.
 
+  // ignore: unused_element
   void _processStreamedMessages(List<Map<String, dynamic>> data) {
     if (!mounted) return;
     
@@ -602,7 +604,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   void _sendRichMessage(String text) async {
     if (_active == null) return;
-    final recipientId = _active!.id;
     
     // Optimistic UI Update: immediately add message to screen locally for instant rendering
     setState(() {
@@ -2961,6 +2962,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
   }
 
+  // ignore: unused_element
   void _handleIncomingCall(Map<String, dynamic> payload) {
     final recipientId = payload['recipient_id'] as String?;
     if (recipientId != _currentUserId) return; // Not for me
@@ -2990,6 +2992,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
   }
 
+  // ignore: unused_element
   void _handleCallResponse(Map<String, dynamic> payload) {
     final callId = payload['call_id'] as String?;
     if (callId != _activeCallId) return; // Not my call
