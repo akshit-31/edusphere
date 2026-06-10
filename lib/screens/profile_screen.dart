@@ -13,7 +13,7 @@ import 'features/settings_screen.dart';
 import '../widgets/common_widgets.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'main_screen.dart';
-
+import '../services/api_service.dart';
 
 // ── CUSTOM QR SIMULATOR PAINTER ──
 class QRSimulatorPainter extends CustomPainter {
