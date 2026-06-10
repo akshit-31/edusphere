@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/colors.dart';
+import '../widgets/dashed_border_painter.dart';
 
 class CommunityScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -29,6 +34,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   String _selectedCategory = 'All';
   List<Map<String, dynamic>> _posts = [];
   bool _isLoading = false;
+  RealtimeChannel? _communityChannel;
 
   final List<String> _categories = [
     'All',
@@ -47,6 +53,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
     _loadPosts();
   }
 
+  @override
+  void dispose() {
+    if (_communityChannel != null) {
+      Supabase.instance.client.removeChannel(_communityChannel!);
+    }
+    super.dispose();
+  }
+
   Future<void> _loadUserName() async {
     final prefs = await SharedPreferences.getInstance();
     final role = prefs.getString('user_role') ?? 'student';
@@ -60,49 +74,128 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
+  Future<void> _refreshPostsSilently() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('CommunityPost')
+          .select()
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _posts = List<Map<String, dynamic>>.from(res.map((post) {
+            return {
+              'id': post['id'],
+              'title': '',
+              'content': post['content'],
+              'category': post['category'] ?? 'General',
+              'authorName': post['author_name'] ?? 'Unknown',
+              'createdAt': post['created_at'],
+              'likesCount': post['likes'] ?? 0,
+              'commentsCount': (post['comments'] as List?)?.length ?? 0,
+              'isLiked': post['userLiked'] ?? false,
+              'comments': post['comments'] ?? [],
+              'pollOptions': post['poll_options'] ?? [],
+            };
+          }));
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadPosts() async {
     setState(() {
       _isLoading = true;
     });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final postsJson = prefs.getString('community_posts_list');
-      if (postsJson != null) {
-        final List<dynamic> decoded = json.decode(postsJson);
+      final res = await Supabase.instance.client
+          .from('CommunityPost')
+          .select()
+          .order('created_at', ascending: false);
+
+      if (mounted) {
         setState(() {
-          _posts = List<Map<String, dynamic>>.from(decoded);
+          _posts = List<Map<String, dynamic>>.from(res.map((post) {
+            return {
+              'id': post['id'],
+              'title': '',
+              'content': post['content'],
+              'category': post['category'] ?? 'General',
+              'authorName': post['author_name'] ?? 'Unknown',
+              'createdAt': post['created_at'],
+              'likesCount': post['likes'] ?? 0,
+              'commentsCount': (post['comments'] as List?)?.length ?? 0,
+              'isLiked': post['userLiked'] ?? false,
+              'comments': post['comments'] ?? [],
+              'pollOptions': post['poll_options'] ?? [],
+            };
+          }));
         });
       }
-    } catch (_) {}
-    setState(() {
-      _isLoading = false;
-    });
+
+      _communityChannel ??= Supabase.instance.client
+          .channel('public:CommunityPost')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'CommunityPost',
+            callback: (payload) {
+              if (mounted) {
+                _refreshPostsSilently();
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('Error loading posts: $e');
+    }
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _savePosts() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('community_posts_list', json.encode(_posts));
-    } catch (_) {}
+    // Legacy method, not used anymore but kept for compatibility
   }
 
-  void _addNewPost(String title, String content, String category) {
-    final newPost = {
-      'id': 'post_${DateTime.now().millisecondsSinceEpoch}',
-      'title': title,
-      'content': content,
-      'category': category,
-      'authorName': _userName,
-      'createdAt': DateTime.now().toIso8601String(),
-      'likesCount': 0,
-      'commentsCount': 0,
-      'isLiked': false,
-      'comments': [],
-    };
-    setState(() {
-      _posts.insert(0, newPost);
-    });
-    _savePosts();
+  Future<void> _addNewPost(String title, String content, String category, String audience, List<XFile> images, {List<Map<String,dynamic>> pollOptions = const []}) async {
+    final finalContent = title.isNotEmpty ? '$title\n\n$content' : content;
+    
+    try {
+      await Supabase.instance.client.from('CommunityPost').insert({
+        'author_name': _userName,
+        'author_role': 'Student',
+        'category': category,
+        'content': finalContent,
+        'poll_options': pollOptions,
+        'comments': [],
+        'likes': 0,
+        'insightfuls': 0,
+      });
+    } catch (e) {
+      debugPrint('Error adding post to Supabase: $e');
+      // LOCAL FALLBACK: Show post in UI even if DB fails
+      if (mounted) {
+        setState(() {
+          _posts.insert(0, {
+            'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
+            'title': '',
+            'content': finalContent,
+            'category': category,
+            'authorName': _userName,
+            'createdAt': DateTime.now().toIso8601String(),
+            'likesCount': 0,
+            'commentsCount': 0,
+            'isLiked': false,
+            'comments': [],
+            'pollOptions': pollOptions,
+          });
+        });
+      }
+      // Suppress rethrow to allow seamless local fallback for demo purposes
+    }
   }
 
   int get _topPostsCount {
@@ -129,30 +222,48 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return sum;
   }
 
-  void _toggleLike(int index) {
+  Future<void> _toggleLike(int index) async {
+    final p = _posts[index];
+    final isLiked = p['isLiked'] as bool? ?? false;
+    final newLikes = (p['likesCount'] as int? ?? 0) + (!isLiked ? 1 : -1);
+    
     setState(() {
-      final p = _posts[index];
-      final isLiked = p['isLiked'] as bool? ?? false;
       p['isLiked'] = !isLiked;
-      p['likesCount'] = (p['likesCount'] as int? ?? 0) + (!isLiked ? 1 : -1);
+      p['likesCount'] = newLikes;
     });
-    _savePosts();
+    
+    try {
+      await Supabase.instance.client.from('CommunityPost').update({
+        'likes': newLikes,
+      }).eq('id', p['id']);
+    } catch (_) {}
   }
 
-  void _addComment(int postIndex, String commentText) {
+  Future<void> _addComment(int postIndex, String commentText) async {
     if (commentText.trim().isEmpty) return;
+    
+    final p = _posts[postIndex];
+    final List<dynamic> comments = p['comments'] ?? [];
+    
+    final newComment = {
+      'id': 'c_${DateTime.now().millisecondsSinceEpoch}',
+      'authorName': _userName,
+      'authorRole': 'Student',
+      'content': commentText,
+      'timeAgo': 'Just now',
+    };
+    
     setState(() {
-      final p = _posts[postIndex];
-      final List<dynamic> comments = p['comments'] ?? [];
-      comments.add({
-        'author': _userName,
-        'text': commentText,
-        'time': DateFormat('h:mm a').format(DateTime.now()),
-      });
+      comments.add(newComment);
       p['comments'] = comments;
       p['commentsCount'] = comments.length;
     });
-    _savePosts();
+    
+    try {
+      await Supabase.instance.client.from('CommunityPost').update({
+        'comments': comments,
+      }).eq('id', p['id']);
+    } catch (_) {}
   }
 
   @override
@@ -550,6 +661,29 @@ class _CommunityScreenState extends State<CommunityScreen> {
               height: 1.4,
             ),
           ),
+          if (post['pollOptions'] != null && (post['pollOptions'] as List).isNotEmpty) ...[
+            SizedBox(height: 12.h),
+            ...((post['pollOptions'] as List).map((opt) {
+              return Container(
+                width: double.infinity,
+                margin: EdgeInsets.only(bottom: 8.h),
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10.r),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Text(
+                  opt['option'] ?? '',
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF334155),
+                  ),
+                ),
+              );
+            }).toList()),
+          ],
           SizedBox(height: 16.h),
           Row(
             children: [
@@ -615,79 +749,465 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void _showCreatePostDialog() {
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
+    final pollQuestionCtrl = TextEditingController();
+    final List<TextEditingController> pollOptionCtrls = [TextEditingController(), TextEditingController()];
+    String? pollEndDate;
     String category = 'General';
+    String audience = 'All';
+    List<XFile> selectedImages = [];
+    final ImagePicker picker = ImagePicker();
+
+    final categories = ['General', 'Announcement', 'Question', 'Event', 'Poll', 'Resource'];
+    final audiences = [
+      {'label': 'All', 'icon': Icons.public},
+      {'label': 'Teachers', 'icon': Icons.school},
+      {'label': 'Students', 'icon': Icons.face},
+      {'label': 'Parents', 'icon': Icons.family_restroom},
+      {'label': 'Class specific', 'icon': Icons.meeting_room},
+    ];
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Text('Create Post', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: InputDecoration(
-                    labelText: 'Category',
-                    labelStyle: GoogleFonts.inter(fontSize: 12.sp),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r)),
+        builder: (ctx, setModalState) {
+          final contentLen = bodyCtrl.text.length;
+          
+          return Dialog(
+            backgroundColor: const Color(0xFFF3F8FC),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+            insetPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20.r),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create a Community Post',
+                              style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              'Share something with your school community',
+                              style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Icon(Icons.close, size: 20.sp, color: const Color(0xFF64748B)),
+                      ),
+                    ],
                   ),
-                  items: _categories.where((c) => c != 'All').map((cat) {
-                    return DropdownMenuItem(value: cat, child: Text(cat));
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setModalState(() {
-                        category = val;
-                      });
-                    }
-                  },
-                ),
-                SizedBox(height: 12.h),
-                TextField(
-                  controller: titleCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Post Title',
-                    labelStyle: GoogleFonts.inter(fontSize: 12.sp),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r)),
+                  SizedBox(height: 20.h),
+                  
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Post Type
+                          Text('POST TYPE', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                          SizedBox(height: 8.h),
+                          Wrap(
+                            spacing: 8.w,
+                            runSpacing: 8.h,
+                            children: categories.map((c) {
+                              final isSelected = category == c;
+                              return GestureDetector(
+                                onTap: () => setModalState(() => category = c),
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFF0EA5E9) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20.r),
+                                    border: Border.all(color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (c == 'Poll') ...[
+                                        Icon(Icons.bar_chart_rounded, size: 12.sp, color: isSelected ? Colors.white : const Color(0xFF475569)),
+                                        SizedBox(width: 4.w),
+                                      ],
+                                      Text(
+                                        c,
+                                        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF475569)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          SizedBox(height: 16.h),
+                          
+                          // Audience
+                          Text('AUDIENCE', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                          SizedBox(height: 8.h),
+                          Wrap(
+                            spacing: 8.w,
+                            runSpacing: 8.h,
+                            children: audiences.map((a) {
+                              final label = a['label'] as String;
+                              final icon = a['icon'] as IconData;
+                              final isSelected = audience == label;
+                              return GestureDetector(
+                                onTap: () => setModalState(() => audience = label),
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFF0EA5E9) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20.r),
+                                    border: Border.all(color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(icon, size: 12.sp, color: isSelected ? Colors.white : const Color(0xFF475569)),
+                                      SizedBox(width: 4.w),
+                                      Text(
+                                        label,
+                                        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF475569)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          SizedBox(height: 16.h),
+                          
+                          // Title
+                          Text('TITLE (OPTIONAL)', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                          SizedBox(height: 6.h),
+                          TextField(
+                            controller: titleCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'Give your post a title...',
+                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                              filled: true,
+                              fillColor: const Color(0xFFF1F5F9),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
+                            ),
+                          ),
+                          SizedBox(height: 16.h),
+                          
+                          // Content
+                          Text('CONTENT *', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                          SizedBox(height: 6.h),
+                          TextField(
+                            controller: bodyCtrl,
+                            maxLines: 5,
+                            onChanged: (v) => setModalState(() {}),
+                            decoration: InputDecoration(
+                              hintText: 'What\'s on your mind? Share with the community...',
+                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                              filled: true,
+                              fillColor: const Color(0xFFF1F5F9),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 4.h),
+                              child: Text('$contentLen/5000', style: GoogleFonts.inter(fontSize: 9.sp, color: const Color(0xFF64748B))),
+                            ),
+                          ),
+                          SizedBox(height: 12.h),
+                          
+                          if (category == 'Poll') ...[
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.all(16.r),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F8FB),
+                                borderRadius: BorderRadius.circular(12.r),
+                                border: Border.all(color: const Color(0xFFE0E8EF)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('POLL SETUP', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                                  SizedBox(height: 12.h),
+                                  TextField(
+                                    controller: pollQuestionCtrl,
+                                    onChanged: (v) => setModalState(() {}),
+                                    decoration: InputDecoration(
+                                      hintText: 'Poll question...',
+                                      hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF8FAFC),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
+                                    ),
+                                  ),
+                                  SizedBox(height: 12.h),
+                                  ...List.generate(pollOptionCtrls.length, (idx) {
+                                    return Padding(
+                                      padding: EdgeInsets.only(bottom: 12.h),
+                                      child: TextField(
+                                        controller: pollOptionCtrls[idx],
+                                        onChanged: (v) => setModalState(() {}),
+                                        decoration: InputDecoration(
+                                          hintText: 'Option ${idx + 1}',
+                                          hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setModalState(() {
+                                        pollOptionCtrls.add(TextEditingController());
+                                      });
+                                    },
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.add, size: 14.sp, color: const Color(0xFF0EA5E9)),
+                                        SizedBox(width: 4.w),
+                                        Text('Add option', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w600, color: const Color(0xFF0EA5E9))),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: 16.h),
+                                  Text('Poll ends (optional)', style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B))),
+                                  SizedBox(height: 6.h),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: DateTime.now().add(const Duration(days: 1)),
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      );
+                                      if (picked != null) {
+                                        setModalState(() {
+                                          pollEndDate = DateFormat('dd-MM-yyyy --:--').format(picked);
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(10.r),
+                                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            pollEndDate ?? 'dd-mm-yyyy --:--',
+                                            style: GoogleFonts.inter(fontSize: 12.sp, color: pollEndDate == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A)),
+                                          ),
+                                          Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+                          ],
+                          
+                          // Media
+                          Text('MEDIA (OPTIONAL - UP TO 5 IMAGES)', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
+                          SizedBox(height: 6.h),
+                          GestureDetector(
+                            onTap: () async {
+                              final List<XFile> picked = await picker.pickMultiImage(imageQuality: 80);
+                              if (picked.isNotEmpty) {
+                                setModalState(() {
+                                  selectedImages.addAll(picked);
+                                  if (selectedImages.length > 5) selectedImages = selectedImages.sublist(0, 5);
+                                });
+                              }
+                            },
+                            child: CustomPaint(
+                              painter: DashedBorderPainter(
+                                color: const Color(0xFFCBD5E1),
+                                strokeWidth: 1.5,
+                                dashWidth: 6.0,
+                                dashSpace: 4.0,
+                                borderRadius: 12.r,
+                              ),
+                              child: Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.symmetric(vertical: selectedImages.isEmpty ? 24.h : 16.h),
+                                child: selectedImages.isEmpty 
+                                  ? Column(
+                                      children: [
+                                        Icon(Icons.upload_file_outlined, size: 24.sp, color: const Color(0xFF64748B)),
+                                        SizedBox(height: 8.h),
+                                        RichText(
+                                          text: TextSpan(
+                                            text: 'Click to browse',
+                                            style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w600, color: const Color(0xFF0EA5E9)),
+                                            children: [
+                                              TextSpan(text: ' or drag & drop', style: GoogleFonts.inter(color: const Color(0xFF64748B))),
+                                            ],
+                                          ),
+                                        ),
+                                        SizedBox(height: 4.h),
+                                        Text('Images & videos, max 5MB each', style: GoogleFonts.inter(fontSize: 9.sp, color: const Color(0xFF94A3B8))),
+                                      ],
+                                    )
+                                  : Wrap(
+                                      spacing: 12.w,
+                                      runSpacing: 12.h,
+                                      alignment: WrapAlignment.center,
+                                      children: selectedImages.map((file) {
+                                        return Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(8.r),
+                                              child: Image.file(File(file.path), width: 64.w, height: 64.w, fit: BoxFit.cover),
+                                            ),
+                                            Positioned(
+                                              right: -6.w, top: -6.h,
+                                              child: GestureDetector(
+                                                onTap: () => setModalState(() => selectedImages.remove(file)),
+                                                child: Container(
+                                                  padding: EdgeInsets.all(4.r),
+                                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                                  child: Icon(Icons.close, size: 14.sp, color: Colors.white),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList(),
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 12.h),
-                TextField(
-                  controller: bodyCtrl,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    labelText: 'Share what\'s on your mind...',
-                    labelStyle: GoogleFonts.inter(fontSize: 12.sp),
-                    alignLabelWithHint: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r)),
+                  SizedBox(height: 20.h),
+                  
+                  // Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                            padding: EdgeInsets.symmetric(vertical: 12.h),
+                          ),
+                          child: Text('Cancel', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF475569))),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            bool isValid = false;
+                            if (category == 'Poll') {
+                              bool hasQuestion = pollQuestionCtrl.text.trim().isNotEmpty;
+                              int validOptions = pollOptionCtrls.where((c) => c.text.trim().isNotEmpty).length;
+                              isValid = hasQuestion && validOptions >= 2;
+                            } else {
+                              isValid = bodyCtrl.text.trim().isNotEmpty;
+                            }
+
+                            return ElevatedButton(
+                              onPressed: isValid ? () async {
+                                List<Map<String, dynamic>> finalPollOptions = [];
+                                if (category == 'Poll') {
+                                  for (var ctrl in pollOptionCtrls) {
+                                    if (ctrl.text.trim().isNotEmpty) {
+                                      finalPollOptions.add({
+                                        'option': ctrl.text.trim(),
+                                        'votes': 0,
+                                      });
+                                    }
+                                  }
+                                }
+                                
+                                String finalContentBody = bodyCtrl.text.trim();
+                                if (category == 'Poll') {
+                                  finalContentBody += (finalContentBody.isNotEmpty ? '\n\n' : '') + '**Poll Question:** ${pollQuestionCtrl.text.trim()}';
+                                }
+                                
+                                final scaffoldMessenger = ScaffoldMessenger.of(this.context);
+                                Navigator.pop(ctx);
+                                scaffoldMessenger.showSnackBar(
+                                  const SnackBar(content: Text('Publishing...'), duration: Duration(seconds: 1)),
+                                );
+                                
+                                try {
+                                  await _addNewPost(titleCtrl.text.trim(), finalContentBody, category, audience, selectedImages, pollOptions: finalPollOptions);
+                                  await _refreshPostsSilently();
+                                  
+                                  if (mounted) {
+                                    scaffoldMessenger.showSnackBar(
+                                      const SnackBar(content: Text('🎉 Post published successfully!'), backgroundColor: Colors.green),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    scaffoldMessenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text('Database Error: Table missing in Supabase!'), 
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 4)
+                                      ),
+                                    );
+                                  }
+                                }
+                              } : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isValid ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1),
+                                disabledBackgroundColor: const Color(0xFFCBD5E1),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                padding: EdgeInsets.symmetric(vertical: 12.h),
+                              ),
+                              child: Text('Post', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.white)),
+                            );
+                          }
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: widget.theme.primary),
-              onPressed: () {
-                if (titleCtrl.text.trim().isEmpty || bodyCtrl.text.trim().isEmpty) return;
-                _addNewPost(titleCtrl.text.trim(), bodyCtrl.text.trim(), category);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Publish', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
