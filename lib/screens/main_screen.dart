@@ -17,7 +17,6 @@ import 'features/teacher_more_screen.dart';
 import 'features/academic_calendar_screen.dart';
 import 'features/student_directory_screen.dart';
 import 'features/create_assignment_screen.dart';
-import 'features/exam_marks_entry_screen.dart';
 import 'features/schedule_screen.dart';
 import 'features/announcements_screen.dart';
 import 'features/exam_schedule_screen.dart';
@@ -79,7 +78,6 @@ class _MainScreenState extends State<MainScreen> {
           case 5: return 'Assignments';
           case 6: return 'Academic';
           case 7: return 'Examinations';
-          case 8: return 'Marks Entry';
           case 9: return 'My Schedule';
           case 10: return 'Announcements';
           case 11: return 'Community';
@@ -97,7 +95,6 @@ class _MainScreenState extends State<MainScreen> {
           case 6: return 'Assignments';
           case 7: return 'Academic';
           case 8: return 'Examinations';
-          case 9: return 'Marks Entry';
           case 10: return 'My Schedule';
           case 11: return 'Announcements';
           case 12: return 'Community';
@@ -277,7 +274,7 @@ class _MainScreenState extends State<MainScreen> {
                   showBackButton: false,
                 ), // Index 6: Academic
                 const ExamScheduleScreen(showAppBar: false), // Index 7: Examinations
-                ExamMarksEntryScreen(theme: _theme, showAppBar: false), // Index 8: Marks Entry
+                const SizedBox.shrink(), // Index 8: Marks Entry
                 ScheduleScreen(role: 'teacher', theme: _theme, showAppBar: false), // Index 9: My Schedule
                 AnnouncementsScreen(theme: _theme, role: 'teacher', showAppBar: false), // Index 10: Announcements
                 CommunityScreen(
@@ -319,7 +316,7 @@ class _MainScreenState extends State<MainScreen> {
                   showBackButton: false,
                 ), // Index 7: Academic
                 const ExamScheduleScreen(showAppBar: false), // Index 8: Examinations
-                ExamMarksEntryScreen(theme: _theme, showAppBar: false), // Index 9: Marks Entry
+                const SizedBox.shrink(), // Index 9: Marks Entry
                 ScheduleScreen(role: 'teacher', theme: _theme, showAppBar: false), // Index 10: My Schedule
                 AnnouncementsScreen(theme: _theme, role: 'teacher', showAppBar: false), // Index 11: Announcements
                 CommunityScreen(
@@ -635,8 +632,6 @@ class _MainScreenState extends State<MainScreen> {
                     _SidebarItem(icon: Icons.menu_book_outlined, label: 'Academic', selected: _idx == 6, color: _theme.primary, onTap: () => _navigateTo(6)),
                     SizedBox(height: 8.h),
                     _SidebarItem(icon: Icons.description_outlined, label: 'Examinations', selected: _idx == 7, color: _theme.primary, onTap: () => _navigateTo(7)),
-                    SizedBox(height: 8.h),
-                    _SidebarItem(icon: Icons.fact_check_outlined, label: 'Marks Entry', selected: _idx == 8, color: _theme.primary, onTap: () => _navigateTo(8)),
                     SizedBox(height: 8.h),
                     _SidebarItem(icon: Icons.access_time_rounded, label: 'My Schedule', selected: _idx == 9, color: _theme.primary, onTap: () => _navigateTo(9)),
                     SizedBox(height: 8.h),
@@ -1092,11 +1087,6 @@ AcademicTabConfig getAcademicTabConfig(int index) {
         icon: Icons.description_outlined,
         label: 'Exams',
       );
-    case 9:
-      return AcademicTabConfig(
-        icon: Icons.assignment_turned_in_outlined,
-        label: 'Marks Entry',
-      );
     case 10:
       return AcademicTabConfig(
         icon: Icons.access_time_rounded,
@@ -1280,14 +1270,6 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
                             inactiveIcon: inactiveIcon,
                             inactiveText: inactiveText,
                             onTap: () => MainScreen.navigateTo(context, isDesktop ? 7 : 8),
-                          ),
-                          _drawerItem(
-                            icon: Icons.fact_check_outlined,
-                            label: 'Marks Entry',
-                            activeBlue: activeBlue,
-                            inactiveIcon: inactiveIcon,
-                            inactiveText: inactiveText,
-                            onTap: () => MainScreen.navigateTo(context, isDesktop ? 8 : 9),
                           ),
                           _drawerItem(
                             icon: Icons.access_time_rounded,

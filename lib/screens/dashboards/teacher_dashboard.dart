@@ -11,7 +11,7 @@ import '../../theme/colors.dart';
 import '../../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main_screen.dart';
-import '../features/library_overdue_screen.dart';
+import '../features/teacher_overdue_management_screen.dart';
 
 class TeacherDashboard extends StatefulWidget {
   final RoleTheme theme;
@@ -30,6 +30,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   RealtimeChannel? _teacherDashChannel;
   Timer? _teacherDashTimer;
   String _teacherName = 'Teacher';
+
+  // Refresh state
+  bool _isRefreshing = false;
 
   // Dynamic Statistics
   int _studentCount = 60;
@@ -56,6 +59,21 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       } catch (_) {}
     }
     super.dispose();
+  }
+
+  Future<void> _refreshDashboard() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await Future.wait([
+        _loadUpcomingEvents(),
+        _loadDashboardStats(),
+      ]);
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
   }
 
   void _connectRealTime() {
@@ -187,7 +205,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final isDesktop = size.width > 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
     );
   }
@@ -272,33 +290,49 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             children: [
               Text('Teacher Dashboard',
                   style: GoogleFonts.outfit(
-                      fontSize: 28.sp,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 24.sp,
+                      fontWeight: FontWeight.w800,
                       color: const Color(0xFF0F172A))),
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      _loadUpcomingEvents();
-                      _loadDashboardStats();
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8.r),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.refresh_rounded, size: 16.sp, color: const Color(0xFF475569)),
-                          SizedBox(width: 6.w),
-                          Text('Refresh',
+                  Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8.r),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8.r),
+                      onTap: _isRefreshing ? null : _refreshDashboard,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8.r),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            _isRefreshing
+                                ? SizedBox(
+                                    width: 16.sp,
+                                    height: 16.sp,
+                                    child: const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF0EA5E9),
+                                    ),
+                                  )
+                                : Icon(Icons.refresh_rounded,
+                                    size: 16.sp,
+                                    color: const Color(0xFF475569)),
+                            SizedBox(width: 6.w),
+                            Text(
+                              _isRefreshing ? 'Refreshing...' : 'Refresh',
                               style: GoogleFonts.inter(
                                   fontSize: 13.sp,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF475569))),
-                        ],
+                                  color: _isRefreshing
+                                      ? const Color(0xFF0EA5E9)
+                                      : const Color(0xFF475569)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -329,8 +363,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           SizedBox(height: 6.h),
           Text('Good day, $_teacherName. Here\'s what\'s happening in your classes.',
               style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  color: const Color(0xFF475569))),
+                  fontSize: 12.sp,
+                  color: const Color(0xFF64748B))),
         ],
       );
     } else {
@@ -339,44 +373,64 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         children: [
           Text('Teacher Dashboard',
               style: GoogleFonts.outfit(
-                  fontSize: 28.sp,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 24.sp,
+                  fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A))),
-          SizedBox(height: 6.h),
+          SizedBox(height: 4.h),
           Text('Good day, $_teacherName. Here\'s what\'s happening in your classes.',
               style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  color: const Color(0xFF475569))),
+                  fontSize: 12.sp,
+                  color: const Color(0xFF64748B))),
           SizedBox(height: 16.h),
           Row(
             children: [
               Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    _loadUpcomingEvents();
-                    _loadDashboardStats();
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 10.h),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10.r),
-                      border: Border.all(color: const Color(0xFFD2E2F4)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.refresh_rounded, size: 16.sp, color: const Color(0xFF475569)),
-                        SizedBox(width: 6.w),
-                        Text(
-                          'Refresh',
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF475569),
-                          ),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10.r),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10.r),
+                    onTap: _isRefreshing ? null : _refreshDashboard,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 10.h),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10.r),
+                        border: Border.all(
+                          color: _isRefreshing
+                              ? const Color(0xFF93C5FD)
+                              : const Color(0xFFD2E2F4),
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _isRefreshing
+                              ? SizedBox(
+                                  width: 16.sp,
+                                  height: 16.sp,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF0EA5E9),
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.refresh_rounded,
+                                  size: 16.sp,
+                                  color: const Color(0xFF475569),
+                                ),
+                          SizedBox(width: 6.w),
+                          Text(
+                            _isRefreshing ? 'Refreshing...' : 'Refresh',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w600,
+                              color: _isRefreshing
+                                  ? const Color(0xFF0EA5E9)
+                                  : const Color(0xFF475569),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -443,7 +497,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => LibraryOverdueScreen(theme: widget.theme),
+            builder: (_) => TeacherOverdueManagementScreen(theme: widget.theme),
           ),
         ),
       ),
@@ -474,12 +528,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16.r),
-          border: Border(left: BorderSide(color: color, width: 4.w)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             )
           ],
         ),
@@ -498,10 +552,17 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     letterSpacing: 0.5,
                   ),
                 ),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 14.sp,
-                  color: const Color(0xFF64748B),
+                Container(
+                  padding: EdgeInsets.all(4.r),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14.sp,
+                    color: color,
+                  ),
                 ),
               ],
             ),
@@ -549,9 +610,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
-              offset: const Offset(0, 4))
+              offset: const Offset(0, 2))
         ],
       ),
       child: Column(
