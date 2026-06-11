@@ -69,20 +69,31 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       final data = await ApiService.instance.get('dashboard/stats');
       if (data != null && data['success'] == true && data['stats'] != null) {
         final stats = data['stats'];
-        final totalStudents = stats['myClassStudents'] ?? 0;
-        final pendingAtt = stats['pendingAttendance'] ?? 0;
+        final totalStudents = stats['totalStudents'] ?? stats['myClassStudents'] ?? 0;
+        
+        // Calculate attendance percent based on attendanceDetails if available, or fallback
+        String attendanceRate = '—%';
+        if (stats['attendanceDetails'] != null) {
+          final attDetails = stats['attendanceDetails'];
+          final marked = attDetails['marked'] ?? 0;
+          final total = attDetails['total'] ?? 0;
+          if (total > 0) {
+            attendanceRate = '${((marked / total) * 100).toStringAsFixed(0)}%';
+          } else {
+            attendanceRate = '100%'; // Default when no classes are scheduled/all marked
+          }
+        } else if (stats['attendanceToday'] != null) {
+          attendanceRate = '${stats['attendanceToday']}%';
+        }
+        
+        final pendingFee = stats['pendingFeeCount'] ?? 0;
         final overdueBooks = stats['overdueBooks'] ?? 0;
-        final classesToday = stats['classesToday'] ?? 0;
-        final markedSlots = classesToday - pendingAtt;
-        final attendanceRate = classesToday > 0 
-            ? '${((markedSlots / classesToday) * 100).toStringAsFixed(0)}%'
-            : '—%';
 
         if (mounted) {
           setState(() {
             _myStudentsCount = totalStudents;
             _attendanceRateToday = attendanceRate;
-            _pendingAttendanceCount = pendingAtt;
+            _pendingAttendanceCount = pendingFee; // Using pending fee/pending items count
             _overdueBooksCount = overdueBooks;
           });
         }
@@ -97,6 +108,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final name = prefs.getString('teacher_name') ?? prefs.getString('user_name') ?? 'Teacher';
     if (mounted) setState(() { _teacherName = name.trim().split(' ').first; });
   }
+
+  Map<String, List<dynamic>> _calendarEvents = {};
+  bool _calendarEventsLoaded = false;
 
   Future<void> _loadUpcomingEvents() async {
     try {
@@ -113,6 +127,41 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     } catch (e) {
       dev.log('Error loading teacher upcoming events from API: $e');
       if (mounted) setState(() { _upcomingEventsLoaded = true; });
+    }
+    await _loadCalendarEvents();
+  }
+
+  Future<void> _loadCalendarEvents() async {
+    try {
+      final now = DateTime.now();
+      final startDate = '${now.year - 1}-01-01';
+      final endDate = '${now.year + 1}-12-31';
+      final res = await ApiService.instance.get(
+        'calendar',
+        queryParams: {'startDate': startDate, 'endDate': endDate},
+      );
+      if (res != null && res['success'] == true && mounted) {
+        final List apiEvents = res['events'] as List? ?? [];
+        final Map<String, List<dynamic>> newEvents = {};
+        for (var item in apiEvents) {
+          final dateStr = item['date']?.toString();
+          if (dateStr == null) continue;
+          try {
+            final parsedDate = DateTime.parse(dateStr).toLocal();
+            final key = '${parsedDate.year}-${parsedDate.month}-${parsedDate.day}';
+            newEvents.putIfAbsent(key, () => []).add(item);
+          } catch (_) {}
+        }
+        setState(() {
+          _calendarEvents = newEvents;
+          _calendarEventsLoaded = true;
+        });
+      } else {
+        if (mounted) setState(() { _calendarEventsLoaded = true; });
+      }
+    } catch (e) {
+      dev.log('Error loading calendar events in dashboard: $e');
+      if (mounted) setState(() { _calendarEventsLoaded = true; });
     }
   }
 
@@ -253,7 +302,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             'MY STUDENTS', '$_myStudentsCount', Icons.school_outlined,
             const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), null),
         _buildStatCard(
-            'PENDING ATTEND.', '$_pendingAttendanceCount', Icons.access_time_rounded,
+            'PENDING FEES', '$_pendingAttendanceCount', Icons.payments_outlined,
             const Color(0xFFF59E0B), const Color(0xFFFEF3C7), null),
         _buildStatCard(
             'OVERDUE BOOKS', '$_overdueBooksCount', Icons.menu_book_rounded,
@@ -389,6 +438,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 _focusedDay = focusedDay;
               });
             },
+            eventLoader: (day) {
+              final key = '${day.year}-${day.month}-${day.day}';
+              return _calendarEvents[key] ?? [];
+            },
             headerStyle: HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
@@ -419,6 +472,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   fontSize: 13.sp, color: const Color(0xFF1E293B)),
               outsideTextStyle: GoogleFonts.inter(
                   fontSize: 13.sp, color: const Color(0xFF94A3B8)),
+              markerDecoration: const BoxDecoration(
+                color: Color(0xFF0EA5E9),
+                shape: BoxShape.circle,
+              ),
+              markersMaxCount: 3,
               todayDecoration: BoxDecoration(
                 border: Border.all(color: const Color(0xFF0EA5E9), width: 1.5),
                 shape: BoxShape.rectangle,
@@ -453,41 +511,123 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         letterSpacing: 0.5)),
                 SizedBox(height: 12.h),
                 const Divider(color: Color(0xFFE2E8F0)),
+                SizedBox(height: 16.h),
+                (() {
+                  final key = _selectedDay != null
+                      ? '${_selectedDay!.year}-${_selectedDay!.month}-${_selectedDay!.day}'
+                      : '';
+                  final dayEvents = _calendarEvents[key] ?? [];
+                  if (dayEvents.isEmpty) {
+                    return Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.calendar_today_rounded,
+                              color: const Color(0xFFCBD5E1), size: 32.sp),
+                          SizedBox(height: 12.h),
+                          Text('No events scheduled',
+                              style: GoogleFonts.inter(
+                                  fontSize: 13.sp,
+                                  fontStyle: FontStyle.italic,
+                                  color: const Color(0xFF64748B))),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: dayEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = dayEvents[index];
+                      final title = event['title']?.toString() ?? 'Event';
+                      final type = (event['type']?.toString() ?? 'EVENT').toUpperCase();
+                      final description = event['description']?.toString() ?? '';
+                      final time = event['startTime']?.toString() ?? '';
+
+                      Color typeColor = const Color(0xFF0EA5E9);
+                      if (type == 'HOLIDAY') typeColor = const Color(0xFFEF4444);
+                      if (type == 'EXAM') typeColor = const Color(0xFFF59E0B);
+                      if (type == 'MEETING') typeColor = const Color(0xFF8B5CF6);
+
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 8.h),
+                        padding: EdgeInsets.all(12.r),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10.r),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 4.w,
+                              height: 32.h,
+                              decoration: BoxDecoration(
+                                color: typeColor,
+                                borderRadius: BorderRadius.circular(2.r),
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: GoogleFonts.inter(
+                                        fontSize: 13.sp,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF0F172A)),
+                                  ),
+                                  if (description.isNotEmpty) ...[
+                                    SizedBox(height: 2.h),
+                                    Text(
+                                      description,
+                                      style: GoogleFonts.inter(
+                                          fontSize: 11.sp,
+                                          color: const Color(0xFF64748B)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (time.isNotEmpty)
+                              Text(
+                                time,
+                                style: GoogleFonts.inter(
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF64748B)),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                })(),
                 SizedBox(height: 24.h),
-                Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.calendar_today_rounded,
-                          color: const Color(0xFFCBD5E1), size: 32.sp),
-                      SizedBox(height: 12.h),
-                      Text('No events scheduled',
-                          style: GoogleFonts.inter(
-                              fontSize: 13.sp,
-                              fontStyle: FontStyle.italic,
-                              color: const Color(0xFF64748B))),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 24.h),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: 12.h),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F4F8),
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('View Full Academic Schedule',
-                          style: GoogleFonts.inter(
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF0F172A))),
-                      SizedBox(width: 4.w),
-                      Icon(Icons.chevron_right,
-                          size: 16.sp, color: const Color(0xFF0F172A)),
-                    ],
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicCalendarScreen())),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F4F8),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('View Full Academic Schedule',
+                            style: GoogleFonts.inter(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0F172A))),
+                        SizedBox(width: 4.w),
+                        Icon(Icons.chevron_right,
+                            size: 16.sp, color: const Color(0xFF0F172A)),
+                      ],
+                    ),
                   ),
                 ),
               ],
