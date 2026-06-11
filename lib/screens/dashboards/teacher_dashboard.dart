@@ -55,49 +55,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_teacherDashChannel != null) {
-        client.removeChannel(_teacherDashChannel!);
-      }
-      _teacherDashChannel = client.channel('public:teacher_dash_events')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'SchoolCalendar',
-          callback: (_) {
-            if (mounted) _loadUpcomingEvents();
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'AttendanceRecord',
-          callback: (_) {
-            if (mounted) _loadDashboardMetrics();
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'Student',
-          callback: (_) {
-            if (mounted) _loadDashboardMetrics();
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'LibraryIssue',
-          callback: (_) {
-            if (mounted) _loadDashboardMetrics();
-          },
-        );
-      _teacherDashChannel!.subscribe();
-    } catch (e) {
-      dev.log('Teacher dash realtime error: $e');
-    }
-    _teacherDashTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+    _teacherDashTimer?.cancel();
+    _teacherDashTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         _loadUpcomingEvents();
         _loadDashboardMetrics();
@@ -107,52 +66,29 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   Future<void> _loadDashboardMetrics() async {
     try {
-      final now = DateTime.now();
-      final todayStr = DateFormat('yyyy-MM-dd').format(now);
+      final data = await ApiService.instance.get('dashboard/stats');
+      if (data != null && data['success'] == true && data['stats'] != null) {
+        final stats = data['stats'];
+        final totalStudents = stats['myClassStudents'] ?? 0;
+        final pendingAtt = stats['pendingAttendance'] ?? 0;
+        final overdueBooks = stats['overdueBooks'] ?? 0;
+        final classesToday = stats['classesToday'] ?? 0;
+        final markedSlots = classesToday - pendingAtt;
+        final attendanceRate = classesToday > 0 
+            ? '${((markedSlots / classesToday) * 100).toStringAsFixed(0)}%'
+            : '—%';
 
-      // 1. Fetch total students count
-      final studentsRes = await Supabase.instance.client.from('Student').select('id');
-      final totalStudents = studentsRes.length;
-
-      // 2. Fetch today's attendance records
-      final attRes = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .select('status')
-          .eq('date', todayStr);
-
-      int presentCount = 0;
-      for (var r in attRes) {
-        final status = (r['status'] ?? '').toString().toUpperCase();
-        if (status == 'PRESENT' || status == 'P' || status == 'LATE' || status == 'HALF_DAY') {
-          presentCount++;
+        if (mounted) {
+          setState(() {
+            _myStudentsCount = totalStudents;
+            _attendanceRateToday = attendanceRate;
+            _pendingAttendanceCount = pendingAtt;
+            _overdueBooksCount = overdueBooks;
+          });
         }
       }
-
-      // Calculate attendance rate
-      final attendanceRate = attRes.isNotEmpty
-          ? '${(presentCount / attRes.length * 100).toStringAsFixed(0)}%'
-          : '—%';
-
-      // Calculate pending attendance
-      final pendingAtt = (totalStudents - attRes.length).clamp(0, totalStudents);
-
-      // 3. Fetch overdue books count
-      final overdueRes = await Supabase.instance.client
-          .from('LibraryIssue')
-          .select('id')
-          .isFilter('returnDate', null)
-          .lt('dueDate', todayStr);
-
-      if (mounted) {
-        setState(() {
-          _myStudentsCount = totalStudents;
-          _attendanceRateToday = attendanceRate;
-          _pendingAttendanceCount = pendingAtt;
-          _overdueBooksCount = overdueRes.length;
-        });
-      }
     } catch (e) {
-      dev.log('Error loading teacher dashboard metrics: $e');
+      dev.log('Error loading teacher dashboard metrics from API: $e');
     }
   }
 

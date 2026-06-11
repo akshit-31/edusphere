@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class StudentScore {
   final String admissionNo;
@@ -134,10 +135,67 @@ class _ExamMarksEntryScreenState extends State<ExamMarksEntryScreen> {
       _searched = true;
     });
 
-    // Simulate short network delay for smooth experience
-    await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      String clsName = _selectedClass ?? '';
+      String secName = '';
+      if (clsName.contains(' - ')) {
+        final parts = clsName.split(' - ');
+        clsName = parts[0].trim();
+        secName = parts[1].trim();
+      }
 
-    // Verify if we have mock students for the selected class
+      final classRes = await Supabase.instance.client
+          .from('Class')
+          .select('id')
+          .eq('name', clsName)
+          .maybeSingle();
+
+      if (classRes != null) {
+        final classId = classRes['id'] as String;
+
+        String? sectionId;
+        if (secName.isNotEmpty) {
+          final sectionRes = await Supabase.instance.client
+              .from('Section')
+              .select('id')
+              .eq('classId', classId)
+              .eq('name', secName)
+              .maybeSingle();
+          if (sectionRes != null) {
+            sectionId = sectionRes['id'] as String;
+          }
+        }
+
+        var studentQuery = Supabase.instance.client
+            .from('Student')
+            .select('id, admissionNumber, rollNumber, User(firstName, lastName, email)')
+            .eq('currentClassId', classId);
+
+        if (sectionId != null) {
+          studentQuery = studentQuery.eq('sectionId', sectionId);
+        }
+
+        final studentRes = await studentQuery;
+
+        if (studentRes.isNotEmpty) {
+          final List<Map<String, String>> dbStudents = [];
+          for (var s in studentRes) {
+            final user = s['User'] as Map? ?? {};
+            final fName = user['firstName'] as String? ?? '';
+            final lName = user['lastName'] as String? ?? '';
+            dbStudents.add({
+              "admissionNo": s['admissionNumber']?.toString() ?? '',
+              "name": '$fName $lName'.trim(),
+              "rollNo": s['rollNumber']?.toString() ?? '01',
+            });
+          }
+          _classStudents[_selectedClass!] = dbStudents;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error searching dynamic students from Supabase: $e');
+    }
+
     final studentsData = _classStudents[_selectedClass];
     if (studentsData != null) {
       final prefs = await SharedPreferences.getInstance();
