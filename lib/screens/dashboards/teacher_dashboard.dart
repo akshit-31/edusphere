@@ -184,7 +184,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   Map<String, List<dynamic>> _calendarEvents = {};
-  bool _calendarEventsLoaded = false;
 
   Future<void> _loadUpcomingEvents() async {
     try {
@@ -228,14 +227,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         }
         setState(() {
           _calendarEvents = newEvents;
-          _calendarEventsLoaded = true;
         });
       } else {
-        if (mounted) setState(() { _calendarEventsLoaded = true; });
+        // no-op
       }
     } catch (e) {
       dev.log('Error loading calendar events in dashboard: $e');
-      if (mounted) setState(() { _calendarEventsLoaded = true; });
     }
   }
 
@@ -863,6 +860,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 })(),
                 SizedBox(height: 24.h),
                 GestureDetector(
+                  onTap: () => MainScreen.navigateTo(context, 1),
                   onTap: () {
                     final isDesktop = MediaQuery.of(context).size.width > 900;
                     if (isDesktop) {
