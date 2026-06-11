@@ -97,9 +97,6 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     _connectRealTime();
   }
 
-  void _loadEvents() {
-    // Events should be loaded from real-time database here.
-    // Currently cleared to reflect actual state (no events) matching the design.
   @override
   void dispose() {
     if (_realtimeChannel != null) {
@@ -386,7 +383,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset(0, button.size.height + 8), ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset(0, 8)), ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(const Offset(0, 8)), ancestor: overlay),
       ),
       Offset.zero & overlay.size,
     );

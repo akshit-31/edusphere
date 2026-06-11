@@ -19,11 +19,49 @@ class _TeacherOverdueManagementScreenState
     extends State<TeacherOverdueManagementScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _overdueIssues = [];
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     _loadOverdueData();
+    _connectRealtime();
+  }
+
+  void _connectRealtime() {
+    try {
+      final client = Supabase.instance.client;
+      _realtimeChannel = client.channel('public:teacher_overdue_sync')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'LibraryIssue',
+          callback: (payload) {
+            if (mounted) _loadOverdueData();
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'Book',
+          callback: (payload) {
+            if (mounted) _loadOverdueData();
+          },
+        );
+      _realtimeChannel!.subscribe();
+    } catch (e) {
+      debugPrint('Error subscribing to overdue management realtime: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      try {
+        Supabase.instance.client.removeChannel(_realtimeChannel!);
+      } catch (_) {}
+    }
+    super.dispose();
   }
 
   Future<void> _loadOverdueData() async {
@@ -295,7 +333,7 @@ class _TeacherOverdueManagementScreenState
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
         leading: IconButton(
-          icon: Icon(Icons.menu, size: 28),
+          icon: const Icon(Icons.menu, size: 28),
           onPressed: () {
             Navigator.of(context).popUntil((route) => route.isFirst);
             MainScreen.openDrawer();
@@ -311,10 +349,10 @@ class _TeacherOverdueManagementScreenState
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.notifications_none_rounded, size: 28),
+            icon: const Icon(Icons.notifications_none_rounded, size: 28),
             onPressed: () {},
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
         ],
       ),
 
