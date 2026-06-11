@@ -56,6 +56,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final role = (userObj['role'] as String? ?? '').toLowerCase();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_role', role);
+      await prefs.setString('user_id', userObj['id'] as String? ?? '');
 
       // 2. Perform Supabase Login (as a secondary check for realtime subscriptions)
       try {
@@ -80,8 +81,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final empIdVal = teacherMap['employeeId'] ?? '';
         final qualVal = teacherMap['qualification'] ?? '';
 
+        String teacherIdVal = teacherMap['id'] as String? ?? '';
+        if (teacherIdVal.isEmpty || teacherIdVal == 'b2f4c6d8-2345-6789-bcde-f23456789012') {
+          try {
+            final teachersData = await ApiService.instance.get('teachers');
+            if (teachersData != null && teachersData['success'] == true) {
+              final teachersList = teachersData['teachers'] as List? ?? [];
+              final matchingTeacher = teachersList.firstWhere(
+                (t) => t['userId'] == userObj['id'],
+                orElse: () => null,
+              );
+              if (matchingTeacher != null) {
+                teacherIdVal = matchingTeacher['id'] as String? ?? '';
+              }
+            }
+          } catch (e) {
+            dev.log('Error looking up teacher profile ID: $e');
+          }
+        }
+        if (teacherIdVal.isEmpty) {
+          teacherIdVal = 'd38f8d07-0e3c-4b3a-9d7b-a75bde8d5044'; // real akshit sharma teacher ID
+        }
+
         await prefs.setString('teacher_name', fullName.isNotEmpty ? fullName : 'Emma Johnson');
-        await prefs.setString('teacher_id', teacherMap['id'] as String? ?? 'b2f4c6d8-2345-6789-bcde-f23456789012');
+        await prefs.setString('teacher_id', teacherIdVal);
         await prefs.setString('teacher_design', specVal.isNotEmpty ? '$specVal HOD' : 'Senior Teacher');
         await prefs.setString('teacher_dept', specVal.isNotEmpty ? specVal : 'Academics');
         await prefs.setString('teacher_email', email);
@@ -90,6 +113,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         await prefs.setString('teacher_emp_id', empIdVal);
         if (qualVal.isNotEmpty) {
           await prefs.setString('teacher_qual', qualVal);
+        }
+        
+        final qrCodeVal = userObj['qrCode'] as String? ?? '';
+        if (qrCodeVal.isNotEmpty) {
+          await prefs.setString('teacher_qrcode', qrCodeVal);
+        } else {
+          await prefs.remove('teacher_qrcode');
         }
         
         await prefs.setString('${role}_name', fullName.isNotEmpty ? fullName : 'Emma Johnson');
@@ -115,6 +145,71 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         if (admVal.isNotEmpty) {
           await prefs.setString('student_admission_id', admVal);
           await prefs.setString('student_admission_no', admVal);
+        }
+
+        // Save database-related QR code base64 string
+        final qrCodeVal = userObj['qrCode'] as String? ?? '';
+        if (qrCodeVal.isNotEmpty) {
+          await prefs.setString('student_qrcode', qrCodeVal);
+        } else {
+          await prefs.remove('student_qrcode');
+        }
+
+        // Save core identity details
+        await prefs.setString('student_gender', userObj['gender'] as String? ?? '—');
+        
+        final dobVal = userObj['dateOfBirth'] as String?;
+        if (dobVal != null) {
+          try {
+            final parsed = DateTime.parse(dobVal);
+            await prefs.setString('student_dob', '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}');
+          } catch (_) {
+            await prefs.setString('student_dob', dobVal);
+          }
+        } else {
+          await prefs.setString('student_dob', '—');
+        }
+
+        await prefs.setString('student_blood_group', userObj['bloodGroup'] as String? ?? '—');
+        await prefs.setString('student_religion', studentMap['religion'] as String? ?? 'HINDU');
+        await prefs.setString('student_caste_group', studentMap['caste'] as String? ?? 'GENERAL');
+        await prefs.setString('student_nationality', studentMap['nationality'] as String? ?? 'INDIAN');
+
+        // Save parents info
+        try {
+          final parentsList = studentMap['parents'] as List? ?? [];
+          if (parentsList.isNotEmpty) {
+            String father = '—';
+            String mother = '—';
+            String guardianPhone = '—';
+            for (var sp in parentsList) {
+              final spMap = sp as Map;
+              final rel = spMap['relationship'] as String?;
+              final parentObj = spMap['parent'] as Map?;
+              if (parentObj != null) {
+                final pFullName = '${parentObj['firstName'] ?? ''} ${parentObj['lastName'] ?? ''}'.trim();
+                final pPhone = parentObj['phone'] as String? ?? '—';
+                if (rel == 'FATHER') {
+                  father = pFullName;
+                  if (guardianPhone == '—') guardianPhone = pPhone;
+                } else if (rel == 'MOTHER') {
+                  mother = pFullName;
+                  if (guardianPhone == '—') guardianPhone = pPhone;
+                } else {
+                  if (guardianPhone == '—') guardianPhone = pPhone;
+                }
+              }
+            }
+            await prefs.setString('student_father', father);
+            await prefs.setString('student_mother', mother);
+            await prefs.setString('student_guardian_phone', guardianPhone);
+          } else {
+            await prefs.remove('student_father');
+            await prefs.remove('student_mother');
+            await prefs.remove('student_guardian_phone');
+          }
+        } catch (e) {
+          dev.log('Error saving parents to prefs: $e');
         }
         
         await prefs.setString('${role}_name', fullName.isNotEmpty ? fullName : 'Alex Rivera');

@@ -8,6 +8,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
+import 'dart:developer' as dev;
 import '../main_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -82,6 +85,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
 
   // Events keyed by "year-month-day"
   final Map<String, List<CalendarEvent>> _events = {};
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
@@ -90,11 +94,125 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     _focusedMonth = DateTime(now.year, now.month, 1);
     _selectedDay = now;
     _loadEvents();
+    _connectRealTime();
   }
 
   void _loadEvents() {
     // Events should be loaded from real-time database here.
     // Currently cleared to reflect actual state (no events) matching the design.
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      try {
+        Supabase.instance.client.removeChannel(_realtimeChannel!);
+      } catch (_) {}
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadEvents() async {
+    try {
+      final now = DateTime.now();
+      final startDate = '${now.year - 1}-01-01';
+      final endDate = '${now.year + 1}-12-31';
+      final res = await ApiService.instance.get(
+        'calendar',
+        queryParams: {'startDate': startDate, 'endDate': endDate},
+      );
+      
+      if (res['success'] == true && mounted) {
+        final apiEvents = res['events'] as List? ?? [];
+        setState(() {
+          _events.clear();
+          for (var item in apiEvents) {
+            final dateStr = item['date']?.toString();
+            if (dateStr == null) continue;
+            try {
+              final parsedDate = DateTime.parse(dateStr).toLocal();
+              final title = item['title']?.toString() ?? 'No Title';
+              final typeStr = item['type']?.toString().toLowerCase();
+              EventType eventType;
+              switch (typeStr) {
+                case 'holiday':
+                  eventType = EventType.holiday;
+                  break;
+                case 'exam':
+                  eventType = EventType.exam;
+                  break;
+                case 'emergency':
+                  eventType = EventType.emergency;
+                  break;
+                case 'notice':
+                  eventType = EventType.notice;
+                  break;
+                default:
+                  eventType = EventType.event;
+              }
+              final timeStr = item['startTime']?.toString();
+              
+              _addEvent(parsedDate.year, parsedDate.month, parsedDate.day, 
+                  CalendarEvent(title, eventType, time: timeStr));
+            } catch (e) {
+              dev.log('Error parsing calendar event date: $e');
+            }
+          }
+        });
+      }
+    } catch (e) {
+      dev.log('Error loading calendar events from API: $e');
+      _loadMockEvents();
+    }
+  }
+
+  void _loadMockEvents() {
+    final now = DateTime.now();
+    final y = now.year;
+    final m = now.month;
+
+    setState(() {
+      _events.clear();
+      // Pre-loaded institutional events
+      _addEvent(y, m, 1,  const CalendarEvent('Start of Academic Year 2025-2026', EventType.event));
+      _addEvent(y, m, 15, const CalendarEvent('Science Fair 2026', EventType.event, time: '10:00 AM'));
+      _addEvent(y, m, 20, const CalendarEvent('National Holiday', EventType.holiday));
+      _addEvent(y, m, 25, const CalendarEvent('Mid-Term Examinations', EventType.exam));
+
+      // Next month events
+      _addEvent(y, m + 1, 5,  const CalendarEvent('Parents Meeting', EventType.event));
+      _addEvent(y, m + 1, 14, const CalendarEvent('Independence Day', EventType.holiday));
+      _addEvent(y, m + 1, 22, const CalendarEvent('Annual Sports Day', EventType.event));
+      _addEvent(y, m + 1, 28, const CalendarEvent('Chemistry Lab Exam', EventType.exam));
+    });
+  }
+
+  void _connectRealTime() {
+    try {
+      final client = Supabase.instance.client;
+      if (_realtimeChannel != null) {
+        client.removeChannel(_realtimeChannel!);
+      }
+      
+      _realtimeChannel = client.channel('public:school_calendar_sync')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'SchoolCalendar',
+          callback: (_) {
+            if (mounted) {
+              _loadEvents();
+            }
+          },
+        );
+      
+      _realtimeChannel!.subscribe((status, [error]) {
+        dev.log('📡 Supabase Realtime Academic Calendar channel status: $status', name: 'AcademicCalendarScreen');
+        if (error != null) {
+          dev.log('❌ Supabase Realtime Academic Calendar subscription error: $error', name: 'AcademicCalendarScreen');
+        }
+      });
+    } catch (e) {
+      dev.log('Error connecting realtime in calendar: $e');
+    }
   }
 
   void _addEvent(int year, int month, int day, CalendarEvent event) {

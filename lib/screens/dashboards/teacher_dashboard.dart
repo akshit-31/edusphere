@@ -10,6 +10,8 @@ import '../features/academic_calendar_screen.dart';
 import '../../theme/colors.dart';
 import '../../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main_screen.dart';
+import '../features/teacher_overdue_management_screen.dart';
 
 class TeacherDashboard extends StatefulWidget {
   final RoleTheme theme;
@@ -29,12 +31,22 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Timer? _teacherDashTimer;
   String _teacherName = 'Teacher';
 
+  // Refresh state
+  bool _isRefreshing = false;
+
+  // Dynamic Statistics
+  int _studentCount = 60;
+  int _pendingAttendance = 0;
+  int _overdueBooks = 0;
+  double _attendanceTodayPercentage = 90.0;
+
   @override
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
     _loadTeacherName();
     _loadUpcomingEvents();
+    _loadDashboardStats();
     _connectRealTime();
   }
 
@@ -42,13 +54,62 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   void dispose() {
     _teacherDashTimer?.cancel();
     if (_teacherDashChannel != null) {
-      try { Supabase.instance.client.removeChannel(_teacherDashChannel!); } catch (_) {}
+      try {
+        Supabase.instance.client.removeChannel(_teacherDashChannel!);
+      } catch (_) {}
     }
     super.dispose();
   }
 
+  Future<void> _refreshDashboard() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await Future.wait([
+        _loadUpcomingEvents(),
+        _loadDashboardStats(),
+      ]);
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
+
   void _connectRealTime() {
     try {
+      final data = await ApiService.instance.get('dashboard/stats');
+      if (data != null && data['success'] == true && data['stats'] != null) {
+        final stats = data['stats'];
+        final totalStudents = stats['totalStudents'] ?? stats['myClassStudents'] ?? 0;
+        
+        // Calculate attendance percent based on attendanceDetails if available, or fallback
+        String attendanceRate = '—%';
+        if (stats['attendanceDetails'] != null) {
+          final attDetails = stats['attendanceDetails'];
+          final marked = attDetails['marked'] ?? 0;
+          final total = attDetails['total'] ?? 0;
+          if (total > 0) {
+            attendanceRate = '${((marked / total) * 100).toStringAsFixed(0)}%';
+          } else {
+            attendanceRate = '100%'; // Default when no classes are scheduled/all marked
+          }
+        } else if (stats['attendanceToday'] != null) {
+          attendanceRate = '${stats['attendanceToday']}%';
+        }
+        
+        final pendingFee = stats['pendingFeeCount'] ?? 0;
+        final overdueBooks = stats['overdueBooks'] ?? 0;
+
+        if (mounted) {
+          setState(() {
+            _myStudentsCount = totalStudents;
+            _attendanceRateToday = attendanceRate;
+            _pendingAttendanceCount = pendingFee; // Using pending fee/pending items count
+            _overdueBooksCount = overdueBooks;
+          });
+        }
+      }
       final client = Supabase.instance.client;
       _teacherDashChannel = client.channel('public:teacher_dash_events')
         .onPostgresChanges(
@@ -56,7 +117,18 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           schema: 'public',
           table: 'SchoolCalendar',
           callback: (_) {
-            if (mounted) _loadUpcomingEvents();
+            if (mounted) {
+              _loadUpcomingEvents();
+              _loadDashboardStats();
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'AttendanceRecord',
+          callback: (_) {
+            if (mounted) _loadDashboardStats();
           },
         );
       _teacherDashChannel!.subscribe();
@@ -64,15 +136,87 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       dev.log('Teacher dash realtime error: $e');
     }
     _teacherDashTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (mounted) _loadUpcomingEvents();
+      if (mounted) {
+        _loadUpcomingEvents();
+        _loadDashboardStats();
+      }
     });
   }
+
+
 
   Future<void> _loadTeacherName() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('teacher_name') ?? prefs.getString('user_name') ?? 'Teacher';
-    if (mounted) setState(() { _teacherName = name.trim().split(' ').first; });
+    if (mounted) {
+      setState(() {
+        _teacherName = name.trim().split(' ').first;
+      });
+    }
   }
+
+  Future<void> _loadDashboardStats() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      // 1. Fetch student count
+      final studentCountRes = await supabase.from('Student').select('id');
+      final studentCount = studentCountRes.length;
+
+      // 2. Fetch overdue books count (unreturned issues whose dueDate is before today)
+      final activeIssuesRes = await supabase.from('LibraryIssue').select('dueDate').isFilter('returnDate', null);
+      int overdueCount = 0;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      for (var issue in activeIssuesRes) {
+        final dueDateStr = issue['dueDate'] ?? '';
+        if (dueDateStr.isNotEmpty) {
+          try {
+            final dueDate = DateTime.parse(dueDateStr);
+            final dueNormalized = DateTime(dueDate.year, dueDate.month, dueDate.day);
+            if (dueNormalized.isBefore(today)) {
+              overdueCount++;
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. Fetch attendance today percentage
+      final attendanceRecords = await supabase.from('AttendanceRecord').select('status').eq('date', todayStr);
+      double attendancePct = 90.0;
+      if (attendanceRecords.isNotEmpty) {
+        final presentCount = attendanceRecords.where((r) => r['status'] == 'PRESENT').length;
+        attendancePct = (presentCount / attendanceRecords.length) * 100.0;
+      }
+
+      // 4. Fetch pending attendance count (classes without attendance marked today)
+      final classesRes = await supabase.from('Class').select('id');
+      final markedTodayRes = await supabase.from('AttendanceRecord').select('classId').eq('date', todayStr);
+      final markedClassIds = markedTodayRes.map((r) => r['classId']?.toString()).toSet();
+      int pendingAttend = 0;
+      for (var c in classesRes) {
+        final classId = c['id']?.toString();
+        if (classId != null && !markedClassIds.contains(classId)) {
+          pendingAttend++;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _studentCount = studentCount > 0 ? studentCount : 60;
+          _overdueBooks = overdueCount;
+          _attendanceTodayPercentage = attendancePct;
+          _pendingAttendance = pendingAttend;
+        });
+      }
+    } catch (e) {
+      dev.log('Error loading teacher dashboard stats: $e');
+    }
+  }
+
+  Map<String, List<dynamic>> _calendarEvents = {};
+  bool _calendarEventsLoaded = false;
 
   Future<void> _loadUpcomingEvents() async {
     try {
@@ -90,120 +234,132 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       dev.log('Error loading teacher upcoming events from API: $e');
       if (mounted) setState(() { _upcomingEventsLoaded = true; });
     }
+    await _loadCalendarEvents();
+  }
+
+  Future<void> _loadCalendarEvents() async {
+    try {
+      final now = DateTime.now();
+      final startDate = '${now.year - 1}-01-01';
+      final endDate = '${now.year + 1}-12-31';
+      final res = await ApiService.instance.get(
+        'calendar',
+        queryParams: {'startDate': startDate, 'endDate': endDate},
+      );
+      if (res != null && res['success'] == true && mounted) {
+        final List apiEvents = res['events'] as List? ?? [];
+        final Map<String, List<dynamic>> newEvents = {};
+        for (var item in apiEvents) {
+          final dateStr = item['date']?.toString();
+          if (dateStr == null) continue;
+          try {
+            final parsedDate = DateTime.parse(dateStr).toLocal();
+            final key = '${parsedDate.year}-${parsedDate.month}-${parsedDate.day}';
+            newEvents.putIfAbsent(key, () => []).add(item);
+          } catch (_) {}
+        }
+        setState(() {
+          _calendarEvents = newEvents;
+          _calendarEventsLoaded = true;
+        });
+      } else {
+        if (mounted) setState(() { _calendarEventsLoaded = true; });
+      }
+    } catch (e) {
+      dev.log('Error loading calendar events in dashboard: $e');
+      if (mounted) setState(() { _calendarEventsLoaded = true; });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isDesktop = size.width > 900;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8),
-      body: SingleChildScrollView(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadUpcomingEvents();
+        await _loadDashboardStats();
+      },
+      color: const Color(0xFF0EA5E9),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(false),
             SizedBox(height: 24.h),
-            _buildMetricsGrid(),
+            _buildMetricsGrid(false),
             SizedBox(height: 24.h),
             _buildSchoolCalendar(),
             SizedBox(height: 24.h),
             _buildUpcomingEvents(),
-            SizedBox(height: 80.h), // space for FAB
+            SizedBox(height: 40.h),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        onPressed: () {},
-        backgroundColor: const Color(0xFF0EA5E9),
-        child: Icon(Icons.auto_awesome, color: Colors.white, size: 28.sp), // closest to the spark icon
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Teacher Dashboard',
-                style: GoogleFonts.outfit(
-                    fontSize: 24.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A))),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.r),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: GestureDetector(
-                onTap: _loadUpcomingEvents,
-                child: Row(
+  Widget _buildDesktopLayout() {
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadUpcomingEvents();
+        await _loadDashboardStats();
+      },
+      color: const Color(0xFF0EA5E9),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(32.r),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(true),
+                SizedBox(height: 24.h),
+                _buildMetricsGrid(true),
+                SizedBox(height: 24.h),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.refresh_rounded, size: 16.sp, color: const Color(0xFF64748B)),
-                    SizedBox(width: 4.w),
-                    Text('Refresh',
-                        style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF475569))),
+                    Expanded(
+                      flex: 7,
+                      child: _buildSchoolCalendar(),
+                    ),
+                    SizedBox(width: 24.w),
+                    Expanded(
+                      flex: 4,
+                      child: _buildUpcomingEvents(),
+                    ),
                   ],
                 ),
-              ),
+                SizedBox(height: 40.h),
+              ],
             ),
-          ],
-        ),
-        SizedBox(height: 8.h),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Good day, $_teacherName.',
-                      style: GoogleFonts.inter(
-                          fontSize: 14.sp,
-                          color: const Color(0xFF64748B))),
-                  SizedBox(height: 4.h),
-                  Text('Here\'s what\'s happening in your classes.',
-                      style: GoogleFonts.inter(
-                          fontSize: 14.sp,
-                          color: const Color(0xFF64748B))),
-                ],
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.r),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_month_rounded, size: 16.sp, color: const Color(0xFF3B82F6)),
-                  SizedBox(width: 6.w),
-                  Text(DateFormat('EEE, d MMM yyyy').format(DateTime.now()),
-                      style: GoogleFonts.inter(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF3B82F6))),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildMetricsGrid() {
+    double? attPercent;
+    if (_attendanceRateToday != '—%') {
+      try {
+        attPercent = double.parse(_attendanceRateToday.replaceAll('%', '')) / 100.0;
+      } catch (_) {}
+    }
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -213,93 +369,341 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       childAspectRatio: 1.5,
       children: [
         _buildStatCard(
-            'ATTENDANCE TODAY', '95%', Icons.people_outline_rounded,
-            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), true),
+            'ATTENDANCE TODAY', _attendanceRateToday, Icons.people_outline_rounded,
+            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), attPercent),
         _buildStatCard(
-            'MY STUDENTS', '300', Icons.school_outlined,
-            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), false),
+            'MY STUDENTS', '$_myStudentsCount', Icons.school_outlined,
+            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), null),
         _buildStatCard(
-            'PENDING ATTEND.', '0', Icons.access_time_rounded,
-            const Color(0xFFF59E0B), const Color(0xFFFEF3C7), false),
+            'PENDING FEES', '$_pendingAttendanceCount', Icons.payments_outlined,
+            const Color(0xFFF59E0B), const Color(0xFFFEF3C7), null),
         _buildStatCard(
-            'OVERDUE BOOKS', '0', Icons.menu_book_rounded,
-            const Color(0xFFEF4444), const Color(0xFFFEE2E2), false),
+            'OVERDUE BOOKS', '$_overdueBooksCount', Icons.menu_book_rounded,
+            const Color(0xFFEF4444), const Color(0xFFFEE2E2), null),
       ],
+      ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color iconColor, Color bgColor, bool showProgress) {
-    return Container(
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border(left: BorderSide(color: iconColor, width: 4.w)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
-        ],
-      ),
-      child: Column(
+  Widget _buildHeader(bool isDesktop) {
+    if (isDesktop) {
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(title,
-                    style: GoogleFonts.inter(
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1E293B),
-                        letterSpacing: 0.5)),
-              ),
-              Container(
-                padding: EdgeInsets.all(8.r),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: iconColor, size: 18.sp),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
+              Text('Teacher Dashboard',
                   style: GoogleFonts.outfit(
                       fontSize: 24.sp,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF0F172A))),
-              if (showProgress) ...[
-                SizedBox(height: 8.h),
-                Container(
-                  height: 4.h,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(2.r),
+              Row(
+                children: [
+                  Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8.r),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8.r),
+                      onTap: _isRefreshing ? null : _refreshDashboard,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8.r),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            _isRefreshing
+                                ? SizedBox(
+                                    width: 16.sp,
+                                    height: 16.sp,
+                                    child: const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF0EA5E9),
+                                    ),
+                                  )
+                                : Icon(Icons.refresh_rounded,
+                                    size: 16.sp,
+                                    color: const Color(0xFF475569)),
+                            SizedBox(width: 6.w),
+                            Text(
+                              _isRefreshing ? 'Refreshing...' : 'Refresh',
+                              style: GoogleFonts.inter(
+                                  fontSize: 13.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: _isRefreshing
+                                      ? const Color(0xFF0EA5E9)
+                                      : const Color(0xFF475569)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: 0.95,
+                  SizedBox(width: 12.w),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE),
+                      borderRadius: BorderRadius.circular(8.r),
+                      border: Border.all(color: const Color(0xFFBAE6FD)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_month_rounded, size: 16.sp, color: const Color(0xFF0284C7)),
+                        SizedBox(width: 6.w),
+                        Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                            style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0284C7))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 6.h),
+          Text('Good day, $_teacherName. Here\'s what\'s happening in your classes.',
+              style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF64748B))),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Teacher Dashboard',
+              style: GoogleFonts.outfit(
+                  fontSize: 24.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A))),
+          SizedBox(height: 4.h),
+          Text('Good day, $_teacherName. Here\'s what\'s happening in your classes.',
+              style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF64748B))),
+          SizedBox(height: 16.h),
+          Row(
+            children: [
+              Expanded(
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10.r),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10.r),
+                    onTap: _isRefreshing ? null : _refreshDashboard,
                     child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 10.h),
                       decoration: BoxDecoration(
-                        color: iconColor,
-                        borderRadius: BorderRadius.circular(2.r),
+                        borderRadius: BorderRadius.circular(10.r),
+                        border: Border.all(
+                          color: _isRefreshing
+                              ? const Color(0xFF93C5FD)
+                              : const Color(0xFFD2E2F4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _isRefreshing
+                              ? SizedBox(
+                                  width: 16.sp,
+                                  height: 16.sp,
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF0EA5E9),
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.refresh_rounded,
+                                  size: 16.sp,
+                                  color: const Color(0xFF475569),
+                                ),
+                          SizedBox(width: 6.w),
+                          Text(
+                            _isRefreshing ? 'Refreshing...' : 'Refresh',
+                            style: GoogleFonts.inter(
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w600,
+                              color: _isRefreshing
+                                  ? const Color(0xFF0EA5E9)
+                                  : const Color(0xFF475569),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 10.h),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0284C7),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ],
+      );
+    }
+  }
+
+
+  Widget _buildMetricsGrid(bool isDesktop) {
+    final cards = [
+      _buildResponsiveStatCard(
+        title: 'ATTENDANCE TODAY',
+        value: '${_attendanceTodayPercentage.toStringAsFixed(0)}%',
+        color: const Color(0xFF3B82F6),
+        showProgress: true,
+        onTap: () => MainScreen.navigateTo(context, 3),
+      ),
+      _buildResponsiveStatCard(
+        title: 'MY STUDENTS',
+        value: '$_studentCount',
+        color: const Color(0xFF0EA5E9),
+        showProgress: false,
+        onTap: () => MainScreen.navigateTo(context, 2),
+      ),
+      _buildResponsiveStatCard(
+        title: 'PENDING ATTEND.',
+        value: '$_pendingAttendance',
+        color: const Color(0xFFF59E0B),
+        showProgress: false,
+        onTap: () => MainScreen.navigateTo(context, 3),
+      ),
+      _buildResponsiveStatCard(
+        title: 'OVERDUE BOOKS',
+        value: '$_overdueBooks',
+        color: const Color(0xFFEF4444),
+        showProgress: false,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherOverdueManagementScreen(theme: widget.theme),
+          ),
+        ),
+      ),
+    ];
+
+    if (isDesktop) {
+      return Row(
+        children: cards.map((c) => Expanded(child: c)).toList(),
+      );
+    } else {
+      return Column(
+        children: cards.expand((c) => [c, SizedBox(height: 12.h)]).toList()..removeLast(),
+      );
+    }
+  }
+
+  Widget _buildResponsiveStatCard({
+    required String title,
+    required String value,
+    required Color color,
+    required bool showProgress,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 18.h),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF475569),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(4.r),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14.sp,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 12.h),
+            Text(
+              value,
+              style: GoogleFonts.outfit(
+                fontSize: 28.sp,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            if (showProgress) ...[
+              SizedBox(height: 10.h),
+              Container(
+                height: 4.h,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2.r),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: (_attendanceTodayPercentage / 100.0).clamp(0.0, 1.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(2.r),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -312,9 +716,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
-              offset: const Offset(0, 4))
+              offset: const Offset(0, 2))
         ],
       ),
       child: Column(
@@ -355,6 +759,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 _focusedDay = focusedDay;
               });
             },
+            eventLoader: (day) {
+              final key = '${day.year}-${day.month}-${day.day}';
+              return _calendarEvents[key] ?? [];
+            },
             headerStyle: HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
@@ -385,6 +793,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   fontSize: 13.sp, color: const Color(0xFF1E293B)),
               outsideTextStyle: GoogleFonts.inter(
                   fontSize: 13.sp, color: const Color(0xFF94A3B8)),
+              markerDecoration: const BoxDecoration(
+                color: Color(0xFF0EA5E9),
+                shape: BoxShape.circle,
+              ),
+              markersMaxCount: 3,
               todayDecoration: BoxDecoration(
                 border: Border.all(color: const Color(0xFF0EA5E9), width: 1.5),
                 shape: BoxShape.rectangle,
@@ -419,7 +832,103 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         letterSpacing: 0.5)),
                 SizedBox(height: 12.h),
                 const Divider(color: Color(0xFFE2E8F0)),
+                SizedBox(height: 16.h),
+                (() {
+                  final key = _selectedDay != null
+                      ? '${_selectedDay!.year}-${_selectedDay!.month}-${_selectedDay!.day}'
+                      : '';
+                  final dayEvents = _calendarEvents[key] ?? [];
+                  if (dayEvents.isEmpty) {
+                    return Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.calendar_today_rounded,
+                              color: const Color(0xFFCBD5E1), size: 32.sp),
+                          SizedBox(height: 12.h),
+                          Text('No events scheduled',
+                              style: GoogleFonts.inter(
+                                  fontSize: 13.sp,
+                                  fontStyle: FontStyle.italic,
+                                  color: const Color(0xFF64748B))),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: dayEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = dayEvents[index];
+                      final title = event['title']?.toString() ?? 'Event';
+                      final type = (event['type']?.toString() ?? 'EVENT').toUpperCase();
+                      final description = event['description']?.toString() ?? '';
+                      final time = event['startTime']?.toString() ?? '';
+
+                      Color typeColor = const Color(0xFF0EA5E9);
+                      if (type == 'HOLIDAY') typeColor = const Color(0xFFEF4444);
+                      if (type == 'EXAM') typeColor = const Color(0xFFF59E0B);
+                      if (type == 'MEETING') typeColor = const Color(0xFF8B5CF6);
+
+                      return Container(
+                        margin: EdgeInsets.only(bottom: 8.h),
+                        padding: EdgeInsets.all(12.r),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10.r),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 4.w,
+                              height: 32.h,
+                              decoration: BoxDecoration(
+                                color: typeColor,
+                                borderRadius: BorderRadius.circular(2.r),
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: GoogleFonts.inter(
+                                        fontSize: 13.sp,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF0F172A)),
+                                  ),
+                                  if (description.isNotEmpty) ...[
+                                    SizedBox(height: 2.h),
+                                    Text(
+                                      description,
+                                      style: GoogleFonts.inter(
+                                          fontSize: 11.sp,
+                                          color: const Color(0xFF64748B)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (time.isNotEmpty)
+                              Text(
+                                time,
+                                style: GoogleFonts.inter(
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF64748B)),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                })(),
                 SizedBox(height: 24.h),
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicCalendarScreen())),
                 Center(
                   child: Column(
                     children: [
@@ -435,25 +944,28 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                 ),
                 SizedBox(height: 24.h),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: 12.h),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F4F8),
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('View Full Academic Schedule',
-                          style: GoogleFonts.inter(
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF0F172A))),
-                      SizedBox(width: 4.w),
-                      Icon(Icons.chevron_right,
-                          size: 16.sp, color: const Color(0xFF0F172A)),
-                    ],
+                GestureDetector(
+                  onTap: () => MainScreen.navigateTo(context, 1),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F4F8),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('View Full Academic Schedule',
+                            style: GoogleFonts.inter(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0F172A))),
+                        SizedBox(width: 4.w),
+                        Icon(Icons.chevron_right,
+                            size: 16.sp, color: const Color(0xFF0F172A)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -497,7 +1009,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                         style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8))),
                   ],
                 ),
-                // Live indicator
                 Row(
                   children: [
                     Container(
@@ -637,7 +1148,14 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
                 SizedBox(height: 12.h),
                 GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicCalendarScreen())),
+                  onTap: () {
+                    final isDesktop = MediaQuery.of(context).size.width > 900;
+                    if (isDesktop) {
+                      MainScreen.navigateTo(context, 1);
+                    } else {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AcademicCalendarScreen()));
+                    }
+                  },
                   child: Container(
                     width: double.infinity,
                     padding: EdgeInsets.symmetric(vertical: 12.h),
@@ -664,5 +1182,3 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 }
-
-

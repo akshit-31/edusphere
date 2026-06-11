@@ -2,21 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../profile_screen.dart';
+import '../../theme/colors.dart';
+
 
 // ── Student Model ────────────────────────────────────────────────────────────
 class StudentRecord {
+  final String id;
   final String admissionNo;
   final String name;
   final String className;
   final String email;
   final String status;
   const StudentRecord({
+    required this.id,
     required this.admissionNo,
     required this.name,
     required this.className,
     required this.email,
     required this.status,
   });
+
+  String get formattedAdmissionNo {
+    if (admissionNo.startsWith('ADM24') && admissionNo.length == 9) {
+      return 'ADM-2024${admissionNo.substring(5)}';
+    }
+    return admissionNo;
+  }
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -47,9 +59,10 @@ class StudentDirectoryScreen extends StatefulWidget {
 class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   int _currentPage = 1;
-  final int _rowsPerPage = 10;
+  final int _rowsPerPage = 100;
   String _searchQuery = '';
   bool _isLoading = false;
+  String? _errorMessage;
   List<StudentRecord> _allStudents = [];
 
   @override
@@ -59,25 +72,33 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   }
 
   Future<void> _fetchStudents() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final response = await Supabase.instance.client
           .from('Student')
-          .select('id, admissionNumber, currentClassId, status, User(firstName, lastName, email), Class(name)');
+          .select('id, admissionNumber, currentClassId, status, User(firstName, lastName, email), Class(name), Section(name)');
 
       final List<StudentRecord> loadedStudents = [];
       for (var item in response) {
         final user = item['User'] as Map?;
         final classData = item['Class'] as Map?;
+        final sectionData = item['Section'] as Map?;
         final firstName = user?['firstName'] ?? '';
         final lastName = user?['lastName'] ?? '';
         final fullName = '$firstName $lastName'.trim();
-        final className = classData?['name'] ?? 'Class 1';
+        
+        final rawClassName = classData?['name']?.toString() ?? 'Class 8';
+        final sectionName = sectionData?['name']?.toString() ?? 'A';
+        final displayClassName = '${rawClassName.replaceAll('Class', 'Grade')} - $sectionName';
 
         loadedStudents.add(StudentRecord(
+          id: item['id']?.toString() ?? '',
           admissionNo: item['admissionNumber'] ?? '',
           name: fullName.isNotEmpty ? fullName : 'Unknown',
-          className: className,
+          className: displayClassName,
           email: user?['email'] ?? '',
           status: item['status'] ?? 'ACTIVE',
         ));
@@ -90,35 +111,16 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching students: $e');
+      debugPrint('Error fetching students from API: $e');
       if (mounted) {
         setState(() {
-          _allStudents = _getDemoStudents();
+          _errorMessage = 'Could not load students. Pull down to retry.';
           _isLoading = false;
         });
       }
     }
   }
 
-  List<StudentRecord> _getDemoStudents() {
-    return [
-      const StudentRecord(admissionNo: 'ADM240001', name: 'Priya Singh', className: 'Class 1 - A', email: 'student1@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240002', name: 'Anjali Das', className: 'Class 1 - A', email: 'student2@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240003', name: 'Sneha Mair', className: 'Class 1 - A', email: 'student3@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240004', name: 'Arjun Reddy', className: 'Class 1 - A', email: 'student4@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240005', name: 'Ankit Gupta', className: 'Class 1 - A', email: 'student5@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240006', name: 'Deepak Yadav', className: 'Class 1 - A', email: 'student6@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240007', name: 'Riya Nair', className: 'Class 1 - A', email: 'student7@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240008', name: 'Karan Mishra', className: 'Class 1 - A', email: 'student8@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240009', name: 'Deepika Sharma', className: 'Class 1 - A', email: 'student9@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240010', name: 'Sanjay Mulchandani', className: 'Class 1 - A', email: 'student10@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240011', name: 'Rahul Verma', className: 'Class 2 - B', email: 'student11@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240012', name: 'Kiran Patel', className: 'Class 2 - B', email: 'student12@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240013', name: 'Neha Gupta', className: 'Class 3 - A', email: 'student13@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240014', name: 'Aman Sharma', className: 'Class 3 - B', email: 'student14@demoschool.com', status: 'ACTIVE'),
-      const StudentRecord(admissionNo: 'ADM240015', name: 'Pooja Joshi', className: 'Class 4 - A', email: 'student15@demoschool.com', status: 'ACTIVE'),
-    ];
-  }
 
   @override
   void dispose() {
@@ -147,71 +149,6 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   int get _totalPages {
     final len = _filteredStudents.length;
     return (len / _rowsPerPage).ceil();
-  }
-
-  void _showAddStudentDialog() {
-    final nameCtrl = TextEditingController();
-    final classCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        title: Text(
-          'Add New Student',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Full Name'),
-            ),
-            TextField(
-              controller: classCtrl,
-              decoration: const InputDecoration(labelText: 'Class (e.g. Class 1 - A)'),
-            ),
-            TextField(
-              controller: emailCtrl,
-              decoration: const InputDecoration(labelText: 'Email Address'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.isNotEmpty && emailCtrl.text.isNotEmpty) {
-                setState(() {
-                  final newId = 'ADM24${(_allStudents.length + 1).toString().padLeft(4, '0')}';
-                  _allStudents.insert(
-                    0,
-                    StudentRecord(
-                      admissionNo: newId,
-                      name: nameCtrl.text,
-                      className: classCtrl.text.isEmpty ? 'Class 1 - A' : classCtrl.text,
-                      email: emailCtrl.text,
-                      status: 'ACTIVE',
-                    ),
-                  );
-                });
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0066CC),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
-            ),
-            child: const Text('Add Student', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -245,63 +182,44 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
               ],
             )
           : null,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeaderRow(),
-              SizedBox(height: 16.h),
-              _buildDirectoryCard(),
-              SizedBox(height: 80.h),
-            ],
+      body: RefreshIndicator(
+        onRefresh: _fetchStudents,
+        color: const Color(0xFF0066CC),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderRow(),
+                SizedBox(height: 16.h),
+                _buildDirectoryCard(),
+                SizedBox(height: 80.h),
+              ],
+            ),
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: null,
-        onPressed: _showAddStudentDialog,
-        backgroundColor: const Color(0xFF0066CC),
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30.r)),
-        child: Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 24.sp),
       ),
     );
   }
 
   Widget _buildHeaderRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Students',
-              style: GoogleFonts.outfit(
-                fontSize: 20.sp,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              'Manage all student records and information',
-              style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B)),
-            ),
-          ],
+        Text(
+          'Students',
+          style: GoogleFonts.outfit(
+            fontSize: 24.sp,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8.r),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: IconButton(
-            icon: Icon(Icons.tune_rounded, color: const Color(0xFF64748B), size: 20.sp),
-            onPressed: () {},
-          ),
+        SizedBox(height: 4.h),
+        Text(
+          'Manage all student records and information',
+          style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B)),
         ),
       ],
     );
@@ -330,15 +248,38 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Student Directory',
-                  style: GoogleFonts.outfit(
-                      fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                Row(
+                  children: [
+                    Text(
+                      'Student Directory',
+                      style: GoogleFonts.outfit(
+                          fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
+                    ),
+                    const Spacer(),
+                    if (_isLoading)
+                      SizedBox(
+                        width: 14.w,
+                        height: 14.h,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF0066CC),
+                        ),
+                      ),
+                  ],
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  'Browse and manage student records ($totalCount total)',
-                  style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                  _isLoading
+                      ? 'Loading student data...'
+                      : _errorMessage != null
+                          ? _errorMessage!
+                          : 'Browse and manage student records ($totalCount total)',
+                  style: GoogleFonts.inter(
+                      fontSize: 10.sp,
+                      color: _errorMessage != null
+                          ? Colors.orange
+                          : const Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w500),
                 ),
                 SizedBox(height: 12.h),
                 // Search Bar
@@ -406,26 +347,23 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                                       fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
                             ),
                             Expanded(
-                              flex: 6,
+                              flex: 5,
                               child: Text('Email',
                                   style: GoogleFonts.inter(
                                       fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
                             ),
                             Expanded(
                               flex: 3,
-                              child: Center(
-                                child: Text('Status',
-                                    style: GoogleFonts.inter(
-                                        fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                              ),
+                              child: Text('Status',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
                             ),
                             Expanded(
                               flex: 2,
-                              child: Center(
-                                child: Text('Actions',
-                                    style: GoogleFonts.inter(
-                                        fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-                              ),
+                              child: Text('Actions',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                  textAlign: TextAlign.center),
                             ),
                           ],
                         ),
@@ -438,6 +376,30 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                           child: const Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFF0066CC),
+                            ),
+                          ),
+                        )
+                      else if (_errorMessage != null)
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32.h, horizontal: 16.w),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(Icons.cloud_off_rounded, size: 32.sp, color: Colors.orange.shade300),
+                                SizedBox(height: 8.h),
+                                Text(
+                                  _errorMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B)),
+                                ),
+                                SizedBox(height: 12.h),
+                                ElevatedButton.icon(
+                                  onPressed: _fetchStudents,
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Retry'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0066CC)),
+                                ),
+                              ],
                             ),
                           ),
                         )
@@ -458,120 +420,164 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                           itemCount: paginated.length,
                           itemBuilder: (context, idx) {
                             final student = paginated[idx];
-                            return Container(
-                              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                              decoration: const BoxDecoration(
-                                border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-                              ),
-                              child: Row(
-                                children: [
-                                  // Admission No
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      student.admissionNo,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF0F172A),
-                                      ),
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ProfileScreen(
+                                      role: 'student',
+                                      theme: roleThemes['student']!,
+                                      studentId: student.id,
+                                      studentName: student.name,
+                                      studentEmail: student.email,
+                                      studentClass: student.className,
+                                      admissionNo: student.admissionNo,
+                                      showAppBar: true,
+                                      onBack: () => Navigator.pop(context),
                                     ),
                                   ),
-                                  // Name + Avatar
-                                  Expanded(
-                                    flex: 5,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 28.w,
-                                          height: 28.h,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFFEFF6FF),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              student.initials,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 9.sp,
-                                                fontWeight: FontWeight.w700,
-                                                color: const Color(0xFF1E6091),
+                                );
+                              },
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                                decoration: const BoxDecoration(
+                                  border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Admission No
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        student.formattedAdmissionNo,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                    ),
+                                    // Name + Avatar
+                                    Expanded(
+                                      flex: 5,
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 28.w,
+                                            height: 28.h,
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFFEFF6FF),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                student.initials,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 9.sp,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: const Color(0xFF1E6091),
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        SizedBox(width: 8.w),
-                                        Expanded(
-                                          child: Text(
-                                            student.name,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 10.sp,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF475569),
+                                          SizedBox(width: 8.w),
+                                          Expanded(
+                                            child: Text(
+                                              student.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 10.sp,
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF475569),
+                                              ),
                                             ),
                                           ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Class
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        student.className,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFF64748B),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Class
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      student.className,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w500,
-                                        color: const Color(0xFF64748B),
                                       ),
                                     ),
-                                  ),
-                                  // Email
-                                  Expanded(
-                                    flex: 6,
-                                    child: Text(
-                                      student.email,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
-                                        color: const Color(0xFF64748B),
+                                    // Email
+                                    Expanded(
+                                      flex: 5,
+                                      child: Text(
+                                        student.email,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10.sp,
+                                          color: const Color(0xFF64748B),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  // Status
-                                  Expanded(
-                                    flex: 3,
-                                    child: Center(
+                                    // Status
+                                    Expanded(
+                                      flex: 3,
                                       child: Container(
                                         padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFECFDF5),
-                                          borderRadius: BorderRadius.circular(6.r),
+                                          color: student.status == 'ACTIVE'
+                                              ? const Color(0xFFDCFCE7)
+                                              : const Color(0xFFFEE2E2),
+                                          borderRadius: BorderRadius.circular(12.r),
                                         ),
                                         child: Text(
                                           student.status,
+                                          textAlign: TextAlign.center,
                                           style: GoogleFonts.inter(
-                                            fontSize: 8.sp,
-                                            fontWeight: FontWeight.w800,
-                                            color: const Color(0xFF10B981),
+                                            fontSize: 9.sp,
+                                            fontWeight: FontWeight.w700,
+                                            color: student.status == 'ACTIVE'
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFDC2626),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  // Actions (Eye Icon)
-                                  Expanded(
-                                    flex: 2,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.visibility_outlined,
-                                        size: 16.sp,
-                                        color: const Color(0xFF64748B),
+                                    // Actions
+                                    Expanded(
+                                      flex: 2,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => ProfileScreen(
+                                                    role: 'student',
+                                                    theme: roleThemes['student']!,
+                                                    studentId: student.id,
+                                                    studentName: student.name,
+                                                    studentEmail: student.email,
+                                                    studentClass: student.className,
+                                                    admissionNo: student.admissionNo,
+                                                    showAppBar: true,
+                                                    onBack: () => Navigator.pop(context),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: Icon(Icons.remove_red_eye_outlined, size: 18.sp, color: const Color(0xFF64748B)),
+                                          ),
+                                          SizedBox(width: 8.w),
+                                          Icon(Icons.more_vert_rounded, size: 18.sp, color: const Color(0xFF94A3B8)),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             );
                           },
@@ -583,7 +589,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
             },
           ),
 
-          // Pagination Footer (centered & wrapped in column to prevent overflows)
+          // Pagination Footer
           Padding(
             padding: EdgeInsets.all(16.r),
             child: Column(
@@ -597,7 +603,6 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Prev Button
                     GestureDetector(
                       onTap: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
                       child: Container(
@@ -611,10 +616,8 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                       ),
                     ),
                     SizedBox(width: 6.w),
-                    // Pages numbers
                     ..._buildPageNumbers(),
                     SizedBox(width: 6.w),
-                    // Next Button
                     GestureDetector(
                       onTap: _currentPage < _totalPages ? () => setState(() => _currentPage++) : null,
                       child: Container(
@@ -646,35 +649,20 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
         widgets.add(_buildPageButton(p));
       }
     } else {
-      // Always show page 1
       widgets.add(_buildPageButton(1));
+      if (_currentPage > 3) widgets.add(_buildEllipsis());
 
-      if (_currentPage > 3) {
-        widgets.add(_buildEllipsis());
-      }
-
-      // Show pages around current page
       int start = _currentPage - 1;
       int end = _currentPage + 1;
 
-      if (start <= 1) {
-        start = 2;
-        end = 4;
-      }
-      if (end >= total) {
-        end = total - 1;
-        start = total - 3;
-      }
+      if (start <= 1) { start = 2; end = 4; }
+      if (end >= total) { end = total - 1; start = total - 3; }
 
       for (int p = start; p <= end; p++) {
         widgets.add(_buildPageButton(p));
       }
 
-      if (_currentPage < total - 2) {
-        widgets.add(_buildEllipsis());
-      }
-
-      // Always show last page
+      if (_currentPage < total - 2) widgets.add(_buildEllipsis());
       widgets.add(_buildPageButton(total));
     }
 
