@@ -29,12 +29,19 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   Timer? _teacherDashTimer;
   String _teacherName = 'Teacher';
 
+  // Real-time Metrics variables
+  String _attendanceRateToday = '—%';
+  int _myStudentsCount = 0;
+  int _pendingAttendanceCount = 0;
+  int _overdueBooksCount = 0;
+
   @override
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
     _loadTeacherName();
     _loadUpcomingEvents();
+    _loadDashboardMetrics();
     _connectRealTime();
   }
 
@@ -48,24 +55,41 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      _teacherDashChannel = client.channel('public:teacher_dash_events')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'SchoolCalendar',
-          callback: (_) {
-            if (mounted) _loadUpcomingEvents();
-          },
-        );
-      _teacherDashChannel!.subscribe();
-    } catch (e) {
-      dev.log('Teacher dash realtime error: $e');
-    }
-    _teacherDashTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (mounted) _loadUpcomingEvents();
+    _teacherDashTimer?.cancel();
+    _teacherDashTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        _loadUpcomingEvents();
+        _loadDashboardMetrics();
+      }
     });
+  }
+
+  Future<void> _loadDashboardMetrics() async {
+    try {
+      final data = await ApiService.instance.get('dashboard/stats');
+      if (data != null && data['success'] == true && data['stats'] != null) {
+        final stats = data['stats'];
+        final totalStudents = stats['myClassStudents'] ?? 0;
+        final pendingAtt = stats['pendingAttendance'] ?? 0;
+        final overdueBooks = stats['overdueBooks'] ?? 0;
+        final classesToday = stats['classesToday'] ?? 0;
+        final markedSlots = classesToday - pendingAtt;
+        final attendanceRate = classesToday > 0 
+            ? '${((markedSlots / classesToday) * 100).toStringAsFixed(0)}%'
+            : '—%';
+
+        if (mounted) {
+          setState(() {
+            _myStudentsCount = totalStudents;
+            _attendanceRateToday = attendanceRate;
+            _pendingAttendanceCount = pendingAtt;
+            _overdueBooksCount = overdueBooks;
+          });
+        }
+      }
+    } catch (e) {
+      dev.log('Error loading teacher dashboard metrics from API: $e');
+    }
   }
 
   Future<void> _loadTeacherName() async {
@@ -141,7 +165,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: GestureDetector(
-                onTap: _loadUpcomingEvents,
+                onTap: () {
+                  _loadUpcomingEvents();
+                  _loadDashboardMetrics();
+                },
                 child: Row(
                   children: [
                     Icon(Icons.refresh_rounded, size: 16.sp, color: const Color(0xFF64748B)),
@@ -204,6 +231,13 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   Widget _buildMetricsGrid() {
+    double? attPercent;
+    if (_attendanceRateToday != '—%') {
+      try {
+        attPercent = double.parse(_attendanceRateToday.replaceAll('%', '')) / 100.0;
+      } catch (_) {}
+    }
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -213,22 +247,22 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       childAspectRatio: 1.5,
       children: [
         _buildStatCard(
-            'ATTENDANCE TODAY', '95%', Icons.people_outline_rounded,
-            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), true),
+            'ATTENDANCE TODAY', _attendanceRateToday, Icons.people_outline_rounded,
+            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), attPercent),
         _buildStatCard(
-            'MY STUDENTS', '300', Icons.school_outlined,
-            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), false),
+            'MY STUDENTS', '$_myStudentsCount', Icons.school_outlined,
+            const Color(0xFF0EA5E9), const Color(0xFFE0F2FE), null),
         _buildStatCard(
-            'PENDING ATTEND.', '0', Icons.access_time_rounded,
-            const Color(0xFFF59E0B), const Color(0xFFFEF3C7), false),
+            'PENDING ATTEND.', '$_pendingAttendanceCount', Icons.access_time_rounded,
+            const Color(0xFFF59E0B), const Color(0xFFFEF3C7), null),
         _buildStatCard(
-            'OVERDUE BOOKS', '0', Icons.menu_book_rounded,
-            const Color(0xFFEF4444), const Color(0xFFFEE2E2), false),
+            'OVERDUE BOOKS', '$_overdueBooksCount', Icons.menu_book_rounded,
+            const Color(0xFFEF4444), const Color(0xFFFEE2E2), null),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color iconColor, Color bgColor, bool showProgress) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color iconColor, Color bgColor, double? progress) {
     return Container(
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
@@ -276,7 +310,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       fontSize: 24.sp,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF0F172A))),
-              if (showProgress) ...[
+              if (progress != null) ...[
                 SizedBox(height: 8.h),
                 Container(
                   height: 4.h,
@@ -287,7 +321,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                   child: FractionallySizedBox(
                     alignment: Alignment.centerLeft,
-                    widthFactor: 0.95,
+                    widthFactor: progress.clamp(0.0, 1.0),
                     child: Container(
                       decoration: BoxDecoration(
                         color: iconColor,
