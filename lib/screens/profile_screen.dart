@@ -2411,82 +2411,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (_selectedTab == 'Time Table') {
-      final List<Map<String, dynamic>> slots = _timetableSlots[_timetableDay] ?? [];
-      
-      return Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (idx) {
-              final dayNum = idx + 1;
-              final bool isSelected = _timetableDay == dayNum;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _timetableDay = dayNum),
-                  child: Container(
-                    margin: EdgeInsets.symmetric(horizontal: 2.w),
-                    padding: EdgeInsets.symmetric(vertical: 8.h),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF1A6FDB) : Colors.white,
-                      border: Border.all(color: const Color(0xFFE2EAF4)),
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    child: Text(
-                      _weekDays[idx],
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 11.5.sp,
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(10.r),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEFF6FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.access_time_filled_rounded, color: const Color(0xFF1A6FDB), size: 22.sp),
+                ),
+                SizedBox(width: 14.w),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Class Time Table',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16.sp,
                         fontWeight: FontWeight.w800,
-                        color: isSelected ? Colors.white : const Color(0xFF475569),
+                        color: const Color(0xFF0F2547),
                       ),
                     ),
-                  ),
+                    SizedBox(height: 3.h),
+                    Text(
+                      'Weekly period distribution and timings',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            }),
-          ),
-          SizedBox(height: 16.h),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(20.r),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: const Color(0xFFE2EAF4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Scheduled Periods', style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F2547))),
-                SizedBox(height: 16.h),
-                if (slots.isEmpty)
-                  _buildMockTimetableSlots()
-                else
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: slots.length,
-                    itemBuilder: (ctx, idx) {
-                      final s = slots[idx];
-                      final period = s['period'] as int? ?? (idx + 1);
-                      final start = s['startTime']?.toString() ?? '—';
-                      final end = s['endTime']?.toString() ?? '—';
-                      final sub = s['subject'] as Map? ?? {};
-                      final subName = sub['name']?.toString() ?? 'General Class';
-                      final roomName = s['room'] != null ? s['room']['name']?.toString() ?? 'Classroom' : 'Classroom';
-                      final teacherMap = s['teacher'] as Map? ?? {};
-                      final teacherUser = teacherMap['User'] as Map? ?? {};
-                      final tFirstName = teacherUser['firstName']?.toString() ?? '';
-                      final tLastName = teacherUser['lastName']?.toString() ?? '';
-                      final teacherName = '$tFirstName $tLastName'.trim().isNotEmpty ? '$tFirstName $tLastName'.trim() : 'Class Teacher';
-                      
-                      return _buildTimetableSlotRow(period, start, end, subName, teacherName, roomName);
-                    },
-                  ),
               ],
             ),
-          ),
-        ],
+            SizedBox(height: 24.h),
+            _buildScrollableTable(),
+          ],
+        ),
       );
     }
 
@@ -2752,6 +2733,186 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final p = mockData[idx];
         return _buildFeePaymentRow(p['receipt']!, p['amount']!, p['date']!, p['mode']!);
       },
+    );
+  }
+
+  final List<String> _timetableDays = const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+  final List<Map<String, String>> _timetableColumns = const [
+    {'title': 'PERIOD 1', 'time': '08:00 - 08:40', 'start': '08:00'},
+    {'title': 'PERIOD 2', 'time': '08:40 - 09:20', 'start': '08:40'},
+    {'title': 'PERIOD 3', 'time': '09:20 - 10:00', 'start': '09:20'},
+    {'title': 'PERIOD 4', 'time': '10:00 - 10:40', 'start': '10:00'},
+    {'title': 'PERIOD 5', 'time': '10:40 - 11:20', 'start': '10:40'},
+    {'title': 'PERIOD 6', 'time': '11:20 - 12:00', 'start': '11:20'},
+    {'title': 'LUNCH BREAK', 'time': '12:00 - 12:30', 'start': '12:00'},
+    {'title': 'PERIOD 7', 'time': '12:30 - 13:10', 'start': '12:30'},
+    {'title': 'PERIOD 8', 'time': '13:10 - 13:50', 'start': '13:10'},
+    {'title': 'PERIOD 9', 'time': '13:50 - 14:30', 'start': '13:50'},
+  ];
+
+  String? _getSubjectForSlot(String day, String startPrefix) {
+    final Map<String, int> dayToNum = {
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+    };
+    final int? dayNum = dayToNum[day];
+    if (dayNum == null) return null;
+    final slots = _timetableSlots[dayNum];
+    if (slots == null) return null;
+    for (var slot in slots) {
+      String startTime = slot['startTime']?.toString() ?? '';
+      List<String> parts = startTime.split(':');
+      if (parts.length >= 2) {
+        String hh = parts[0].padLeft(2, '0');
+        String mm = parts[1].padLeft(2, '0');
+        String normalizedStartTime = '$hh:$mm';
+        
+        if (normalizedStartTime == startPrefix) {
+          final subject = slot['subject'];
+          if (subject is Map) {
+            return subject['name']?.toString() ?? subject['title']?.toString();
+          } else if (subject is String) {
+            return subject;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  Widget _buildScrollableTable() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFE9F0F8), width: 1.5.w),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.r),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTableHeaderRow(),
+              ..._timetableDays.map((day) => _buildDayRow(day)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableHeaderRow() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _buildCell('DAY', width: 110.w, isHeader: true, alignment: Alignment.centerLeft),
+          ..._timetableColumns.map((col) => _buildTimeCell(col['title']!, col['time']!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayRow(String day) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _buildCell(day, width: 110.w, isDayLabel: true, alignment: Alignment.centerLeft),
+          ..._timetableColumns.map((col) {
+            if (col['title'] == 'LUNCH BREAK') {
+              return _buildCell('Lunch Break', width: 110.w, isLunchBreak: true, bgColor: const Color(0xFFFFF9F2));
+            }
+            final subject = _getSubjectForSlot(day, col['start']!);
+            return _buildCell(subject ?? 'Unassigned', width: 110.w, isUnassigned: subject == null);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeCell(String title, String time) {
+    return Container(
+      width: 110.w,
+      padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 4.w),
+      decoration: const BoxDecoration(
+        border: Border(right: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF4A5568)),
+          ),
+          SizedBox(height: 6.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4.r),
+              border: Border.all(color: const Color(0xFFE2EAF4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.access_time, size: 10.sp, color: const Color(0xFFA0AEC0)),
+                SizedBox(width: 4.w),
+                Text(
+                  time,
+                  style: GoogleFonts.inter(fontSize: 9.sp, fontWeight: FontWeight.w600, color: const Color(0xFF718096)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCell(
+    String text, {
+    required double width,
+    bool isHeader = false,
+    bool isDayLabel = false,
+    bool isUnassigned = false,
+    bool isLunchBreak = false,
+    Alignment alignment = Alignment.center,
+    Color? bgColor,
+  }) {
+    return Container(
+      width: width,
+      padding: EdgeInsets.symmetric(vertical: 24.h, horizontal: 12.w),
+      alignment: alignment,
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: const Border(right: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: isHeader || isDayLabel ? 11.sp : 12.sp,
+          fontWeight: isHeader || isDayLabel ? FontWeight.w800 : FontWeight.w600,
+          fontStyle: isUnassigned || isLunchBreak ? FontStyle.italic : FontStyle.normal,
+          color: isLunchBreak 
+              ? const Color(0xFFE87D3E) 
+              : isUnassigned 
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFF2D3748),
+        ),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 

@@ -379,54 +379,6 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     );
   }
 
-  Widget _actionBtn(
-    IconData icon,
-    String label, {
-    IconData? trailingIcon,
-    bool isActive = false,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFE0F2FE) : Colors.white,
-          borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(
-            color: isActive ? const Color(0xFF0066CC) : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16.sp,
-              color: isActive ? const Color(0xFF0066CC) : const Color(0xFF64748B),
-            ),
-            SizedBox(width: 6.w),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF0066CC) : const Color(0xFF0F172A),
-              ),
-            ),
-            if (trailingIcon != null) ...[
-              SizedBox(width: 4.w),
-              Icon(
-                trailingIcon,
-                size: 16.sp,
-                color: isActive ? const Color(0xFF0066CC) : const Color(0xFF64748B),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
