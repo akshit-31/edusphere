@@ -18,6 +18,7 @@ import 'features/create_assignment_screen.dart';
 import 'features/schedule_screen.dart';
 import 'features/student_timetable_screen.dart';
 import 'features/announcements_screen.dart';
+import '../services/api_service.dart';
 import '../widgets/common_widgets.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -73,24 +74,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
   List<Map<String, dynamic>> _attendanceRecords = [];
   double _attendanceRate = 100.0;
   bool _hasAttendanceData = false;
-  bool _isRefreshButtonPressed = false;
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
-
-  Future<void> _handleRefreshButtonClick() async {
-    if (_isRefreshButtonPressed) return;
-    setState(() => _isRefreshButtonPressed = true);
-    
-    // Visually trigger the page's pull-to-refresh spinner.
-    // This will automatically execute _loadStudentOverviewData(showLoading: false) via onRefresh.
-    _refreshIndicatorKey.currentState?.show();
-    
-    // Keep the button blue for a short duration so it's noticeable
-    await Future.delayed(const Duration(milliseconds: 400));
-    
-    if (mounted) {
-      setState(() => _isRefreshButtonPressed = false);
-    }
-  }
 
 
   // ── Selected day for timetable ──
@@ -391,77 +375,63 @@ class _AcademicScreenState extends State<AcademicScreen> {
       _userName = prefs.getString('teacher_name') ?? prefs.getString('student_name') ?? 'Emma Johnson';
       _userRole = prefs.getString('user_role') ?? 'teacher';
 
-      final client = Supabase.instance.client;
+      // Fetch from ApiService for real-time accurate backend data
+      final results = await Future.wait([
+        ApiService.instance.get('academic/classes'),
+        ApiService.instance.get('academic/subjects'),
+        ApiService.instance.get('academic/sections'),
+      ]);
 
-      // 1. Fetch Class list
-      final List<dynamic> classesRes = await client
-          .from('Class')
-          .select('*, classTeacher:User(firstName, lastName)');
-      
-      final List<Map<String, dynamic>> loadedClasses = [];
-      for (var c in classesRes) {
+      final rawClasses = (results[0]['classes'] ?? results[0]['data'] ?? []) as List;
+      final rawSubjects = (results[1]['subjects'] ?? results[1]['data'] ?? []) as List;
+      final rawSections = (results[2]['sections'] ?? results[2]['data'] ?? []) as List;
+
+      final List<Map<String, dynamic>> loadedClasses = rawClasses.map((c) {
         final classTeacherUser = c['classTeacher'] as Map?;
         final tName = classTeacherUser != null
             ? '${classTeacherUser['firstName'] ?? ''} ${classTeacherUser['lastName'] ?? ''}'.trim()
             : '—';
-        
-        final countRes = await client
-            .from('Student')
-            .select('id')
-            .eq('currentClassId', c['id']);
-        
-        loadedClasses.add({
+            
+        // Use Prisma's _count if available, else 0
+        final stCount = c['_count']?['students'] ?? c['_count']?['Student'] ?? 0;
+
+        return {
           'id': c['id'],
           'name': c['name']?.toString() ?? '',
           'level': c['level']?.toString() ?? '',
-          'academic_year': '2026-2027',
+          'academic_year': '2024-2025',
           'class_teacher': tName.isNotEmpty ? tName : '—',
-          'students': countRes.length,
-        });
-      }
+          'students': stCount,
+        };
+      }).toList();
       
-      // 2. Fetch Subject list
-      final List<dynamic> subjectsRes = await client
-          .from('Subject')
-          .select('*, Class(name)');
-      
-      final List<Map<String, dynamic>> loadedSubjects = [];
-      for (var s in subjectsRes) {
-        final classData = s['Class'] as Map?;
+      final List<Map<String, dynamic>> loadedSubjects = rawSubjects.map((s) {
+        final classData = s['Class'] ?? s['class'] as Map?;
         final className = classData != null ? classData['name']?.toString() ?? '—' : '—';
-        loadedSubjects.add({
+        return {
           'id': s['id'],
           'name': s['name']?.toString() ?? '',
           'code': s['code']?.toString() ?? '',
           'class': className,
           'teacher': '—',
           'description': s['description']?.toString() ?? '-',
-        });
-      }
+        };
+      }).toList();
 
-      // 3. Fetch Section list
-      final List<dynamic> sectionsRes = await client
-          .from('Section')
-          .select('*, Class(name)');
-      
-      final List<Map<String, dynamic>> loadedSections = [];
-      for (var sec in sectionsRes) {
-        final classData = sec['Class'] as Map?;
+      final List<Map<String, dynamic>> loadedSections = rawSections.map((sec) {
+        final classData = sec['Class'] ?? sec['class'] as Map?;
         final className = classData != null ? classData['name']?.toString() ?? '—' : '—';
         
-        final countRes = await client
-            .from('Student')
-            .select('id')
-            .eq('sectionId', sec['id']);
-            
-        loadedSections.add({
+        final stCount = sec['_count']?['students'] ?? sec['_count']?['Student'] ?? 0;
+
+        return {
           'id': sec['id'],
           'name': sec['name']?.toString() ?? '',
           'class': className,
           'max_students': sec['maxStudents'] ?? 40,
-          'students': countRes.length,
-        });
-      }
+          'students': stCount,
+        };
+      }).toList();
 
       if (mounted) {
         setState(() {
@@ -1530,7 +1500,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
             academicYear: c['academic_year']?.toString() ?? '—',
             classTeacher: c['class_teacher']?.toString() ?? '—',
             students: c['students']?.toString() ?? '0',
-            isHoveredDemo: c['name'] == 'Grade 5', // Hover effect to match screenshot
+            isHoveredDemo: false, // Ensure this relies on real hover, not demo effect
           );
         }),
         SizedBox(height: 12.h),
@@ -1581,12 +1551,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
             ),
           ),
           
-          // Search Bar
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20.w),
-            child: _buildSubjectsSearchBar(),
-          ),
-          SizedBox(height: 16.h),
+          // Removed Search Bar as per image
 
           _subjectsList.isEmpty
               ? Padding(
@@ -1599,49 +1564,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
     );
   }
 
-  Widget _buildSubjectsSearchBar() {
-    return Container(
-      height: 44.h,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      padding: EdgeInsets.symmetric(horizontal: 12.w),
-      child: Row(
-        children: [
-          Icon(Icons.search, size: 20.sp, color: const Color(0xFF94A3B8)),
-          SizedBox(width: 8.w),
-          Expanded(
-            child: TextField(
-              onChanged: (val) {
-                setState(() {
-                  _subjectSearchQuery = val;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search subjects...',
-                hintStyle: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF94A3B8)),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 10.h),
-              ),
-              style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCustomSubjectsTable() {
-    final filteredList = _subjectsList.where((s) {
-      final name = s['name']?.toString().toLowerCase() ?? '';
-      final code = s['code']?.toString().toLowerCase() ?? '';
-      final query = _subjectSearchQuery.toLowerCase();
-      return name.contains(query) || code.contains(query);
-    }).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1653,17 +1576,16 @@ class _AcademicScreenState extends State<AcademicScreen> {
           ),
           child: Row(
             children: [
-              Expanded(flex: 4, child: _buildTableHeaderCell('Name', TextAlign.left)),
-              Expanded(flex: 2, child: _buildTableHeaderCell('Code', TextAlign.center)),
-              Expanded(flex: 2, child: _buildTableHeaderCell('Class', TextAlign.center)),
-              Expanded(flex: 2, child: _buildTableHeaderCell('Teacher', TextAlign.center)),
-              Expanded(flex: 2, child: _buildTableHeaderCell('Description', TextAlign.center)),
-              const Expanded(flex: 1, child: SizedBox.shrink()), // Space for trailing chevron
+              Expanded(flex: 3, child: _buildTableHeaderCell('Name', TextAlign.left)),
+              Expanded(flex: 2, child: _buildTableHeaderCell('Code', TextAlign.left)),
+              Expanded(flex: 2, child: _buildTableHeaderCell('Class', TextAlign.left)),
+              Expanded(flex: 2, child: _buildTableHeaderCell('Teacher', TextAlign.left)),
+              Expanded(flex: 2, child: _buildTableHeaderCell('Description', TextAlign.left)),
             ],
           ),
         ),
         // Data Rows
-        ...filteredList.map((s) {
+        ..._subjectsList.map((s) {
           return _SubjectsRowItem(
             name: s['name']?.toString() ?? '',
             code: s['code']?.toString() ?? '',
@@ -1710,12 +1632,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
             ),
           ),
           
-          // Search Bar
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20.w),
-            child: _buildSectionsSearchBar(),
-          ),
-          SizedBox(height: 16.h),
+          // Removed Search Bar
 
           _sectionsList.isEmpty
               ? Padding(
@@ -1728,50 +1645,8 @@ class _AcademicScreenState extends State<AcademicScreen> {
     );
   }
 
-  Widget _buildSectionsSearchBar() {
-    return Container(
-      height: 44.h,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      padding: EdgeInsets.symmetric(horizontal: 12.w),
-      child: Row(
-        children: [
-          Icon(Icons.search, size: 20.sp, color: const Color(0xFF94A3B8)),
-          SizedBox(width: 8.w),
-          Expanded(
-            child: TextField(
-              onChanged: (val) {
-                setState(() {
-                  _sectionSearchQuery = val;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search sections...',
-                hintStyle: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF94A3B8)),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 10.h),
-              ),
-              style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── Teacher exams listing ──
   Widget _buildCustomSectionsTable() {
-    final filteredList = _sectionsList.where((s) {
-      final name = s['name']?.toString().toLowerCase() ?? '';
-      final className = s['class']?.toString().toLowerCase() ?? '';
-      final query = _sectionSearchQuery.toLowerCase();
-      return name.contains(query) || className.contains(query);
-    }).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1784,17 +1659,25 @@ class _AcademicScreenState extends State<AcademicScreen> {
           child: Row(
             children: [
               Expanded(flex: 4, child: _buildTableHeaderCell('Name', TextAlign.left)),
-              Expanded(flex: 3, child: _buildTableHeaderCell('Class', TextAlign.center)),
-              Expanded(flex: 3, child: _buildTableHeaderCell('Max Students', TextAlign.center)),
-              Expanded(flex: 3, child: _buildTableHeaderCell('Students', TextAlign.center)),
-              const Expanded(flex: 1, child: SizedBox.shrink()), // Space for trailing chevron
+              Expanded(flex: 3, child: _buildTableHeaderCell('Class', TextAlign.left)),
+              Expanded(flex: 3, child: _buildTableHeaderCell('Max\nStudents', TextAlign.left)),
+              Expanded(flex: 3, child: _buildTableHeaderCell('Students', TextAlign.left)),
             ],
           ),
         ),
         // Data Rows
-        ...filteredList.map((s) {
+        ..._sectionsList.map((s) {
+          final rawName = s['name']?.toString().trim() ?? '';
+          String formattedName = rawName;
+          if (rawName.isNotEmpty && !rawName.toLowerCase().startsWith('section')) {
+            formattedName = 'Section\n$rawName';
+          } else if (rawName.toLowerCase().startsWith('section ')) {
+            // Replace the first space with a newline to match the stacked look
+            formattedName = rawName.replaceFirst(' ', '\n');
+          }
+
           return _SectionsRowItem(
-            name: s['name']?.toString() ?? '',
+            name: formattedName,
             className: s['class']?.toString() ?? '—',
             maxStudents: s['max_students']?.toString() ?? '40',
             students: s['students']?.toString() ?? '0',
@@ -1838,6 +1721,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
           title: 'Approvals',
           subtitle: 'Principal review and approval of generated student report cards.',
           buttonLabel: 'Pending Review',
+          isPrimary: false,
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExamReportCardScreen(theme: widget.theme))),
         ),
       ],
@@ -1849,38 +1733,46 @@ class _AcademicScreenState extends State<AcademicScreen> {
     required String subtitle,
     required String buttonLabel,
     required VoidCallback onPressed,
+    bool isPrimary = true,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: GoogleFonts.outfit(fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-          SizedBox(height: 4.h),
-          Text(subtitle, style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
-          SizedBox(height: 16.h),
-          SizedBox(
-            width: double.infinity,
-            height: 44.h,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0066CC),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-              ),
-              onPressed: onPressed,
-              child: Text(
-                buttonLabel,
-                style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: Colors.white),
+    return CustomPaint(
+      painter: _DashedRectPainter(color: const Color(0xFFCBD5E1), strokeWidth: 1.5, gap: 4, dash: 6, radius: 16.r),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: GoogleFonts.outfit(fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+            SizedBox(height: 4.h),
+            Text(subtitle, style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
+            SizedBox(height: 16.h),
+            SizedBox(
+              width: double.infinity,
+              height: 44.h,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isPrimary ? const Color(0xFF0066CC) : const Color(0xFFE0F2FE),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                ),
+                onPressed: onPressed,
+                child: Text(
+                  buttonLabel,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp, 
+                    fontWeight: FontWeight.w700, 
+                    color: isPrimary ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1893,59 +1785,63 @@ class _AcademicScreenState extends State<AcademicScreen> {
     required String btn2Label,
     required VoidCallback onBtn2Pressed,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: GoogleFonts.outfit(fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-          SizedBox(height: 4.h),
-          Text(subtitle, style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
-          SizedBox(height: 16.h),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44.h,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                    ),
-                    onPressed: onBtn1Pressed,
-                    child: Text(
-                      btn1Label,
-                      style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: SizedBox(
-                  height: 44.h,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                    ),
-                    onPressed: onBtn2Pressed,
-                    child: Text(
-                      btn2Label,
-                      style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+    return CustomPaint(
+      painter: _DashedRectPainter(color: const Color(0xFFCBD5E1), strokeWidth: 1.5, gap: 4, dash: 6, radius: 16.r),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: GoogleFonts.outfit(fontSize: 14.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+            SizedBox(height: 4.h),
+            Text(subtitle, style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
+            SizedBox(height: 16.h),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44.h,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                      ),
+                      onPressed: onBtn1Pressed,
+                      child: Text(
+                        btn1Label,
+                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: SizedBox(
+                    height: 44.h,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                      ),
+                      onPressed: onBtn2Pressed,
+                      child: Text(
+                        btn2Label,
+                        style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3134,129 +3030,6 @@ class _SubjectsRowItem extends StatefulWidget {
 class _SubjectsRowItemState extends State<_SubjectsRowItem> {
   bool _isHovered = false;
 
-  Widget _buildSubjectAvatar(String name) {
-    final cleanName = name.trim().toLowerCase();
-    if (cleanName.contains('math')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFEFF6FF),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Text(
-            'π',
-            style: GoogleFonts.inter(
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF2563EB),
-            ),
-          ),
-        ),
-      );
-    } else if (cleanName.contains('science')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFF0FDF4),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.science_outlined,
-            size: 16.sp,
-            color: const Color(0xFF16A34A),
-          ),
-        ),
-      );
-    } else if (cleanName.contains('english')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFF7ED),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.menu_book_outlined,
-            size: 16.sp,
-            color: const Color(0xFFEA580C),
-          ),
-        ),
-      );
-    } else if (cleanName.contains('social') || cleanName.contains('history') || cleanName.contains('geography')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFFAF5FF),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.public_rounded,
-            size: 16.sp,
-            color: const Color(0xFF9333EA),
-          ),
-        ),
-      );
-    } else if (cleanName.contains('hindi') || cleanName.contains('sanskrit')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFFBEB),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Text(
-            'वे',
-            style: GoogleFonts.inter(
-              fontSize: 13.sp,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFFD97706),
-            ),
-          ),
-        ),
-      );
-    } else if (cleanName.contains('computer') || cleanName.contains('tech') || cleanName.contains('coding')) {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFEFF6FF),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.computer_rounded,
-            size: 16.sp,
-            color: const Color(0xFF2563EB),
-          ),
-        ),
-      );
-    } else {
-      return Container(
-        width: 32.r,
-        height: 32.r,
-        decoration: const BoxDecoration(
-          color: Color(0xFFF1F5F9),
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.book_rounded,
-            size: 16.sp,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -3271,29 +3044,21 @@ class _SubjectsRowItemState extends State<_SubjectsRowItem> {
         child: Row(
           children: [
             Expanded(
-              flex: 4,
-              child: Row(
-                children: [
-                  _buildSubjectAvatar(widget.name),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Text(
-                      widget.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ),
-                ],
+              flex: 3,
+              child: Text(
+                widget.name,
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
             ),
             Expanded(
               flex: 2,
               child: Text(
                 widget.code,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
@@ -3305,7 +3070,7 @@ class _SubjectsRowItemState extends State<_SubjectsRowItem> {
               flex: 2,
               child: Text(
                 widget.className,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
@@ -3317,7 +3082,7 @@ class _SubjectsRowItemState extends State<_SubjectsRowItem> {
               flex: 2,
               child: Text(
                 widget.teacher,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
@@ -3329,22 +3094,11 @@ class _SubjectsRowItemState extends State<_SubjectsRowItem> {
               flex: 2,
               child: Text(
                 widget.description,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF1E293B),
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 16.sp,
-                  color: const Color(0xFF94A3B8),
                 ),
               ),
             ),
@@ -3378,55 +3132,6 @@ class _SectionsRowItem extends StatefulWidget {
 class _SectionsRowItemState extends State<_SectionsRowItem> {
   bool _isHovered = false;
 
-  Widget _buildSectionAvatar(String name) {
-    String letter = 'A';
-    try {
-      final parts = name.trim().split(RegExp(r'\s+'));
-      if (parts.isNotEmpty) {
-        final lastPart = parts.last;
-        if (lastPart.isNotEmpty) {
-          letter = lastPart[0].toUpperCase();
-        }
-      }
-    } catch (_) {}
-
-    Color bgColor;
-    Color textColor;
-
-    if (letter == 'A') {
-      bgColor = const Color(0xFFFAF5FF); // light purple
-      textColor = const Color(0xFF9333EA); // purple
-    } else if (letter == 'B') {
-      bgColor = const Color(0xFFEFF6FF); // light blue
-      textColor = const Color(0xFF2563EB); // blue
-    } else if (letter == 'C') {
-      bgColor = const Color(0xFFF0FDF4); // light green
-      textColor = const Color(0xFF16A34A); // green
-    } else {
-      bgColor = const Color(0xFFFFF7ED); // light orange
-      textColor = const Color(0xFFEA580C); // orange
-    }
-
-    return Container(
-      width: 32.r,
-      height: 32.r,
-      decoration: BoxDecoration(
-        color: bgColor,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          letter,
-          style: GoogleFonts.inter(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w700,
-            color: textColor,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -3442,28 +3147,20 @@ class _SectionsRowItemState extends State<_SectionsRowItem> {
           children: [
             Expanded(
               flex: 4,
-              child: Row(
-                children: [
-                  _buildSectionAvatar(widget.name),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Text(
-                      widget.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                widget.name,
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
             ),
             Expanded(
               flex: 3,
               child: Text(
                 widget.className,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
@@ -3475,7 +3172,7 @@ class _SectionsRowItemState extends State<_SectionsRowItem> {
               flex: 3,
               child: Text(
                 widget.maxStudents,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
@@ -3487,22 +3184,11 @@ class _SectionsRowItemState extends State<_SectionsRowItem> {
               flex: 3,
               child: Text(
                 widget.students,
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.left,
                 style: GoogleFonts.inter(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF1E293B),
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 16.sp,
-                  color: const Color(0xFF94A3B8),
                 ),
               ),
             ),
@@ -3513,3 +3199,50 @@ class _SectionsRowItemState extends State<_SectionsRowItem> {
   }
 }
 
+class _DashedRectPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double gap;
+  final double dash;
+  final double radius;
+
+  _DashedRectPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.gap,
+    required this.dash,
+    required this.radius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Radius.circular(radius),
+      ));
+
+    final dashPath = Path();
+    var distance = 0.0;
+    for (final pathMetric in path.computeMetrics()) {
+      while (distance < pathMetric.length) {
+        dashPath.addPath(
+          pathMetric.extractPath(distance, distance + dash),
+          Offset.zero,
+        );
+        distance += dash + gap;
+      }
+      distance = 0.0;
+    }
+
+    canvas.drawPath(dashPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

@@ -13,6 +13,7 @@ import '../../services/socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main_screen.dart';
 import '../features/teacher_overdue_management_screen.dart';
+import '../features/teacher_self_attendance_screen.dart';
 
 class TeacherDashboard extends StatefulWidget {
   final RoleTheme theme;
@@ -41,9 +42,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
   int _overdueBooks = 0;
   double _attendanceTodayPercentage = 90.0;
 
+  double _teacherAttendanceRate = 100.0;
+  bool _teacherAttendanceLoaded = false;
+
   DateTime? _lastRefreshTime;
-  String _lastTriggerSource = 'None';
-  String? _lastRealtimeEvent;
 
   @override
   void initState() {
@@ -53,6 +55,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
     _loadTeacherName();
     _loadUpcomingEvents();
     _fetchDashboardData('initial');
+    _loadTeacherAttendance();
     _connectRealTime();
   }
 
@@ -103,6 +106,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
       await Future.wait([
         _loadUpcomingEvents(),
         _fetchDashboardData('manual'),
+        _loadTeacherAttendance(),
       ]);
     } finally {
       if (mounted) {
@@ -135,6 +139,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
             dev.log('⚡ Realtime DB change on AttendanceRecord', name: 'TeacherDashboard');
             if (mounted) {
               _fetchDashboardData('realtime_event', eventName: 'Supabase:AttendanceRecord');
+              _loadTeacherAttendance();
             }
           },
         )
@@ -205,6 +210,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
       if (mounted) {
         _loadUpcomingEvents();
         _fetchDashboardData('periodic');
+        _loadTeacherAttendance();
       }
     });
   }
@@ -224,7 +230,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
   }
 
   Future<void> _fetchDashboardData(String triggerSource, {String? eventName}) async {
-    final apiUrl = 'dashboard/stats';
+    const apiUrl = 'dashboard/stats';
     dev.log('📡 FETCHING Teacher Dashboard stats...', name: 'TeacherDashboard');
     dev.log('🔗 API URL Path: $apiUrl', name: 'TeacherDashboard');
     dev.log('👉 Trigger Source: $triggerSource', name: 'TeacherDashboard');
@@ -262,8 +268,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
             _attendanceTodayPercentage = attendancePct;
             _pendingAttendance = pendingAttend;
             _lastRefreshTime = DateTime.now();
-            _lastTriggerSource = triggerSource;
-            _lastRealtimeEvent = eventName;
+
           });
         }
         
@@ -271,6 +276,40 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
       }
     } catch (e) {
       dev.log('❌ Error fetching dashboard REST API: $e', name: 'TeacherDashboard');
+    }
+  }
+
+  Future<void> _loadTeacherAttendance() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final teacherId = prefs.getString('teacher_id') ?? '';
+      if (teacherId.isEmpty) return;
+
+      final res = await Supabase.instance.client
+          .from('AttendanceRecord')
+          .select()
+          .eq('teacherId', teacherId);
+
+      final List<dynamic> list = res;
+      int present = 0;
+      int total = 0;
+      for (var record in list) {
+        final status = record['status']?.toString().toUpperCase() ?? '';
+        if (status == 'PRESENT' || status == 'P' || status == 'LATE' || status == 'Late' || status == 'HALF_DAY') {
+          present++;
+          total++;
+        } else if (status == 'ABSENT' || status == 'A') {
+          total++;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _teacherAttendanceRate = total > 0 ? (present / total) * 100 : 100.0;
+          _teacherAttendanceLoaded = true;
+        });
+      }
+    } catch (e) {
+      dev.log('Error loading teacher attendance stats: $e', name: 'TeacherDashboard');
     }
   }
 
@@ -599,10 +638,18 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
     final cards = [
       _buildResponsiveStatCard(
         title: 'ATTENDANCE TODAY',
-        value: '${_attendanceTodayPercentage.toStringAsFixed(0)}%',
+        value: _teacherAttendanceLoaded ? '${_teacherAttendanceRate.toStringAsFixed(0)}%' : '—%',
         color: const Color(0xFF3B82F6),
         showProgress: true,
-        onTap: () => MainScreen.navigateTo(context, 3),
+        progress: _teacherAttendanceRate,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TeacherPersonalAttendanceScreen(theme: widget.theme),
+            ),
+          );
+        },
       ),
       _buildResponsiveStatCard(
         title: 'MY STUDENTS',
@@ -648,39 +695,39 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
     required String value,
     required Color color,
     required bool showProgress,
-    required VoidCallback onTap,
+    double? progress,
+    VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 18.h),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            )
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF475569),
-                    letterSpacing: 0.5,
-                  ),
+    final cardContent = Container(
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 18.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF475569),
+                  letterSpacing: 0.5,
                 ),
+              ),
+              if (onTap != null)
                 Container(
                   padding: EdgeInsets.all(4.r),
                   decoration: BoxDecoration(
@@ -693,42 +740,49 @@ class _TeacherDashboardState extends State<TeacherDashboard> with WidgetsBinding
                     color: color,
                   ),
                 ),
-              ],
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Text(
+            value,
+            style: GoogleFonts.outfit(
+              fontSize: 28.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
             ),
-            SizedBox(height: 12.h),
-            Text(
-              value,
-              style: GoogleFonts.outfit(
-                fontSize: 28.sp,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
+          ),
+          if (showProgress) ...[
+            SizedBox(height: 10.h),
+            Container(
+              height: 4.h,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(2.r),
               ),
-            ),
-            if (showProgress) ...[
-              SizedBox(height: 10.h),
-              Container(
-                height: 4.h,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(2.r),
-                ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: (_attendanceTodayPercentage / 100.0).clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(2.r),
-                    ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: ((progress ?? _attendanceTodayPercentage) / 100.0).clamp(0.0, 1.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2.r),
                   ),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: cardContent,
+      );
+    }
+    return cardContent;
   }
 
   Widget _buildSchoolCalendar() {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../profile_screen.dart';
+import 'old_student_profile_screen.dart';
 import '../../theme/colors.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
@@ -491,7 +491,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ProfileScreen(
+                                    builder: (context) => OldStudentProfileScreen(
                                       role: 'student',
                                       theme: roleThemes['student']!,
                                       studentId: student.id,
@@ -641,7 +641,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => ProfileScreen(
+                                                  builder: (context) => OldStudentProfileScreen(
                                                     role: 'student',
                                                     theme: roleThemes['student']!,
                                                     studentId: student.id,
