@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import '../../theme/colors.dart';
+import '../profile_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TeacherScanScreen – Camera QR scanner for marking student attendance
@@ -151,8 +152,111 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
     debugPrint('📦 QR payload: $rawCode');
 
     try {
-      // QR data = admission number (e.g. "ADM-2023-0681")
+      // QR data = admission number or teacher employee ID
       final admissionNo = rawCode.trim();
+
+      // Check if it's a teacher employeeId first
+      final teacherRes = await Supabase.instance.client
+          .from('Teacher')
+          .select('id, userId, employeeId, user:User(firstName, lastName)')
+          .eq('employeeId', admissionNo)
+          .maybeSingle();
+
+      if (teacherRes != null) {
+        final teacherId = teacherRes['id'].toString();
+        final teacherUserId = teacherRes['userId']?.toString();
+        final user = teacherRes['user'] as Map<String, dynamic>? ?? {};
+        final teacherName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        debugPrint('👤 Teacher Identified - ID: $teacherId, Name: $teacherName, UserID: $teacherUserId');
+
+        // Ensure scanner exists in DB
+        await _ensureScannerExists(widget.scannerId);
+
+        final today = DateTime.now().toIso8601String().substring(0, 10);
+
+        // Check if already marked today
+        final existing = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .select('id, status')
+            .eq('teacherId', teacherId)
+            .eq('date', today)
+            .eq('attendeeType', 'TEACHER')
+            .maybeSingle();
+
+        if (existing != null) {
+          debugPrint('⚠️ [QR SCAN ALREADY MARKED] teacherId $teacherId already marked today');
+          _showResult(_ScanResult(
+            success: false,
+            message: 'Teacher $teacherName already marked today',
+            icon: Icons.info_outline_rounded,
+            color: Colors.orange,
+          ));
+          return;
+        }
+
+        final Map<String, dynamic> insertPayload = {
+          'attendeeType': 'TEACHER',
+          'teacherId': teacherId,
+          'date': today,
+          'status': 'PRESENT',
+          'scannedByQR': true,
+          'scannerId': widget.scannerId,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+        
+        if (widget.sessionAction.toLowerCase() == 'check-in' || widget.sessionAction.toLowerCase() == 'check_in') {
+          insertPayload['checkInTime'] = DateTime.now().toIso8601String();
+        } else {
+          insertPayload['checkOutTime'] = DateTime.now().toIso8601String();
+        }
+
+        debugPrint('📤 Teacher Attendance insert payload: $insertPayload');
+
+        final insertResponse = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(insertPayload)
+            .select()
+            .single();
+
+        debugPrint('📥 Teacher Attendance insert response: $insertResponse');
+
+        _showResult(_ScanResult(
+          success: true,
+          message: 'Teacher $teacherName marked PRESENT ✓',
+          icon: Icons.check_circle_rounded,
+          studentName: teacherName,
+          admissionNo: admissionNo,
+        ));
+
+        // Add to recent scans
+        setState(() {
+          _recentScans.insert(0, {
+            'name': teacherName,
+            'admissionNo': admissionNo,
+            'time': DateTime.now(),
+            'status': 'PRESENT',
+          });
+          if (_recentScans.length > 10) _recentScans.removeLast();
+        });
+
+        if (mounted && teacherUserId != null) {
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfileScreen(
+                    role: 'teacher',
+                    theme: widget.theme,
+                    teacherId: teacherUserId,
+                  ),
+                ),
+              );
+            }
+          });
+        }
+        return;
+      }
 
       // 1. Look up student by admission no
       final studentRes = await Supabase.instance.client
@@ -162,10 +266,10 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
           .maybeSingle();
 
       if (studentRes == null) {
-        debugPrint('❌ [QR SCAN ERROR] Student not found for QR payload: $admissionNo');
+        debugPrint('❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $admissionNo');
         _showResult(_ScanResult(
           success: false,
-          message: 'Student not found for QR: $admissionNo',
+          message: 'User not found for QR: $admissionNo',
           icon: Icons.error_outline_rounded,
         ));
         return;

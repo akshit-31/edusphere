@@ -26,77 +26,7 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen> with SingleTick
   double _totalWaiverAmount = 0;
 
   // Mock data
-  final List<Map<String, dynamic>> _mockRequests = [
-    {
-      'id': 'REQ-001',
-      'student_name': 'Aarav Sharma',
-      'class': 'X-A',
-      'type': 'WAIVER',
-      'fee_head': 'Tuition Fee',
-      'original_amount': 45000.0,
-      'requested_amount': 22500.0,
-      'reason': 'Financial hardship — single parent household. Father passed away last year. Mother is the sole earner.',
-      'status': 'PENDING',
-      'submitted_date': '2026-05-28',
-      'documents': 2,
-    },
-    {
-      'id': 'REQ-002',
-      'student_name': 'Priya Verma',
-      'class': 'IX-B',
-      'type': 'DISCOUNT',
-      'fee_head': 'Sports & Activities',
-      'original_amount': 5000.0,
-      'requested_amount': 2500.0,
-      'reason': 'State level athlete — represented school in inter-state basketball tournament.',
-      'status': 'PENDING',
-      'submitted_date': '2026-05-26',
-      'documents': 3,
-    },
-    {
-      'id': 'REQ-003',
-      'student_name': 'Rohan Gupta',
-      'class': 'XI-C',
-      'type': 'WAIVER',
-      'fee_head': 'Technology Fee',
-      'original_amount': 4000.0,
-      'requested_amount': 4000.0,
-      'reason': 'Scholarship recipient — NTSE scholar. Full technology fee waiver as per school policy.',
-      'status': 'PENDING',
-      'submitted_date': '2026-05-24',
-      'documents': 1,
-    },
-    {
-      'id': 'REQ-004',
-      'student_name': 'Neha Kapoor',
-      'class': 'VIII-A',
-      'type': 'DISCOUNT',
-      'fee_head': 'Annual Development Fund',
-      'original_amount': 6500.0,
-      'requested_amount': 3250.0,
-      'reason': 'Sibling discount — elder sister also enrolled in XII-B.',
-      'status': 'APPROVED',
-      'submitted_date': '2026-05-20',
-      'reviewed_by': 'Admin',
-      'reviewed_at': '2026-05-22',
-      'comment': 'Sibling verified. 50% discount approved as per policy.',
-    },
-    {
-      'id': 'REQ-005',
-      'student_name': 'Vikram Singh',
-      'class': 'XII-A',
-      'type': 'WAIVER',
-      'fee_head': 'Laboratory Fee',
-      'original_amount': 8000.0,
-      'requested_amount': 8000.0,
-      'reason': 'Requesting full waiver for lab fee — claims not using lab facilities.',
-      'status': 'REJECTED',
-      'submitted_date': '2026-05-18',
-      'reviewed_by': 'Admin',
-      'reviewed_at': '2026-05-19',
-      'comment': 'Lab attendance records show regular usage. Request denied.',
-    },
-  ];
+  final List<Map<String, dynamic>> _mockRequests = [];
 
   RealtimeChannel? _realtimeChannel;
 

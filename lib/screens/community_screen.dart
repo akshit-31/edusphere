@@ -29,6 +29,7 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   String _userName = 'Vikram';
+  String _userRole = 'Teacher';
   String _selectedCategory = 'All';
   List<Map<String, dynamic>> _posts = [];
   bool _isLoading = false;
@@ -68,6 +69,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     if (mounted) {
       setState(() {
         _userName = savedName;
+        // Capitalize the role to look good (e.g., Student, Teacher, Admin)
+        _userRole = role.isEmpty ? 'Teacher' : '${role[0].toUpperCase()}${role.substring(1)}';
       });
     }
   }
@@ -162,7 +165,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     try {
       await Supabase.instance.client.from('CommunityPost').insert({
         'author_name': _userName,
-        'author_role': 'Student',
+        'author_role': _userRole,
         'category': category,
         'content': finalContent,
         'poll_options': pollOptions,
@@ -756,454 +759,637 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final categories = ['General', 'Announcement', 'Question', 'Event', 'Poll', 'Resource'];
     final audiences = [
       {'label': 'All', 'icon': Icons.public},
-      {'label': 'Teachers', 'icon': Icons.school},
-      {'label': 'Students', 'icon': Icons.face},
-      {'label': 'Parents', 'icon': Icons.family_restroom},
-      {'label': 'Class specific', 'icon': Icons.meeting_room},
+      {'label': 'Teachers', 'icon': Icons.school_outlined},
+      {'label': 'Students', 'icon': Icons.menu_book_outlined},
+      {'label': 'Parents', 'icon': Icons.people_alt_outlined},
+      {'label': 'Class specific', 'icon': Icons.meeting_room_outlined},
     ];
 
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
           final contentLen = bodyCtrl.text.length;
           
+          // Determine if form is valid
+          bool isValid = false;
+          if (category == 'Poll') {
+            bool hasQuestion = pollQuestionCtrl.text.trim().isNotEmpty;
+            int validOptions = pollOptionCtrls.where((c) => c.text.trim().isNotEmpty).length;
+            isValid = hasQuestion && validOptions >= 2;
+          } else {
+            isValid = bodyCtrl.text.trim().isNotEmpty;
+          }
+
           return Dialog(
-            backgroundColor: const Color(0xFFF3F8FC),
+            backgroundColor: const Color(0xFFEFF6FF), // Matching screen 2's light background tint
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
             insetPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 24.h),
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(20.r),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(ctx).unfocus(),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(20.r),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Create a Community Post',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18.sp,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF0F172A),
+                                ),
+                              ),
+                              SizedBox(height: 2.h),
+                              Text(
+                                'Share something with your school community',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11.sp,
+                                  color: const Color(0xFF475569),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            padding: EdgeInsets.all(4.r),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.close, size: 18.sp, color: const Color(0xFF475569)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16.h),
+                    
+                    // Scrollable content area to prevent pixel overflow
+                    Flexible(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // POST TYPE Selector
                             Text(
-                              'Create a Community Post',
-                              style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w700, color: const Color(0xFF1E293B)),
-                            ),
-                            SizedBox(height: 4.h),
-                            Text(
-                              'Share something with your school community',
-                              style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(ctx),
-                        child: Icon(Icons.close, size: 20.sp, color: const Color(0xFF64748B)),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20.h),
-                  
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Post Type
-                          Text('POST TYPE', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                          SizedBox(height: 8.h),
-                          Wrap(
-                            spacing: 8.w,
-                            runSpacing: 8.h,
-                            children: categories.map((c) {
-                              final isSelected = category == c;
-                              return GestureDetector(
-                                onTap: () => setModalState(() => category = c),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? const Color(0xFF0EA5E9) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20.r),
-                                    border: Border.all(color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (c == 'Poll') ...[
-                                        Icon(Icons.bar_chart_rounded, size: 12.sp, color: isSelected ? Colors.white : const Color(0xFF475569)),
-                                        SizedBox(width: 4.w),
-                                      ],
-                                      Text(
-                                        c,
-                                        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF475569)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          SizedBox(height: 16.h),
-                          
-                          // Audience
-                          Text('AUDIENCE', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                          SizedBox(height: 8.h),
-                          Wrap(
-                            spacing: 8.w,
-                            runSpacing: 8.h,
-                            children: audiences.map((a) {
-                              final label = a['label'] as String;
-                              final icon = a['icon'] as IconData;
-                              final isSelected = audience == label;
-                              return GestureDetector(
-                                onTap: () => setModalState(() => audience = label),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? const Color(0xFF0EA5E9) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20.r),
-                                    border: Border.all(color: isSelected ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(icon, size: 12.sp, color: isSelected ? Colors.white : const Color(0xFF475569)),
-                                      SizedBox(width: 4.w),
-                                      Text(
-                                        label,
-                                        style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w500, color: isSelected ? Colors.white : const Color(0xFF475569)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          SizedBox(height: 16.h),
-                          
-                          // Title
-                          Text('TITLE (OPTIONAL)', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                          SizedBox(height: 6.h),
-                          TextField(
-                            controller: titleCtrl,
-                            decoration: InputDecoration(
-                              hintText: 'Give your post a title...',
-                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
-                              filled: true,
-                              fillColor: const Color(0xFFF1F5F9),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-                          
-                          // Content
-                          Text('CONTENT *', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                          SizedBox(height: 6.h),
-                          TextField(
-                            controller: bodyCtrl,
-                            maxLines: 5,
-                            onChanged: (v) => setModalState(() {}),
-                            decoration: InputDecoration(
-                              hintText: 'What\'s on your mind? Share with the community...',
-                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
-                              filled: true,
-                              fillColor: const Color(0xFFF1F5F9),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 4.h),
-                              child: Text('$contentLen/5000', style: GoogleFonts.inter(fontSize: 9.sp, color: const Color(0xFF64748B))),
-                            ),
-                          ),
-                          SizedBox(height: 12.h),
-                          
-                          if (category == 'Poll') ...[
-                            Container(
-                              width: double.infinity,
-                              padding: EdgeInsets.all(16.r),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF1F8FB),
-                                borderRadius: BorderRadius.circular(12.r),
-                                border: Border.all(color: const Color(0xFFE0E8EF)),
+                              'POST TYPE',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF475569),
+                                letterSpacing: 0.5,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('POLL SETUP', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                                  SizedBox(height: 12.h),
-                                  TextField(
-                                    controller: pollQuestionCtrl,
-                                    onChanged: (v) => setModalState(() {}),
-                                    decoration: InputDecoration(
-                                      hintText: 'Poll question...',
-                                      hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8FAFC),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
-                                    ),
-                                  ),
-                                  SizedBox(height: 12.h),
-                                  ...List.generate(pollOptionCtrls.length, (idx) {
-                                    return Padding(
-                                      padding: EdgeInsets.only(bottom: 12.h),
-                                      child: TextField(
-                                        controller: pollOptionCtrls[idx],
-                                        onChanged: (v) => setModalState(() {}),
-                                        decoration: InputDecoration(
-                                          hintText: 'Option ${idx + 1}',
-                                          hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
-                                          filled: true,
-                                          fillColor: const Color(0xFFF8FAFC),
-                                          contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
-                                        ),
+                            ),
+                            SizedBox(height: 8.h),
+                            Wrap(
+                              spacing: 8.w,
+                              runSpacing: 8.h,
+                              children: categories.map((c) {
+                                final isSelected = category == c;
+                                return GestureDetector(
+                                  onTap: () => setModalState(() => category = c),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? widget.theme.primary : Colors.white,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                      border: Border.all(
+                                        color: isSelected ? widget.theme.primary : const Color(0xFFCBD5E1),
                                       ),
-                                    );
-                                  }),
-                                  GestureDetector(
-                                    onTap: () {
-                                      setModalState(() {
-                                        pollOptionCtrls.add(TextEditingController());
-                                      });
-                                    },
+                                    ),
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.add, size: 14.sp, color: const Color(0xFF0EA5E9)),
-                                        SizedBox(width: 4.w),
-                                        Text('Add option', style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w600, color: const Color(0xFF0EA5E9))),
+                                        if (c == 'Poll') ...[
+                                          Icon(
+                                            Icons.bar_chart_rounded,
+                                            size: 13.sp,
+                                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                                          ),
+                                          SizedBox(width: 4.w),
+                                        ],
+                                        Text(
+                                          c,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11.sp,
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
-                                  SizedBox(height: 16.h),
-                                  Text('Poll ends (optional)', style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B))),
-                                  SizedBox(height: 6.h),
-                                  GestureDetector(
-                                    onTap: () async {
-                                      final picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: DateTime.now().add(const Duration(days: 1)),
-                                        firstDate: DateTime.now(),
-                                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                                      );
-                                      if (picked != null) {
-                                        setModalState(() {
-                                          pollEndDate = DateFormat('dd-MM-yyyy --:--').format(picked);
-                                        });
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF8FAFC),
-                                        borderRadius: BorderRadius.circular(10.r),
-                                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            pollEndDate ?? 'dd-mm-yyyy --:--',
-                                            style: GoogleFonts.inter(fontSize: 12.sp, color: pollEndDate == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A)),
-                                          ),
-                                          Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF64748B)),
-                                        ],
+                                );
+                              }).toList(),
+                            ),
+                            SizedBox(height: 16.h),
+                            
+                            // AUDIENCE Selector
+                            Text(
+                              'AUDIENCE',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF475569),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            Wrap(
+                              spacing: 8.w,
+                              runSpacing: 8.h,
+                              children: audiences.map((a) {
+                                final label = a['label'] as String;
+                                final icon = a['icon'] as IconData;
+                                final isSelected = audience == label;
+                                return GestureDetector(
+                                  onTap: () => setModalState(() => audience = label),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? widget.theme.primary : Colors.white,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                      border: Border.all(
+                                        color: isSelected ? widget.theme.primary : const Color(0xFFCBD5E1),
                                       ),
                                     ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          icon,
+                                          size: 13.sp,
+                                          color: isSelected ? Colors.white : const Color(0xFF475569),
+                                        ),
+                                        SizedBox(width: 4.w),
+                                        Text(
+                                          label,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11.sp,
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ],
+                                );
+                              }).toList(),
+                            ),
+                            SizedBox(height: 16.h),
+                            
+                            // TITLE Input (Optional)
+                            Text(
+                              'TITLE (OPTIONAL)',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF475569),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(height: 6.h),
+                            TextField(
+                              controller: titleCtrl,
+                              style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
+                              decoration: InputDecoration(
+                                hintText: 'Give your post a title...',
+                                hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: BorderSide(color: widget.theme.primary),
+                                ),
                               ),
                             ),
                             SizedBox(height: 16.h),
-                          ],
-                          
-                          // Media
-                          Text('MEDIA (OPTIONAL - UP TO 5 IMAGES)', style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-                          SizedBox(height: 6.h),
-                          GestureDetector(
-                            onTap: () async {
-                              final List<XFile> picked = await picker.pickMultiImage(imageQuality: 80);
-                              if (picked.isNotEmpty) {
-                                setModalState(() {
-                                  selectedImages.addAll(picked);
-                                  if (selectedImages.length > 5) selectedImages = selectedImages.sublist(0, 5);
-                                });
-                              }
-                            },
-                            child: CustomPaint(
-                              painter: DashedBorderPainter(
-                                color: const Color(0xFFCBD5E1),
-                                strokeWidth: 1.5,
-                                dashWidth: 6.0,
-                                dashSpace: 4.0,
-                                borderRadius: 12.r,
+                            
+                            // CONTENT Input (Mandatory)
+                            Text(
+                              'CONTENT *',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF475569),
+                                letterSpacing: 0.5,
                               ),
-                              child: Container(
+                            ),
+                            SizedBox(height: 6.h),
+                            TextField(
+                              controller: bodyCtrl,
+                              maxLines: 5,
+                              maxLength: 5000,
+                              onChanged: (v) => setModalState(() {}),
+                              style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
+                              buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null, // Hide native counter
+                              decoration: InputDecoration(
+                                hintText: 'What\'s on your mind? Share with the community...',
+                                hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  borderSide: BorderSide(color: widget.theme.primary),
+                                ),
+                              ),
+                            ),
+                            // Aligned counter text under the content field
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Padding(
+                                padding: EdgeInsets.only(top: 4.h),
+                                child: Text(
+                                  '$contentLen/5000',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.sp,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            
+                            // POLL Section (if category == 'Poll')
+                            if (category == 'Poll') ...[
+                              Container(
                                 width: double.infinity,
-                                padding: EdgeInsets.symmetric(vertical: selectedImages.isEmpty ? 24.h : 16.h),
-                                child: selectedImages.isEmpty 
-                                  ? Column(
-                                      children: [
-                                        Icon(Icons.upload_file_outlined, size: 24.sp, color: const Color(0xFF64748B)),
-                                        SizedBox(height: 8.h),
-                                        RichText(
-                                          text: TextSpan(
-                                            text: 'Click to browse',
-                                            style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.w600, color: const Color(0xFF0EA5E9)),
-                                            children: [
-                                              TextSpan(text: ' or drag & drop', style: GoogleFonts.inter(color: const Color(0xFF64748B))),
-                                            ],
+                                padding: EdgeInsets.all(16.r),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'POLL SETUP',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF64748B),
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12.h),
+                                    TextField(
+                                      controller: pollQuestionCtrl,
+                                      style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
+                                      onChanged: (v) => setModalState(() {}),
+                                      decoration: InputDecoration(
+                                        hintText: 'Poll question...',
+                                        hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10.r),
+                                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10.r),
+                                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10.r),
+                                          borderSide: BorderSide(color: widget.theme.primary),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: 12.h),
+                                    ...List.generate(pollOptionCtrls.length, (idx) {
+                                      return Padding(
+                                        padding: EdgeInsets.only(bottom: 12.h),
+                                        child: TextField(
+                                          controller: pollOptionCtrls[idx],
+                                          style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF0F172A)),
+                                          onChanged: (v) => setModalState(() {}),
+                                          decoration: InputDecoration(
+                                            hintText: 'Option ${idx + 1}',
+                                            hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF94A3B8)),
+                                            filled: true,
+                                            fillColor: const Color(0xFFF8FAFC),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10.r),
+                                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10.r),
+                                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10.r),
+                                              borderSide: BorderSide(color: widget.theme.primary),
+                                            ),
                                           ),
                                         ),
-                                        SizedBox(height: 4.h),
-                                        Text('Images & videos, max 5MB each', style: GoogleFonts.inter(fontSize: 9.sp, color: const Color(0xFF94A3B8))),
-                                      ],
-                                    )
-                                  : Wrap(
-                                      spacing: 12.w,
-                                      runSpacing: 12.h,
-                                      alignment: WrapAlignment.center,
-                                      children: selectedImages.map((file) {
-                                        return Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            ClipRRect(
-                                              borderRadius: BorderRadius.circular(8.r),
-                                              child: Image.file(File(file.path), width: 64.w, height: 64.w, fit: BoxFit.cover),
+                                      );
+                                    }),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setModalState(() {
+                                          pollOptionCtrls.add(TextEditingController());
+                                        });
+                                      },
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.add, size: 14.sp, color: widget.theme.primary),
+                                          SizedBox(width: 4.w),
+                                          Text(
+                                            'Add option',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11.sp,
+                                              fontWeight: FontWeight.w600,
+                                              color: widget.theme.primary,
                                             ),
-                                            Positioned(
-                                              right: -6.w, top: -6.h,
-                                              child: GestureDetector(
-                                                onTap: () => setModalState(() => selectedImages.remove(file)),
-                                                child: Container(
-                                                  padding: EdgeInsets.all(4.r),
-                                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                                  child: Icon(Icons.close, size: 14.sp, color: Colors.white),
-                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: 16.h),
+                                    Text(
+                                      'Poll ends (optional)',
+                                      style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B)),
+                                    ),
+                                    SizedBox(height: 6.h),
+                                    GestureDetector(
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: DateTime.now().add(const Duration(days: 1)),
+                                          firstDate: DateTime.now(),
+                                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        );
+                                        if (picked != null) {
+                                          setModalState(() {
+                                            pollEndDate = DateFormat('dd-MM-yyyy --:--').format(picked);
+                                          });
+                                        }
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(10.r),
+                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              pollEndDate ?? 'dd-mm-yyyy --:--',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12.sp,
+                                                color: pollEndDate == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
                                               ),
                                             ),
+                                            Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF64748B)),
                                           ],
-                                        );
-                                      }).toList(),
+                                        ),
+                                      ),
                                     ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 16.h),
+                            ],
+                            
+                            // MEDIA Card/Zone
+                            Text(
+                              'MEDIA (UP TO 5 IMAGES)',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF475569),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            SizedBox(height: 6.h),
+                            GestureDetector(
+                              onTap: () async {
+                                final List<XFile> picked = await picker.pickMultiImage(imageQuality: 80);
+                                if (picked.isNotEmpty) {
+                                  setModalState(() {
+                                    selectedImages.addAll(picked);
+                                    if (selectedImages.length > 5) selectedImages = selectedImages.sublist(0, 5);
+                                  });
+                                }
+                              },
+                              child: CustomPaint(
+                                painter: DashedBorderPainter(
+                                  color: const Color(0xFFCBD5E1),
+                                  strokeWidth: 1.5,
+                                  dashWidth: 6.0,
+                                  dashSpace: 4.0,
+                                  borderRadius: 12.r,
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12.r),
+                                  ),
+                                  padding: EdgeInsets.symmetric(vertical: selectedImages.isEmpty ? 24.h : 16.h),
+                                  child: selectedImages.isEmpty 
+                                    ? Column(
+                                        children: [
+                                          Icon(Icons.upload_outlined, size: 28.sp, color: const Color(0xFF475569)),
+                                          SizedBox(height: 8.h),
+                                          RichText(
+                                            text: TextSpan(
+                                              text: 'Click to browse',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12.sp,
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF3B82F6),
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                              children: [
+                                                TextSpan(
+                                                  text: ' or drag & drop',
+                                                  style: GoogleFonts.inter(
+                                                    color: const Color(0xFF475569),
+                                                    decoration: TextDecoration.none,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          SizedBox(height: 4.h),
+                                          Text(
+                                            'Images & videos, max 5MB each',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.sp,
+                                              color: const Color(0xFF94A3B8),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : Wrap(
+                                        spacing: 12.w,
+                                        runSpacing: 12.h,
+                                        alignment: WrapAlignment.center,
+                                        children: selectedImages.map((file) {
+                                          return Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(8.r),
+                                                child: Image.file(File(file.path), width: 64.w, height: 64.w, fit: BoxFit.cover),
+                                              ),
+                                              Positioned(
+                                                right: -6.w, top: -6.h,
+                                                child: GestureDetector(
+                                                  onTap: () => setModalState(() => selectedImages.remove(file)),
+                                                  child: Container(
+                                                    padding: EdgeInsets.all(4.r),
+                                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                                    child: Icon(Icons.close, size: 14.sp, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }).toList(),
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20.h),
+                    
+                    // Buttons Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                              padding: EdgeInsets.symmetric(vertical: 12.h),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF475569),
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 20.h),
-                  
-                  // Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFCBD5E1)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                            padding: EdgeInsets.symmetric(vertical: 12.h),
-                          ),
-                          child: Text('Cancel', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF475569))),
                         ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            bool isValid = false;
-                            if (category == 'Poll') {
-                              bool hasQuestion = pollQuestionCtrl.text.trim().isNotEmpty;
-                              int validOptions = pollOptionCtrls.where((c) => c.text.trim().isNotEmpty).length;
-                              isValid = hasQuestion && validOptions >= 2;
-                            } else {
-                              isValid = bodyCtrl.text.trim().isNotEmpty;
-                            }
-
-                            return ElevatedButton(
-                              onPressed: isValid ? () async {
-                                List<Map<String, dynamic>> finalPollOptions = [];
-                                if (category == 'Poll') {
-                                  for (var ctrl in pollOptionCtrls) {
-                                    if (ctrl.text.trim().isNotEmpty) {
-                                      finalPollOptions.add({
-                                        'option': ctrl.text.trim(),
-                                        'votes': 0,
-                                      });
-                                    }
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: isValid ? () async {
+                              List<Map<String, dynamic>> finalPollOptions = [];
+                              if (category == 'Poll') {
+                                for (var ctrl in pollOptionCtrls) {
+                                  if (ctrl.text.trim().isNotEmpty) {
+                                    finalPollOptions.add({
+                                      'option': ctrl.text.trim(),
+                                      'votes': 0,
+                                    });
                                   }
                                 }
+                              }
+                              
+                              String finalContentBody = bodyCtrl.text.trim();
+                              if (category == 'Poll') {
+                                final suffix = '**Poll Question:** ${pollQuestionCtrl.text.trim()}';
+                                finalContentBody = finalContentBody.isNotEmpty
+                                    ? '$finalContentBody\n\n$suffix'
+                                    : suffix;
+                              }
+                              
+                              final scaffoldMessenger = ScaffoldMessenger.of(context);
+                              Navigator.pop(ctx);
+                              scaffoldMessenger.showSnackBar(
+                                const SnackBar(content: Text('Publishing...'), duration: Duration(seconds: 1)),
+                              );
+                              
+                              try {
+                                await _addNewPost(titleCtrl.text.trim(), finalContentBody, category, audience, selectedImages, pollOptions: finalPollOptions);
+                                await _refreshPostsSilently();
                                 
-                                String finalContentBody = bodyCtrl.text.trim();
-                                if (category == 'Poll') {
-                                  finalContentBody += '${finalContentBody.isNotEmpty ? '\n\n' : ''}**Poll Question:** ${pollQuestionCtrl.text.trim()}';
-                                  final suffix = '**Poll Question:** ${pollQuestionCtrl.text.trim()}';
-                                  finalContentBody = finalContentBody.isNotEmpty
-                                      ? '$finalContentBody\n\n$suffix'
-                                      : suffix;
+                                if (mounted) {
+                                  scaffoldMessenger.showSnackBar(
+                                    const SnackBar(content: Text('🎉 Post published successfully!'), backgroundColor: Colors.green),
+                                  );
                                 }
-                                
-                                final scaffoldMessenger = ScaffoldMessenger.of(this.context);
-                                Navigator.pop(ctx);
-                                scaffoldMessenger.showSnackBar(
-                                  const SnackBar(content: Text('Publishing...'), duration: Duration(seconds: 1)),
-                                );
-                                
-                                try {
-                                  await _addNewPost(titleCtrl.text.trim(), finalContentBody, category, audience, selectedImages, pollOptions: finalPollOptions);
-                                  await _refreshPostsSilently();
-                                  
-                                  if (mounted) {
-                                    scaffoldMessenger.showSnackBar(
-                                      const SnackBar(content: Text('🎉 Post published successfully!'), backgroundColor: Colors.green),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    scaffoldMessenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Database Error: Table missing in Supabase!'), 
-                                        backgroundColor: Colors.red,
-                                        duration: Duration(seconds: 4),
-                                      ),
-                                    );
-                                  }
+                              } catch (e) {
+                                if (mounted) {
+                                  scaffoldMessenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Database Error: Table missing in Supabase!'), 
+                                      backgroundColor: Colors.red,
+                                      duration: Duration(seconds: 4),
+                                    ),
+                                  );
                                 }
-                              } : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isValid ? const Color(0xFF0EA5E9) : const Color(0xFFCBD5E1),
-                                disabledBackgroundColor: const Color(0xFFCBD5E1),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                                padding: EdgeInsets.symmetric(vertical: 12.h),
+                              }
+                            } : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isValid ? widget.theme.primary : const Color(0xFFCBD5E1),
+                              disabledBackgroundColor: const Color(0xFFCBD5E1),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                              padding: EdgeInsets.symmetric(vertical: 12.h),
+                            ),
+                            child: Text(
+                              'Post',
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
                               ),
-                              child: Text('Post', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.white)),
-                            );
-                          }
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           );

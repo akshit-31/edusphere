@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
@@ -37,39 +38,10 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
   String rollNo = '24';
 
   // Realistic mock exams
-  final List<Map<String, dynamic>> _mockExams = [
-    {'id': 'exam_term1', 'name': 'Term 1 Final'},
-    {'id': 'exam_term2', 'name': 'Term 2 Final'},
-    {'id': 'exam_annual', 'name': 'Annual Assessment'},
-  ];
+  final List<Map<String, dynamic>> _mockExams = [];
 
   // Realistic mock results mapped by exam_id
-  final Map<String, List<Map<String, dynamic>>> _mockResults = {
-    'exam_term1': [
-      {'subject': 'Physics', 'max_marks': 100, 'marks_obtained': 82.0},
-      {'subject': 'Mathematics', 'max_marks': 100, 'marks_obtained': 88.0},
-      {'subject': 'Chemistry', 'max_marks': 100, 'marks_obtained': 76.0},
-      {'subject': 'English', 'max_marks': 100, 'marks_obtained': 91.0},
-      {'subject': 'Computer Sc.', 'max_marks': 100, 'marks_obtained': 89.0},
-      {'subject': 'History', 'max_marks': 100, 'marks_obtained': 70.0},
-    ],
-    'exam_term2': [
-      {'subject': 'Physics', 'max_marks': 100, 'marks_obtained': 88.0},
-      {'subject': 'Mathematics', 'max_marks': 100, 'marks_obtained': 95.0},
-      {'subject': 'Chemistry', 'max_marks': 100, 'marks_obtained': 79.0},
-      {'subject': 'English', 'max_marks': 100, 'marks_obtained': 85.0},
-      {'subject': 'Computer Sc.', 'max_marks': 100, 'marks_obtained': 92.0},
-      {'subject': 'History', 'max_marks': 100, 'marks_obtained': 76.0},
-    ],
-    'exam_annual': [
-      {'subject': 'Physics', 'max_marks': 100, 'marks_obtained': 91.0},
-      {'subject': 'Mathematics', 'max_marks': 100, 'marks_obtained': 98.0},
-      {'subject': 'Chemistry', 'max_marks': 100, 'marks_obtained': 84.0},
-      {'subject': 'English', 'max_marks': 100, 'marks_obtained': 89.0},
-      {'subject': 'Computer Sc.', 'max_marks': 100, 'marks_obtained': 96.0},
-      {'subject': 'History', 'max_marks': 100, 'marks_obtained': 81.0},
-    ]
-  };
+  final Map<String, List<Map<String, dynamic>>> _mockResults = {};
 
   @override
   void initState() {
@@ -88,29 +60,34 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
         studentName = savedName;
       }
 
-      // 2. Fetch exams list from backend: GET /exams
-      final examsRes = await ApiService.instance.get('exams');
-      final List<dynamic> rawExams = examsRes['exams'] ?? examsRes['data'] ?? [];
+      // 2. Fetch exams list directly from Supabase Exam table
+      final client = Supabase.instance.client;
+      final examsRes = await client
+          .from('Exam')
+          .select('id, name')
+          .order('name', ascending: true);
 
-      final List<Map<String, dynamic>> loadedExams = rawExams
-          .map((e) => {'id': e['id'] as String, 'name': e['name'] as String? ?? 'Exam'})
-          .toList();
+      final List<Map<String, dynamic>> loadedExams = List<Map<String, dynamic>>.from(examsRes);
 
       if (loadedExams.isNotEmpty) {
         _examsList = loadedExams;
         _selectedExamId = widget.initialExamId ?? _examsList.first['id'] as String;
-        // Results: try backend, fall to mocks on failure
         await _fetchReportCardDetails();
         return;
       }
     } catch (e) {
-      dev.log('⚠️ Error loading exams from backend: $e', name: 'ExamReportCard');
+      dev.log('⚠️ Error loading exams from Supabase: $e', name: 'ExamReportCard');
     }
 
     // Fallback to mock data
     _examsList = _mockExams;
-    _selectedExamId = widget.initialExamId ?? _mockExams.first['id'] as String;
-    _loadFallbackMockResults();
+    if (_mockExams.isNotEmpty) {
+      _selectedExamId = widget.initialExamId ?? _mockExams.first['id'] as String;
+      _loadFallbackMockResults();
+    } else {
+      _selectedExamId = null;
+      _reportData = [];
+    }
 
     if (mounted) setState(() => _loading = false);
   }
@@ -162,7 +139,7 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
 
   void _loadFallbackMockResults() {
     setState(() {
-      _reportData = _mockResults[_selectedExamId] ?? _mockResults['exam_term2']!;
+      _reportData = _mockResults[_selectedExamId] ?? (_mockResults.isNotEmpty ? _mockResults.values.first : []);
     });
   }
 

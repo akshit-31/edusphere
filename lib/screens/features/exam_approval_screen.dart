@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart' as intl;
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../main_screen.dart';
@@ -21,53 +22,7 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTick
 
   List<Map<String, dynamic>> _examsList = [];
 
-  // Default mock exams for offline support or empty tables
-  final List<Map<String, dynamic>> _mockExams = [
-    {
-      'id': 'e_ap1',
-      'name': 'Term 1 Midterms',
-      'class_name': 'Grade 12-A',
-      'subject': 'Physics',
-      'date': 'May 20, 2026',
-      'status': 'PENDING',
-      'comments': '',
-      'reviewed_by': null,
-      'reviewed_at': null,
-    },
-    {
-      'id': 'e_ap2',
-      'name': 'Term 2 Final Assessments',
-      'class_name': 'Grade 12-A',
-      'subject': 'Mathematics',
-      'date': 'May 25, 2026',
-      'status': 'REVIEW',
-      'comments': '',
-      'reviewed_by': null,
-      'reviewed_at': null,
-    },
-    {
-      'id': 'e_ap3',
-      'name': 'Annual Physics Practicals',
-      'class_name': 'Grade 11-B',
-      'subject': 'Physics',
-      'date': 'May 26, 2026',
-      'status': 'APPROVED',
-      'comments': 'All marks verified successfully.',
-      'reviewed_by': 'b2f4c6d8-2345-6789-bcde-f23456789012',
-      'reviewed_at': '2026-05-26T14:30:00Z',
-    },
-    {
-      'id': 'e_ap4',
-      'name': 'Chemistry Monthly Unit Test',
-      'class_name': 'Grade 10-C',
-      'subject': 'Chemistry',
-      'date': 'May 28, 2026',
-      'status': 'REJECTED',
-      'comments': 'Chemistry marks out of bounds.',
-      'reviewed_by': 'b2f4c6d8-2345-6789-bcde-f23456789012',
-      'reviewed_at': '2026-05-28T10:15:00Z',
-    }
-  ];
+
 
   @override
   void initState() {
@@ -90,27 +45,39 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTick
     try {
       // Fetch exams from Supabase where status IN ('PENDING', 'REVIEW', 'APPROVED', 'REJECTED')
       final response = await Supabase.instance.client
-          .from('exams')
-          .select()
+          .from('Exam')
+          .select('*, Class(*)')
           .order('name', ascending: true);
 
       final List<Map<String, dynamic>> rawData = List<Map<String, dynamic>>.from(response);
-
-      if (rawData.isNotEmpty) {
-        setState(() {
-          _examsList = rawData;
+      final List<Map<String, dynamic>> mappedData = [];
+      for (var exam in rawData) {
+        final name = exam['name'] as String? ?? 'Exam';
+        final cls = exam['Class']?['name']?.toString() ?? 'Grade 8';
+        const subject = 'All Subjects';
+        final dateStr = exam['startDate']?.toString();
+        String date = '—';
+        if (dateStr != null) {
+          try {
+            date = intl.DateFormat('MMM d, yyyy').format(DateTime.parse(dateStr).toLocal());
+          } catch (_) {}
+        }
+        
+        mappedData.add({
+          ...exam,
+          'name': name,
+          'class_name': cls,
+          'subject': subject,
+          'date': date,
         });
-        return;
       }
-      
-      // Empty database fallback
+
       setState(() {
-        _examsList = _mockExams;
+        _examsList = mappedData;
       });
     } catch (e) {
-      // Offline or missing schema fallback
       setState(() {
-        _examsList = _mockExams;
+        _examsList = [];
       });
       debugPrint('Error loading approvals: $e');
     } finally {
@@ -143,7 +110,7 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTick
 
     try {
       await Supabase.instance.client
-          .from('exams')
+          .from('Exam')
           .update({
             'status': newStatus,
             'comments': comment,
@@ -167,18 +134,8 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen> with SingleTick
         showToast(context, 'Exam successfully marked as $newStatus!', isError: false);
       }
     } catch (e) {
-      // Local caching fallback for offline use/mock setup
-      setState(() {
-        final index = _examsList.indexWhere((e) => e['id'] == examId);
-        if (index != -1) {
-          _examsList[index]['status'] = newStatus;
-          _examsList[index]['comments'] = comment;
-          _examsList[index]['reviewed_by'] = currentUserId;
-          _examsList[index]['reviewed_at'] = nowStr;
-        }
-      });
       if (mounted) {
-        showToast(context, 'Exam cache marked as $newStatus!', isError: false);
+        showToast(context, 'Error updating exam status: $e', isError: true);
       }
     }
   }

@@ -437,6 +437,65 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     );
   }
 
+  Widget _actionBtn(
+    IconData icon,
+    String label, {
+    IconData? trailingIcon,
+    bool isActive = false,
+    VoidCallback? onTap,
+  }) {
+    const activeColor = Color(0xFF0066CC);
+    const inactiveColor = Color(0xFF475569);
+    final bg = isActive ? const Color(0xFFE0F2FE) : Colors.white;
+    final borderCol = isActive ? const Color(0xFFBAE6FD) : const Color(0xFFE2E8F0);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(color: borderCol, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16.sp,
+              color: isActive ? activeColor : inactiveColor,
+            ),
+            SizedBox(width: 6.w),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: isActive ? activeColor : const Color(0xFF0F172A),
+              ),
+            ),
+            if (trailingIcon != null) ...[
+              SizedBox(width: 4.w),
+              Icon(
+                trailingIcon,
+                size: 16.sp,
+                color: isActive ? activeColor : inactiveColor,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showFiltersMenu(BuildContext context, RenderBox button) {
     final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
     final RelativeRect position = RelativeRect.fromRect(

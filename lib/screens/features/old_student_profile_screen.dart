@@ -114,8 +114,6 @@ class _OldStudentProfileScreenState extends State<OldStudentProfileScreen> {
   final List<RealtimeChannel> _realtimeChannels = [];
 
   // Tab details database variables
-  int _timetableDay = 1;
-  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   bool _isLoadingTabDetails = false;
   // ignore: unused_field
   List<Map<String, dynamic>> _attendanceRecords = [];
@@ -150,7 +148,6 @@ class _OldStudentProfileScreenState extends State<OldStudentProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _timetableDay = DateTime.now().weekday > 6 ? 1 : DateTime.now().weekday;
     
     if (widget.studentName != null) {
       _studentName = widget.studentName!;
@@ -3145,70 +3142,7 @@ class _OldStudentProfileScreenState extends State<OldStudentProfileScreen> {
     );
   }
 
-  Widget _buildTimetableSlotRow(int period, String start, String end, String subject, String teacher, String room) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 10.h),
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: const Color(0xFFE2EAF4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36.w,
-            height: 36.w,
-            decoration: const BoxDecoration(color: Color(0xFFEAF1FB), shape: BoxShape.circle),
-            child: Center(
-              child: Text(
-                'P$period',
-                style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1A6FDB)),
-              ),
-            ),
-          ),
-          SizedBox(width: 14.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(subject, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F2547))),
-                SizedBox(height: 2.h),
-                Text('$teacher • Room $room', style: GoogleFonts.inter(fontSize: 10.5.sp, color: const Color(0xFF868E96), fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(start, style: GoogleFonts.inter(fontSize: 11.5.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-              SizedBox(height: 2.h),
-              Text(end, style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF868E96))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildMockTimetableSlots() {
-    final List<Map<String, dynamic>> mockData = [
-      {'period': 1, 'start': '08:30 AM', 'end': '09:15 AM', 'subject': 'Mathematics', 'teacher': 'Emma Johnson', 'room': '101'},
-      {'period': 2, 'start': '09:15 AM', 'end': '10:00 AM', 'subject': 'Physics', 'teacher': 'Vikram Yadav', 'room': 'Lab A'},
-      {'period': 3, 'start': '10:15 AM', 'end': '11:00 AM', 'subject': 'English Lit.', 'teacher': 'Sarah Connor', 'room': '102'},
-      {'period': 4, 'start': '11:00 AM', 'end': '11:45 AM', 'subject': 'Computer Science', 'teacher': 'Alan Turing', 'room': 'CS Lab'},
-    ];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: mockData.length,
-      itemBuilder: (ctx, idx) {
-        final s = mockData[idx];
-        return _buildTimetableSlotRow(s['period']!, s['start']!, s['end']!, s['subject']!, s['teacher']!, s['room']!);
-      },
-    );
-  }
 
   Widget _buildDocumentsVault() {
     return Container(

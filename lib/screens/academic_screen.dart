@@ -52,8 +52,6 @@ class _AcademicScreenState extends State<AcademicScreen> {
   bool _showFabMenu = true;
   String _userName = 'Emma Johnson';
   String _userRole = 'teacher';
-  String _subjectSearchQuery = '';
-  String _sectionSearchQuery = '';
 
   // ── Database Lists ──
   List<Map<String, dynamic>> _classesList = [];

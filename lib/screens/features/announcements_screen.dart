@@ -17,6 +17,7 @@ class AnnouncementModel {
   final String priority; // 'HIGH' | 'NORMAL' | 'LOW'
   final String audience; // 'ALL' | 'STUDENTS' | 'TEACHERS'
   final String date;
+  final String? expiresAt;
 
   AnnouncementModel({
     required this.id,
@@ -25,6 +26,7 @@ class AnnouncementModel {
     required this.priority,
     required this.audience,
     required this.date,
+    this.expiresAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +36,7 @@ class AnnouncementModel {
         'priority': priority,
         'audience': audience,
         'date': date,
+        'expiresAt': expiresAt,
       };
 
   factory AnnouncementModel.fromJson(Map<String, dynamic> json) => AnnouncementModel(
@@ -43,6 +46,7 @@ class AnnouncementModel {
         priority: json['priority'] as String,
         audience: json['audience'] as String,
         date: json['date'] as String,
+        expiresAt: json['expiresAt'] as String?,
       );
 }
 
@@ -76,12 +80,69 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   String _classId = '';
   String _userRole = '';
 
+  bool _isChatOpen = false;
+  String _teacherFirstName = 'KARAN';
+
   @override
   void initState() {
     super.initState();
     _loadIds();
+    _loadTeacherName();
     _loadAnnouncements(showLoading: true);
     _connectRealTime();
+  }
+
+  Future<void> _loadTeacherName() async {
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      if (user != null) {
+        final res = await client
+            .from('User')
+            .select('firstName')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (res != null && mounted) {
+          setState(() {
+            _teacherFirstName = (res['firstName'] as String? ?? 'KARAN').toUpperCase();
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}";
+  }
+
+  void _toggleChat() {
+    setState(() {
+      _isChatOpen = !_isChatOpen;
+    });
+  }
+
+  Future<void> _updateAnnouncement(AnnouncementModel announcement) async {
+    try {
+      final client = Supabase.instance.client;
+      final List<String> audienceList = announcement.audience
+          .split(',')
+          .map((e) => e.trim().toUpperCase())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      await client.from('Announcement').update({
+        'title': announcement.title,
+        'content': announcement.content,
+        'priority': announcement.priority,
+        'targetAudience': audienceList,
+        'expiresAt': announcement.expiresAt,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }).eq('id', announcement.id);
+      
+      _loadAnnouncements(showLoading: false);
+    } catch (e) {
+      dev.log('Error updating announcement: $e', name: 'AnnouncementsScreen');
+    }
   }
 
   Future<void> _loadIds() async {
@@ -209,6 +270,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               priority: priorityStr,
               audience: aud.isEmpty ? 'ALL' : aud.join(', '),
               date: formattedDate,
+              expiresAt: e['expiresAt'] as String?,
             );
           }).toList();
         });
@@ -245,6 +307,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         'createdBy': 'system',
         'createdAt': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
+        'expiresAt': announcement.expiresAt,
       });
       _loadAnnouncements(showLoading: false);
     } catch (e) {
@@ -281,11 +344,27 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   int get _highPriorityCount => _announcements.where((e) => e.priority == 'HIGH').length;
 
   // --- Open Create Form Bottom Sheet ---
-  void _openCreateSheet() {
-    final titleCtrl = TextEditingController();
-    final contentCtrl = TextEditingController();
-    String selectedPriority = 'NORMAL'; // default
-    String selectedAudience = 'ALL'; // default
+  void _openCreateSheet({AnnouncementModel? editItem}) {
+    final bool isEditing = editItem != null;
+    final titleCtrl = TextEditingController(text: editItem?.title ?? '');
+    final contentCtrl = TextEditingController(text: editItem?.content ?? '');
+    
+    String selectedPriority = editItem?.priority ?? 'NORMAL'; // default
+    String selectedAudience = editItem?.audience ?? 'ALL'; // default
+    if (selectedAudience.contains(',')) {
+      selectedAudience = 'ALL';
+    }
+
+    DateTime? selectedExpiryDate;
+    if (isEditing && editItem.expiresAt != null) {
+      try {
+        selectedExpiryDate = DateTime.parse(editItem.expiresAt!);
+      } catch (_) {}
+    }
+
+    final expiryCtrl = TextEditingController(
+      text: selectedExpiryDate != null ? _formatDate(selectedExpiryDate) : '',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -295,228 +374,330 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Container(
-              height: MediaQuery.of(context).size.height * 0.8,
+              height: MediaQuery.of(context).size.height * 0.92,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFEFF6FF), // light blue-gray background matching the image
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
               ),
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Handle
-                  Container(
-                    margin: EdgeInsets.symmetric(vertical: 12.h),
-                    width: 40.w,
-                    height: 4.h,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(2.r),
-                    ),
-                  ),
                   // Header
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20.w),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Create New Announcement",
-                          style: GoogleFonts.inter(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textDark,
-                          ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isEditing ? "Edit Announcement" : "Create New Announcement",
+                              style: GoogleFonts.outfit(
+                                fontSize: 20.sp,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              "Post an announcement to all users or specific groups",
+                              style: GoogleFonts.inter(
+                                fontSize: 13.sp,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
+                  SizedBox(height: 16.h),
                   const Divider(color: Color(0xFFE2E8F0)),
-                  // Scroll Area for inputs
+                  SizedBox(height: 16.h),
+                  // Scrollable Form
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                      physics: const BouncingScrollPhysics(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Title
+                          // Title *
                           Text(
-                            "Title",
-                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                            "Title *",
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
+                            ),
                           ),
-                          SizedBox(height: 6.h),
-                          TextField(
+                          SizedBox(height: 8.h),
+                          TextFormField(
                             controller: titleCtrl,
                             decoration: InputDecoration(
-                              hintText: "Enter title e.g. Welcome to Academic Year",
-                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textLight),
+                              hintText: "Enter announcement title",
+                              hintStyle: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF94A3B8)),
                               filled: true,
-                              fillColor: const Color(0xFFF8FAFC),
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                                borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
                               ),
                             ),
+                            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
                           ),
-                          SizedBox(height: 16.h),
-                          // Content
-                          Text(
-                            "Content / Description",
-                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: AppColors.textDark),
-                          ),
-                          SizedBox(height: 6.h),
-                          TextField(
-                            controller: contentCtrl,
-                            maxLines: 4,
-                            decoration: InputDecoration(
-                              hintText: "Write details about the update or notice...",
-                              hintStyle: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textLight),
-                              filled: true,
-                              fillColor: const Color(0xFFF8FAFC),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                                borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-                          // Priority Selection
-                          Text(
-                            "Priority Level",
-                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: AppColors.textDark),
-                          ),
-                          SizedBox(height: 8.h),
-                          Row(
-                            children: [
-                              _buildPriorityOption(
-                                label: "LOW",
-                                isSelected: selectedPriority == 'LOW',
-                                color: Colors.grey,
-                                onTap: () => setModalState(() => selectedPriority = 'LOW'),
-                              ),
-                              SizedBox(width: 8.w),
-                              _buildPriorityOption(
-                                label: "NORMAL",
-                                isSelected: selectedPriority == 'NORMAL',
-                                color: const Color(0xFF2563EB),
-                                onTap: () => setModalState(() => selectedPriority = 'NORMAL'),
-                              ),
-                              SizedBox(width: 8.w),
-                              _buildPriorityOption(
-                                label: "HIGH",
-                                isSelected: selectedPriority == 'HIGH',
-                                color: Colors.redAccent,
-                                onTap: () => setModalState(() => selectedPriority = 'HIGH'),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 16.h),
-                          // Audience Selection
-                          Text(
-                            "Target Audience",
-                            style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: AppColors.textDark),
-                          ),
-                          SizedBox(height: 8.h),
-                          Row(
-                            children: [
-                              _buildAudienceOption(
-                                label: "ALL",
-                                display: "Everyone",
-                                isSelected: selectedAudience == 'ALL',
-                                onTap: () => setModalState(() => selectedAudience = 'ALL'),
-                              ),
-                              SizedBox(width: 8.w),
-                              _buildAudienceOption(
-                                label: "STUDENTS",
-                                display: "Students",
-                                isSelected: selectedAudience == 'STUDENTS',
-                                onTap: () => setModalState(() => selectedAudience = 'STUDENTS'),
-                              ),
-                              SizedBox(width: 8.w),
-                              _buildAudienceOption(
-                                label: "TEACHERS",
-                                display: "Teachers",
-                                isSelected: selectedAudience == 'TEACHERS',
-                                onTap: () => setModalState(() => selectedAudience = 'TEACHERS'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Publish button
-                  SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 48.h,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                            elevation: 0,
-                          ),
-                          onPressed: () {
-                            if (titleCtrl.text.trim().isEmpty || contentCtrl.text.trim().isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Please fill in both title and content', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                                  backgroundColor: AppColors.error,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                                ),
-                              );
-                              return;
-                            }
+                          SizedBox(height: 20.h),
 
-                            final newAnn = AnnouncementModel(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(),
-                              title: titleCtrl.text.trim(),
-                              content: contentCtrl.text.trim(),
-                              priority: selectedPriority,
-                              audience: selectedAudience,
-                              date: "Today",
-                            );
-
-                            _addAnnouncement(newAnn);
-                            Navigator.pop(context);
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    const Icon(Icons.check_circle_rounded, color: Colors.white),
-                                    SizedBox(width: 8.w),
-                                    Text('Announcement published!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                                backgroundColor: AppColors.success,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            "Publish Announcement",
+                          // Content *
+                          Text(
+                            "Content *",
                             style: GoogleFonts.inter(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
                             ),
                           ),
-                        ),
+                          SizedBox(height: 8.h),
+                          TextFormField(
+                            controller: contentCtrl,
+                            maxLines: 5,
+                            decoration: InputDecoration(
+                              hintText: "Enter announcement details",
+                              hintStyle: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF94A3B8)),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                              ),
+                            ),
+                            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
+                          ),
+                          SizedBox(height: 20.h),
+
+                          // Priority *
+                          Text(
+                            "Priority *",
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
+                            ),
+                          ),
+                          SizedBox(height: 8.h),
+                          DropdownButtonFormField<String>(
+                            initialValue: selectedPriority,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                              ),
+                            ),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                            items: const [
+                              DropdownMenuItem(value: 'LOW', child: Text('Low')),
+                              DropdownMenuItem(value: 'NORMAL', child: Text('Normal')),
+                              DropdownMenuItem(value: 'HIGH', child: Text('High')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setModalState(() => selectedPriority = val);
+                              }
+                            },
+                            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
+                          ),
+                          SizedBox(height: 20.h),
+
+                          // Target Audience *
+                          Text(
+                            "Target Audience *",
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
+                            ),
+                          ),
+                          SizedBox(height: 8.h),
+                          DropdownButtonFormField<String>(
+                            initialValue: selectedAudience,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                              ),
+                            ),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                            items: const [
+                              DropdownMenuItem(value: 'ALL', child: Text('All Users')),
+                              DropdownMenuItem(value: 'STUDENTS', child: Text('Students')),
+                              DropdownMenuItem(value: 'TEACHERS', child: Text('Teachers')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setModalState(() => selectedAudience = val);
+                              }
+                            },
+                            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
+                          ),
+                          SizedBox(height: 20.h),
+
+                          // Expiry Date (Optional)
+                          Text(
+                            "Expiry Date (Optional)",
+                            style: GoogleFonts.inter(
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E293B),
+                            ),
+                          ),
+                          SizedBox(height: 8.h),
+                          TextFormField(
+                            controller: expiryCtrl,
+                            readOnly: true,
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: selectedExpiryDate ?? DateTime.now(),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked != null) {
+                                setModalState(() {
+                                  selectedExpiryDate = picked;
+                                  expiryCtrl.text = _formatDate(picked);
+                                });
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: "dd-mm-yyyy",
+                              hintStyle: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF94A3B8)),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.r),
+                                borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                              ),
+                              suffixIcon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF64748B)),
+                            ),
+                            style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF0F172A)),
+                          ),
+                          SizedBox(height: 32.h),
+
+                          // Publish button
+                          SizedBox(
+                            width: double.infinity,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0284C7),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                                  padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 14.h),
+                                  elevation: 0,
+                                ),
+                                onPressed: () {
+                                  if (titleCtrl.text.trim().isEmpty || contentCtrl.text.trim().isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Please fill in both title and content', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                                        backgroundColor: AppColors.error,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  final String? expiryIso = selectedExpiryDate?.toIso8601String();
+
+                                  if (isEditing) {
+                                    final updatedAnn = AnnouncementModel(
+                                      id: editItem.id,
+                                      title: titleCtrl.text.trim(),
+                                      content: contentCtrl.text.trim(),
+                                      priority: selectedPriority,
+                                      audience: selectedAudience,
+                                      date: editItem.date,
+                                      expiresAt: expiryIso,
+                                    );
+                                    _updateAnnouncement(updatedAnn);
+                                  } else {
+                                    final newAnn = AnnouncementModel(
+                                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                      title: titleCtrl.text.trim(),
+                                      content: contentCtrl.text.trim(),
+                                      priority: selectedPriority,
+                                      audience: selectedAudience,
+                                      date: "Today",
+                                      expiresAt: expiryIso,
+                                    );
+                                    _addAnnouncement(newAnn);
+                                  }
+                                  Navigator.pop(context);
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.check_circle_rounded, color: Colors.white),
+                                          SizedBox(width: 8.w),
+                                          Text(isEditing ? 'Announcement updated!' : 'Announcement published!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                                        ],
+                                      ),
+                                      backgroundColor: AppColors.success,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  isEditing ? "Save Changes" : "Publish Announcement",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 24.h),
+                        ],
                       ),
                     ),
                   ),
@@ -529,65 +710,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     );
   }
 
-  Widget _buildPriorityOption({
-    required String label,
-    required bool isSelected,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          decoration: BoxDecoration(
-            color: isSelected ? color.withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(10.r),
-            border: Border.all(color: isSelected ? color : const Color(0xFFE2E8F0), width: 1.5.w),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w800,
-              color: isSelected ? color : AppColors.textMedium,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildAudienceOption({
-    required String label,
-    required String display,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(10.r),
-            border: Border.all(color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0), width: 1.5.w),
-          ),
-          child: Text(
-            display,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w800,
-              color: isSelected ? const Color(0xFF2563EB) : AppColors.textMedium,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -599,7 +724,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return Scaffold(
       key: _scaffoldKey,
       drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Announcements') : null,
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF1F5F9),
       bottomNavigationBar: (widget.showAppBar && isTeacher)
           ? const TeacherBottomNavBar(activeIndex: 11)
           : null,
@@ -609,85 +734,247 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               elevation: 0,
               iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
               leading: IconButton(
-                icon: Icon(Icons.menu, size: 28.sp),
+                icon: Icon(Icons.menu, size: 24.sp, color: const Color(0xFF475569)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              title: Text(
-                'EduSphere',
-                style: GoogleFonts.outfit(
-                  fontSize: 22.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
               ),
               actions: [
                 IconButton(
-                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  icon: Stack(
+                    children: [
+                      Icon(Icons.notifications_none_rounded, size: 24.sp, color: const Color(0xFF2563EB)),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8.r,
+                          height: 8.r,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  onPressed: () {},
+                ),
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 24.sp, color: const Color(0xFF475569)),
                   onPressed: () {},
                 ),
                 SizedBox(width: 8.w),
               ],
             )
           : null,
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Banner Card
-                  _buildBannerCard(),
-                  SizedBox(height: 16.h),
-                  // New Announcement button Row
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-                        elevation: 0,
-                      ),
-                      onPressed: _openCreateSheet,
-                      icon: Icon(Icons.add, size: 16.sp, color: Colors.white),
-                      label: Text(
-                        "New Announcement",
-                        style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: Colors.white),
-                      ),
+          Positioned.fill(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // H1 Header and description
+                        Text(
+                          'Announcements',
+                          style: GoogleFonts.outfit(
+                            fontSize: 28.sp,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        SizedBox(height: 4.h),
+                        Text(
+                          'Create and manage school-wide announcements',
+                          style: GoogleFonts.inter(
+                            fontSize: 14.sp,
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: 20.h),
+                        // New Announcement Button
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                              padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                              elevation: 0,
+                            ),
+                            onPressed: () => _openCreateSheet(),
+                            icon: Icon(Icons.add, size: 18.sp, color: Colors.white),
+                            label: Text(
+                              "New Announcement",
+                              style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24.h),
+                        // Stats Column (stacked vertically)
+                        _buildStatsGrid(),
+                        SizedBox(height: 24.h),
+                        // Content Section (Empty State or List)
+                        _isLoading
+                            ? Container(
+                                height: 250.h,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB))),
+                              )
+                            : (_announcements.isEmpty ? _buildEmptyStateCard() : _buildAnnouncementsList()),
+                        SizedBox(height: 100.h),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 16.h),
-                  // 2. Stats Grid
-                  _buildStatsGrid(),
-                  SizedBox(height: 16.h),
-                  // 3. Content Section (Empty State or List)
-                  _isLoading
-                      ? Container(
-                          height: 250.h,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16.r),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB))),
-                        )
-                      : (_announcements.isEmpty ? _buildEmptyStateCard() : _buildAnnouncementsList()),
-                  SizedBox(height: 32.h),
-                ],
-              ),
+                ),
+                // Bottom Navigation Bar
+                if (widget.showAppBar && widget.role != 'teacher') _buildBottomNav(),
+              ],
             ),
           ),
-          // Bottom Navigation Bar
-          if (widget.showAppBar && widget.role != 'teacher') _buildBottomNav(),
+
+          // Chatbot Assistant Overlay
+          if (_isChatOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _toggleChat,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.1),
+                ),
+              ),
+            ),
+
+          if (_isChatOpen)
+            Positioned(
+              bottom: 80.h,
+              right: 16.w,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 280.w,
+                  height: 360.h,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(16.r),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2563EB),
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.assistant, color: Colors.white, size: 20.sp),
+                            SizedBox(width: 8.w),
+                            Text(
+                              'EduSphere Assistant',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: _toggleChat,
+                              child: Icon(Icons.close, color: Colors.white, size: 20.sp),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'How can I help you?',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          if (!_isChatOpen)
+            Positioned(
+              bottom: 80.h,
+              right: 16.w,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16.r),
+                    topRight: Radius.circular(16.r),
+                    bottomLeft: Radius.circular(16.r),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'HI $_teacherFirstName!',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      'HOW CAN I\nHELP?',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF2563EB),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF2563EB),
-        onPressed: _openCreateSheet,
-        child: const Icon(Icons.campaign_rounded, color: Colors.white),
+        heroTag: 'announcements_chatbot_fab',
+        backgroundColor: const Color(0xFF0284C7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.r)),
+        onPressed: _toggleChat,
+        child: Icon(
+          _isChatOpen ? Icons.close_rounded : Icons.assistant_navigation,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -1016,60 +1303,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
 
 
-  // --- UI Component: Banner Card ---
-  Widget _buildBannerCard() {
-    return Container(
-      padding: EdgeInsets.all(18.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(10.r),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2563EB),
-              borderRadius: BorderRadius.circular(12.r),
-            ),
-            child: Icon(Icons.notifications_active_rounded, color: Colors.white, size: 24.sp),
-          ),
-          SizedBox(width: 14.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Announcements",
-                  style: GoogleFonts.inter(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  "Create and manage school-wide announcements",
-                  style: GoogleFonts.inter(
-                    fontSize: 10.5.sp,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Megaphone Illustration
-          const MegaphoneIllustration(),
-        ],
-      ),
-    );
-  }
+
 
   // --- UI Component: Stats Grid ---
   Widget _buildStatsGrid() {
-    return Row(
+    return Column(
       children: [
         _buildStatCard(
           icon: Icons.notifications_none_rounded,
@@ -1078,7 +1316,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           color: const Color(0xFF2563EB),
           bgLight: const Color(0xFFEFF6FF),
         ),
-        SizedBox(width: 8.w),
+        SizedBox(height: 12.h),
         _buildStatCard(
           icon: Icons.notifications_none_rounded,
           label: "Active",
@@ -1086,7 +1324,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           color: const Color(0xFF10B981),
           bgLight: const Color(0xFFECFDF5),
         ),
-        SizedBox(width: 8.w),
+        SizedBox(height: 12.h),
         _buildStatCard(
           icon: Icons.notifications_none_rounded,
           label: "High Priority",
@@ -1105,45 +1343,52 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     required Color color,
     required Color bgLight,
   }) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 14.h),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(6.r),
-              decoration: BoxDecoration(
-                color: bgLight,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 16.sp),
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: 24.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10.r,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: EdgeInsets.all(12.r),
+            decoration: BoxDecoration(
+              color: bgLight,
+              shape: BoxShape.circle,
             ),
-            SizedBox(height: 8.h),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 9.sp,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textMedium,
-              ),
+            child: Icon(icon, color: color, size: 24.sp),
+          ),
+          SizedBox(height: 12.h),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF475569),
             ),
-            SizedBox(height: 6.h),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 22.sp,
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            value,
+            style: GoogleFonts.outfit(
+              fontSize: 28.sp,
+              fontWeight: FontWeight.w800,
+              color: color,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1222,8 +1467,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       itemBuilder: (context, index) {
         final ann = _announcements[index];
         final isHigh = ann.priority.toUpperCase() == 'HIGH' || ann.priority.toUpperCase() == 'URGENT';
-        final color = _getNoticeColor(ann.priority, ann.title);
-        final icon = _getNoticeIcon(ann.title, ann.priority);
 
         // Split audience into individual tags
         final List<String> audienceTags = ann.audience
@@ -1233,14 +1476,14 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             .toList();
             
         final priorityBg = isHigh ? const Color(0xFFFEE2E2) : const Color(0xFFFFEDD5);
-        final priorityTextColor = isHigh ? const Color(0xFFEF4444) : const Color(0xFFF97316);
+        final priorityTextColor = isHigh ? const Color(0xFFEF4444) : const Color(0xFFEA580C);
 
         return Container(
           padding: EdgeInsets.all(20.r),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20.r),
-            border: Border.all(color: const Color(0xFFE2EAF4)),
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
@@ -1249,52 +1492,31 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                margin: EdgeInsets.only(top: 14.h),
-                width: 8.w,
-                height: 8.w,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Container(
-                width: 48.w,
-                height: 48.w,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 24.sp),
-              ),
-              SizedBox(width: 16.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8.w,
+                      runSpacing: 4.h,
                       children: [
-                        Expanded(
-                          child: Text(
-                            ann.title,
-                            style: GoogleFonts.inter(
-                              fontSize: 15.sp,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F2547),
-                            ),
+                        Text(
+                          ann.title,
+                          style: GoogleFonts.inter(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0F172A),
                           ),
                         ),
-                        SizedBox(width: 8.w),
                         Container(
                           padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                           decoration: BoxDecoration(
                             color: priorityBg,
-                            borderRadius: BorderRadius.circular(12.r),
+                            borderRadius: BorderRadius.circular(6.r),
                           ),
                           child: Text(
                             ann.priority.toUpperCase(),
@@ -1305,66 +1527,67 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    SizedBox(height: 12.h),
-                    if (audienceTags.isNotEmpty) ...[
-                      Wrap(
-                        spacing: 8.w,
-                        runSpacing: 8.h,
-                        children: audienceTags.map((t) => Container(
+                        ...audienceTags.map((t) => Container(
                           padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8.r),
-                            border: Border.all(color: const Color(0xFFE2EAF4)),
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6.r),
                           ),
                           child: Text(
                             t == 'ALL' ? 'EVERYONE' : t,
                             style: GoogleFonts.inter(
                               fontSize: 10.sp,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF475569),
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF2563EB),
                             ),
                           ),
-                        )).toList(),
-                      ),
-                      SizedBox(height: 12.h),
-                    ],
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF6B7A90)),
-                        SizedBox(width: 6.w),
-                        Text(
-                          ann.date,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            color: const Color(0xFF6B7A90),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        )),
                       ],
                     ),
-                    SizedBox(height: 12.h),
-                    Text(
-                      ann.content,
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        color: const Color(0xFF475569),
-                        height: 1.5,
-                      ),
-                    ),
-                    SizedBox(height: 12.h),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
+                  ),
+                  SizedBox(width: 8.w),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.edit_note_outlined, size: 22.sp, color: const Color(0xFF475569)),
+                        onPressed: () => _openCreateSheet(editItem: ann),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
-                        icon: Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18.sp),
-                        onPressed: () => _deleteAnnouncement(ann.id),
                       ),
+                      SizedBox(width: 16.w),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline_rounded, size: 22.sp, color: const Color(0xFF475569)),
+                        onPressed: () => _deleteAnnouncement(ann.id),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              SizedBox(height: 12.h),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF64748B)),
+                  SizedBox(width: 6.w),
+                  Text(
+                    ann.date,
+                    style: GoogleFonts.inter(
+                      fontSize: 12.sp,
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              SizedBox(height: 12.h),
+              Text(
+                ann.content,
+                style: GoogleFonts.inter(
+                  fontSize: 13.sp,
+                  color: const Color(0xFF334155),
+                  height: 1.5,
                 ),
               ),
             ],

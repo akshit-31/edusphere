@@ -308,25 +308,28 @@ class _StudentDashboardState extends State<StudentDashboard>
           if (attRes['success'] == true) {
             final stats = attRes['stats'] as Map? ?? {};
             final pct = (stats['percentage'] ?? 0) as num;
-            if (mounted)
+            if (mounted) {
               setState(() {
                 attendanceRate = pct.toDouble();
                 _attendanceLoaded = true;
               });
+            }
           } else {
-            if (mounted)
+            if (mounted) {
               setState(() {
                 attendanceRate = 100.0;
                 _attendanceLoaded = true;
               });
+            }
           }
         } catch (e) {
           dev.log('Error loading attendance from API: $e');
-          if (mounted)
+          if (mounted) {
             setState(() {
               attendanceRate = 100.0;
               _attendanceLoaded = true;
             });
+          }
         }
 
         // ── 3. Pending Assignments ─────────────────────────────────────────
@@ -338,10 +341,11 @@ class _StudentDashboardState extends State<StudentDashboard>
             final subs = a['submissions'] as List? ?? [];
             return subs.isEmpty;
           }).length;
-          if (mounted)
+          if (mounted) {
             setState(() {
               pendingCount = pending.clamp(0, 99);
             });
+          }
         } catch (e) {
           dev.log('Error loading assignments from API: $e');
         }
@@ -355,10 +359,11 @@ class _StudentDashboardState extends State<StudentDashboard>
             final outstanding = (summary['totalOutstanding'] ??
                 summary['totalPending'] ??
                 0) as num;
-            if (mounted)
+            if (mounted) {
               setState(() {
                 pendingFee = outstanding.toInt().clamp(0, 999999);
               });
+            }
           }
         } catch (e) {
           dev.log('Error loading fees from API: $e');
@@ -372,10 +377,11 @@ class _StudentDashboardState extends State<StudentDashboard>
           );
           if (libRes['success'] == true) {
             final issues = libRes['issues'] as List? ?? [];
-            if (mounted)
+            if (mounted) {
               setState(() {
                 booksDue = issues.length;
               });
+            }
           }
         } catch (e) {
           dev.log('Error loading library from API: $e');
@@ -388,10 +394,11 @@ class _StudentDashboardState extends State<StudentDashboard>
     } catch (e) {
       dev.log('Error loading student data from backend API: $e');
       // Fallback: load from SharedPreferences only
-      if (mounted)
+      if (mounted) {
         setState(() {
           _attendanceLoaded = true;
         });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -434,17 +441,19 @@ class _StudentDashboardState extends State<StudentDashboard>
         dev.log('📅 Loaded ${events.length} upcoming events from API',
             name: 'StudentDashboard');
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _upcomingEventsLoaded = true;
           });
+        }
       }
     } catch (e) {
       dev.log('Error loading upcoming events from API: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _upcomingEventsLoaded = true;
         });
+      }
     }
   }
 

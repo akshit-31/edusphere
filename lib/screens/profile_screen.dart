@@ -8,8 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../theme/colors.dart';
-import 'welcome_screen.dart';
-import 'features/settings_screen.dart';
 import '../widgets/common_widgets.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/api_service.dart';
@@ -70,6 +68,7 @@ class ProfileScreen extends StatefulWidget {
   final String? studentEmail;
   final String? studentClass;
   final String? admissionNo;
+  final String? teacherId;
 
   const ProfileScreen({
     super.key,
@@ -83,6 +82,7 @@ class ProfileScreen extends StatefulWidget {
     this.studentEmail,
     this.studentClass,
     this.admissionNo,
+    this.teacherId,
   });
 
   @override
@@ -102,20 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _addressCtrl = TextEditingController();
-  final TextEditingController _dobCtrl = TextEditingController();
-
-  final Map<String, String> _teacherData = {
-    'name': 'Emma Johnson',
-    'designation': 'Senior Mathematics Teacher',
-    'empId': 'TCH1024',
-    'dept': 'Mathematics',
-    'exp': '6+ Years',
-    'email': 'emma.johnson@edusphere.com',
-    'phone': '+1 (555) 123-4567',
-    'address': '123 Education Street,\nManhattan, New York, USA',
-    'dob': '12 March 1990',
-  };
-  // Shared state fields
+  final TextEditingController _dobCtrl = TextEditingController();  // Shared state fields
   String _userName = '';
   String _email = '';
   String _phone = '';
@@ -191,8 +178,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final List<RealtimeChannel> _realtimeChannels = [];
 
   // Tab details database variables
-  int _timetableDay = 1;
-  final List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   bool _isLoadingTabDetails = false;
   List<Map<String, dynamic>> _attendanceRecords = [];
   Map<String, dynamic>? _feeLedger;
@@ -203,7 +188,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _timetableDay = DateTime.now().weekday > 6 ? 1 : DateTime.now().weekday;
     if (widget.role == 'teacher') {
       _loadTeacherDataFromSupabase();
       _loadSessionData();
@@ -938,7 +922,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _realtimeChannels.clear();
 
       final String targetStudentId = widget.studentId ?? '';
-      final String targetUserId = widget.studentId != null ? (_studentUserId ?? '') : currentUser.id;
+      final String targetUserId = widget.studentId != null ? (_studentUserId ?? '') : (widget.teacherId ?? currentUser.id);
 
       debugPrint('🔌 Connecting Real-Time Sync. Student ID: $targetStudentId, User ID: $targetUserId');
 
@@ -1022,7 +1006,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         parentChannel.subscribe();
         _realtimeChannels.add(parentChannel);
       } else if (widget.role == 'teacher') {
-        final teacherChannel = client.channel('public:teacher_profile_sync')
+        final teacherChannel = client.channel('public:teacher_profile_sync_${widget.teacherId ?? currentUser.id}')
             .onPostgresChanges(
               event: PostgresChangeEvent.all,
               schema: 'public',
@@ -1030,7 +1014,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               filter: PostgresChangeFilter(
                 type: PostgresChangeFilterType.eq,
                 column: 'userId',
-                value: currentUser.id,
+                value: widget.teacherId ?? currentUser.id,
               ),
               callback: (_) {
                 debugPrint('🔄 Realtime update detected on Teacher. Reloading...');
@@ -1394,7 +1378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final client = Supabase.instance.client;
       final currentUser = client.auth.currentUser;
       
-      String? currentUserId = currentUser?.id;
+      String? currentUserId = widget.teacherId ?? currentUser?.id;
       if (currentUserId == null || currentUserId.isEmpty) {
         currentUserId = prefs.getString('user_id');
       }
@@ -1501,19 +1485,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _admissionNo = _employeeId;
       });
 
-      await prefs.setString('teacher_name', _userName);
-      await prefs.setString('teacher_email', _email);
-      await prefs.setString('teacher_mobile', _phone);
-      await prefs.setString('teacher_gender', _gender);
-      await prefs.setString('teacher_dob', _dob);
-      await prefs.setString('teacher_blood', _bloodGroup);
-      await prefs.setString('teacher_address', _address);
-      await prefs.setString('teacher_emp_id', _employeeId);
-      await prefs.setString('teacher_design', _designation);
-      await prefs.setString('teacher_dept', _department);
-      await prefs.setString('teacher_exp', _experience);
-      if (_dbQrCode != null) {
-        await prefs.setString('teacher_qrcode', _dbQrCode!);
+      if (widget.teacherId == null || widget.teacherId == currentUser?.id) {
+        await prefs.setString('teacher_name', _userName);
+        await prefs.setString('teacher_email', _email);
+        await prefs.setString('teacher_mobile', _phone);
+        await prefs.setString('teacher_gender', _gender);
+        await prefs.setString('teacher_dob', _dob);
+        await prefs.setString('teacher_blood', _bloodGroup);
+        await prefs.setString('teacher_address', _address);
+        await prefs.setString('teacher_emp_id', _employeeId);
+        await prefs.setString('teacher_design', _designation);
+        await prefs.setString('teacher_dept', _department);
+        await prefs.setString('teacher_exp', _experience);
+        if (_dbQrCode != null) {
+          await prefs.setString('teacher_qrcode', _dbQrCode!);
+        }
       }
     } catch (e) {
       debugPrint('Error loading teacher profile from API: $e');
@@ -1569,26 +1555,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
+    final currentUser = Supabase.instance.client.auth.currentUser;
     setState(() {
       if (widget.role == 'teacher') {
-        _userName = prefs.getString('teacher_name') ?? 'Vikram Yadav';
-        _email = prefs.getString('teacher_email') ?? 'teacher1@demoschool.com';
-        _phone = prefs.getString('teacher_mobile') ?? 'N/A';
-        _gender = prefs.getString('teacher_gender') ?? 'Not Specified';
-        _dob = prefs.getString('teacher_dob') ?? 'Not set';
-        _bloodGroup = prefs.getString('teacher_blood') ?? 'Not assigned';
-        _address = prefs.getString('teacher_address') ?? 'No location registered';
-        _employeeId = prefs.getString('teacher_emp_id') ?? 'ID_PENDING';
-        _designation = prefs.getString('teacher_design') ?? 'TEACHER';
-        _department = prefs.getString('teacher_dept') ?? 'CORE_SYSTEM';
-        _experience = prefs.getString('teacher_exp') ?? 'N/A';
-        _activityStatus = prefs.getString('teacher_activity') ?? 'Offline';
-        _pushEnabled = prefs.getBool('notifications_enabled') ?? true;
-        _inAppEnabled = prefs.getBool('in_app_notifications') ?? true;
-        _lastPasswordChange = prefs.getString('teacher_last_pwd') ?? 'Action Required';
-        _dbQrCode = prefs.getString('teacher_qrcode');
-        _studentName = _userName;
-        _admissionNo = _employeeId;
+        if (widget.teacherId != null && widget.teacherId != currentUser?.id) {
+          _userName = 'Loading Teacher...';
+          _email = '';
+          _phone = 'N/A';
+          _gender = 'Not Specified';
+          _dob = 'Not set';
+          _bloodGroup = 'Not assigned';
+          _address = 'No location registered';
+          _employeeId = 'ID_PENDING';
+          _designation = 'TEACHER';
+          _department = 'CORE_SYSTEM';
+          _experience = 'N/A';
+          _joinedDate = 'N/A';
+          _activityStatus = 'Offline';
+          _pushEnabled = true;
+          _inAppEnabled = true;
+          _lastPasswordChange = 'Action Required';
+          _dbQrCode = null;
+          _studentName = _userName;
+          _admissionNo = _employeeId;
+        } else {
+          _userName = prefs.getString('teacher_name') ?? 'Vikram Yadav';
+          _email = prefs.getString('teacher_email') ?? 'teacher1@demoschool.com';
+          _phone = prefs.getString('teacher_mobile') ?? 'N/A';
+          _gender = prefs.getString('teacher_gender') ?? 'Not Specified';
+          _dob = prefs.getString('teacher_dob') ?? 'Not set';
+          _bloodGroup = prefs.getString('teacher_blood') ?? 'Not assigned';
+          _address = prefs.getString('teacher_address') ?? 'No location registered';
+          _employeeId = prefs.getString('teacher_emp_id') ?? 'ID_PENDING';
+          _designation = prefs.getString('teacher_design') ?? 'TEACHER';
+          _department = prefs.getString('teacher_dept') ?? 'CORE_SYSTEM';
+          _experience = prefs.getString('teacher_exp') ?? 'N/A';
+          _activityStatus = prefs.getString('teacher_activity') ?? 'Offline';
+          _pushEnabled = prefs.getBool('notifications_enabled') ?? true;
+          _inAppEnabled = prefs.getBool('in_app_notifications') ?? true;
+          _lastPasswordChange = prefs.getString('teacher_last_pwd') ?? 'Action Required';
+          _dbQrCode = prefs.getString('teacher_qrcode');
+          _studentName = _userName;
+          _admissionNo = _employeeId;
+        }
       } else {
         _userName = prefs.getString('student_name') ?? 'Alex Rivera';
         _email = prefs.getString('student_email') ?? 'alex.rivera@edusmart.edu';
@@ -1641,33 +1650,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _updateNotificationPreference(String key, bool val) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, val);
-    setState(() {
-      if (key == 'notifications_enabled') {
-        _pushEnabled = val;
-      } else {
-        _inAppEnabled = val;
-      }
-    });
-  }
-
-  Future<void> _toggleActivityStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final newStatus = _activityStatus == 'Offline' ? 'Online' : 'Offline';
-    if (widget.role == 'teacher') {
-      await prefs.setString('teacher_activity', newStatus);
-    } else {
-      await prefs.setString('student_activity', newStatus);
-    }
-    setState(() {
-      _activityStatus = newStatus;
-    });
-    if (mounted) {
-      showToast(context, 'Status changed to $newStatus!');
-    }
-  }
 
   // --- RESPONSIVE TABBED STUDENT PROFILE METHODS ---
   Widget _buildTabbedStudentProfile(bool isDesktop) {
@@ -2916,70 +2898,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTimetableSlotRow(int period, String start, String end, String subject, String teacher, String room) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 10.h),
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: const Color(0xFFE2EAF4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36.w,
-            height: 36.w,
-            decoration: const BoxDecoration(color: Color(0xFFEAF1FB), shape: BoxShape.circle),
-            child: Center(
-              child: Text(
-                'P$period',
-                style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w800, color: const Color(0xFF1A6FDB)),
-              ),
-            ),
-          ),
-          SizedBox(width: 14.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(subject, style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F2547))),
-                SizedBox(height: 2.h),
-                Text('$teacher • Room $room', style: GoogleFonts.inter(fontSize: 10.5.sp, color: const Color(0xFF868E96), fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(start, style: GoogleFonts.inter(fontSize: 11.5.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569))),
-              SizedBox(height: 2.h),
-              Text(end, style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF868E96))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildMockTimetableSlots() {
-    final List<Map<String, dynamic>> mockData = [
-      {'period': 1, 'start': '08:30 AM', 'end': '09:15 AM', 'subject': 'Mathematics', 'teacher': 'Emma Johnson', 'room': '101'},
-      {'period': 2, 'start': '09:15 AM', 'end': '10:00 AM', 'subject': 'Physics', 'teacher': 'Vikram Yadav', 'room': 'Lab A'},
-      {'period': 3, 'start': '10:15 AM', 'end': '11:00 AM', 'subject': 'English Lit.', 'teacher': 'Sarah Connor', 'room': '102'},
-      {'period': 4, 'start': '11:00 AM', 'end': '11:45 AM', 'subject': 'Computer Science', 'teacher': 'Alan Turing', 'room': 'CS Lab'},
-    ];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: mockData.length,
-      itemBuilder: (ctx, idx) {
-        final s = mockData[idx];
-        return _buildTimetableSlotRow(s['period']!, s['start']!, s['end']!, s['subject']!, s['teacher']!, s['room']!);
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -3445,27 +3364,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  String _getInitials(String name) {
-    try {
-      final parts = name.trim().split(RegExp(r'\s+'));
-      if (parts.length >= 2) {
-        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-      } else if (parts.isNotEmpty && parts[0].isNotEmpty) {
-        return parts[0][0].toUpperCase();
-      }
-    } catch (_) {}
-    return 'U';
-  }
 
   Widget _buildTeacherProfile() {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
     final bool isPushed = Navigator.canPop(context);
+    final double width = MediaQuery.of(context).size.width;
+    final bool isDesktop = width > 900;
 
     return Scaffold(
       key: _teacherScaffoldKey,
       drawer: isPushed ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Profile') : null,
       bottomNavigationBar: isPushed ? const TeacherBottomNavBar(activeIndex: 13) : null,
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: const Color(0xFFEFF6FF), // From image background color
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: Colors.white,
@@ -3475,206 +3384,149 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: const Icon(Icons.menu),
                 onPressed: () => _teacherScaffoldKey.currentState?.openDrawer(),
               ),
-              title: const Text(
-                'My Profile',
-                style: TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontWeight: FontWeight.bold,
+              actions: [
+                IconButton(
+                  icon: Stack(
+                    children: [
+                      Icon(Icons.notifications_none, color: const Color(0xFF0F172A), size: 22.sp),
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+                        ),
+                      )
+                    ],
+                  ),
+                  onPressed: () {},
                 ),
-              ),
+                SizedBox(width: 8.w),
+              ],
             )
           : null,
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(20.r, 20.r, 20.r, 120.r),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title and Subtitle Header
-                Text(
-                  'My Profile',
-                  style: GoogleFonts.inter(
-                    fontSize: 26.sp,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  'Manage your account and view your detailed information',
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                SizedBox(height: 20.h),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(isDesktop ? 32.r : 16.r, 20.r, isDesktop ? 32.r : 16.r, 120.r),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title and Subtitle Header
+            Text(
+              'My Profile',
+              style: GoogleFonts.outfit(
+                fontSize: 24.sp,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0F2547),
+              ),
+            ),
+            SizedBox(height: 4.h),
+            Text(
+              'Manage your account and view your detailed information',
+              style: GoogleFonts.inter(
+                fontSize: 13.sp,
+                color: const Color(0xFF64748B),
+                height: 1.4,
+              ),
+            ),
+            SizedBox(height: 24.h),
 
-                // Core Profile Card
-                _buildCoreProfileCard(),
-                SizedBox(height: 20.h),
+            // Core Profile Card
+            _buildCoreProfileCard(isDesktop),
+            SizedBox(height: 20.h),
 
-                // Status summary grid (2x2)
-                _buildStatusSummaryGrid(),
-                SizedBox(height: 24.h),
+            // Summary Cards
+            if (isDesktop)
+              Row(
+                children: [
+                  Expanded(child: _buildSummaryCard('Last Session', _lastSession, Icons.access_time_rounded, const Color(0xFF3B82F6), true)),
+                  SizedBox(width: 16.w),
+                  Expanded(child: _buildSummaryCard('Activity Status', _activityStatus, Icons.check_circle_outline, const Color(0xFF10B981), false)),
+                  SizedBox(width: 16.w),
+                  Expanded(child: _buildSummaryCard('Employment', _designation, Icons.business_center_outlined, const Color(0xFF8B5CF6), false, true)),
+                  SizedBox(width: 16.w),
+                  Expanded(child: _buildSummaryCard('Joined Date', _joinedDate, Icons.calendar_month_outlined, const Color(0xFF06B6D4), false)),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  _buildSummaryCard('Last Session', _lastSession, Icons.access_time_rounded, const Color(0xFF3B82F6), true),
+                  SizedBox(height: 16.h),
+                  _buildSummaryCard('Activity Status', _activityStatus, Icons.check_circle_outline, const Color(0xFF10B981), false),
+                  SizedBox(height: 16.h),
+                  _buildSummaryCard('Employment', _designation, Icons.business_center_outlined, const Color(0xFF8B5CF6), false, true),
+                  SizedBox(height: 16.h),
+                  _buildSummaryCard('Joined Date', _joinedDate, Icons.calendar_month_outlined, const Color(0xFF06B6D4), false),
+                ],
+              ),
+            SizedBox(height: 24.h),
 
-                // Detail sections (Responsively side by side on desktop, vertical on mobile)
-                if (isDesktop)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Personal & Professional Details', style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                      SizedBox(height: 16.h),
-                      Wrap(
-                        spacing: 12.w,
-                        runSpacing: 12.h,
-                        children: [
-                          _detailCard('Employee ID', _teacherData['empId']!, Icons.badge_outlined, const Color(0xFF8B5CF6)),
-                          _detailCard('Department', _teacherData['dept']!, Icons.business_rounded, const Color(0xFF3B82F6)),
-                          _detailCard('Experience', _teacherData['exp']!, Icons.history_rounded, const Color(0xFF10B981)),
-                          _detailCard('Email', _teacherData['email']!, Icons.email_outlined, const Color(0xFFF59E0B)),
-                          _detailCard('Phone', _teacherData['phone']!, Icons.phone_outlined, const Color(0xFFEF4444)),
-                          _detailCard('Date of Birth', _teacherData['dob']!, Icons.calendar_month_outlined, const Color(0xFF3B82F6)),
-                          _detailCard('Address', _teacherData['address']!, Icons.location_on_outlined, const Color(0xFF8B5CF6), isFullWidth: true),
-                        ],
-                      ),
-                      Expanded(child: _buildPersonalInfoCard()),
-                      SizedBox(width: 16.w),
-                      Expanded(child: _buildIdentityInfoCard()),
-                    ],
-                  )
-                else ...[
+            // Detail Cards Row 1: Personal Info & Professional Identity
+            if (isDesktop)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildPersonalInfoCard()),
+                  SizedBox(width: 20.w),
+                  Expanded(child: _buildIdentityInfoCard()),
+                ],
+              )
+            else
+              Column(
+                children: [
                   _buildPersonalInfoCard(),
-                  SizedBox(height: 20.h),
+                  SizedBox(height: 16.h),
                   _buildIdentityInfoCard(),
                 ],
-                SizedBox(height: 20.h),
+              ),
+            SizedBox(height: 20.h),
 
-                // Security & Notification Preferences
-                if (isDesktop)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildSecurityStatusCard()),
-                      SizedBox(width: 16.w),
-                      Expanded(child: _buildNotificationPreferencesCard()),
-                    ],
-                  )
-                else ...[
+            // Detail Cards Row 2: Security Status & Notification Preferences
+            if (isDesktop)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildSecurityStatusCard()),
+                  SizedBox(width: 20.w),
+                  Expanded(child: _buildNotificationPreferencesCard()),
+                ],
+              )
+            else
+              Column(
+                children: [
                   _buildSecurityStatusCard(),
-                  SizedBox(height: 20.h),
+                  SizedBox(height: 16.h),
                   _buildNotificationPreferencesCard(),
                 ],
-                SizedBox(height: 24.h),
+              ),
+            SizedBox(height: 20.h),
 
-                // Digital Identity QR card
-                _buildTeacherDigitalIdentityCard(isDesktop),
-              ],
-            ),
-          ),
-          
-
-          // Double Actions row floating at the bottom center
-          Positioned(
-            bottom: 20.h,
-            left: 20.w,
-            right: 20.w,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: _showEditProfileSheet,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(30.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Edit',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14.sp,
-                          ),
-                        ),
-                        SizedBox(width: 8.w),
-                        Icon(Icons.edit_outlined, color: Colors.white, size: 16.sp),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12.w),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SettingsScreen(
-                          role: widget.role,
-                          theme: widget.theme,
-                        ),
-                      ),
-                    ).then((_) => _loadProfileData());
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                    decoration: BoxDecoration(
-                      color: widget.theme.primary,
-                      borderRadius: BorderRadius.circular(30.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.theme.primary.withValues(alpha: 0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Settings',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14.sp,
-                          ),
-                        ),
-                        SizedBox(width: 8.w),
-                        Icon(Icons.settings_rounded, color: Colors.white, size: 16.sp),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-
-        ],
+            // Digital Identity & QR Attendance Card
+            _buildTeacherDigitalIdentityCard(isDesktop),
+          ],
+        ),
       ),
+      floatingActionButton: (widget.role == 'teacher' && widget.teacherId != null && widget.teacherId != Supabase.instance.client.auth.currentUser?.id)
+          ? null
+          : FloatingActionButton(
+              onPressed: _showEditProfileSheet,
+              backgroundColor: const Color(0xFF0284C7),
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+              child: const Icon(Icons.edit_note, color: Colors.white, size: 28),
+            ),
     );
   }
 
-  Widget _buildCoreProfileCard() {
+  Widget _buildSummaryCard(String title, String value, IconData icon, Color color, bool isTopBorder, [bool isUpperValue = false]) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(20.r),
+      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
+        borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
@@ -3684,579 +3536,613 @@ class _ProfileScreenState extends State<ProfileScreen> {
           )
         ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isLarge = constraints.maxWidth > 500;
-          return Flex(
-            direction: isLarge ? Axis.horizontal : Axis.vertical,
-            crossAxisAlignment: CrossAxisAlignment.center,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -20.w,
+            top: -24.h,
+            bottom: -24.h,
+            child: Container(
+              width: 4.w,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16.r),
+                  bottomLeft: Radius.circular(16.r),
+                ),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Initials circle avatar with edit overlays
-              Stack(
-                alignment: Alignment.bottomRight,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 40.r,
-                    backgroundColor: widget.theme.primary.withValues(alpha: 0.1),
-                    backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                        ? NetworkImage(_avatarUrl!)
-                        : null,
-                    child: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                        ? null
-                        : Text(
-                            _getInitials(_userName),
-                            style: GoogleFonts.inter(
-                              fontSize: 26.sp,
-                              fontWeight: FontWeight.w800,
-                              color: widget.theme.primary,
-                            ),
-                          ),
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
                   ),
-                  Container(
-                    padding: EdgeInsets.all(4.r),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2563EB),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12.sp),
+                  SizedBox(height: 8.h),
+                  Text(
+                    isUpperValue ? value.toUpperCase() : value,
+                    style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
                   ),
                 ],
               ),
-              SizedBox(width: isLarge ? 20.w : 0, height: isLarge ? 0 : 16.h),
-
-              // User Info details
-              Expanded(
-                flex: isLarge ? 1 : 0,
-                child: Column(
-                  crossAxisAlignment: isLarge ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8.w,
-                      runSpacing: 4.h,
-                      alignment: isLarge ? WrapAlignment.start : WrapAlignment.center,
-                      children: [
-                        Text(
-                          _userName,
-                          style: GoogleFonts.inter(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0F172A),
-                          ),
-                          textAlign: isLarge ? TextAlign.left : TextAlign.center,
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                          decoration: BoxDecoration(
-                            color: widget.theme.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20.r),
-                          ),
-                          child: Text(
-                            widget.role.toUpperCase(),
-                            style: GoogleFonts.inter(
-                              fontSize: 10.sp,
-                              fontWeight: FontWeight.w800,
-                              color: widget.theme.primary,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8.h),
-                    Wrap(
-                      alignment: isLarge ? WrapAlignment.start : WrapAlignment.center,
-                      spacing: 12.w,
-                      runSpacing: 4.h,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.email_outlined, size: 14.sp, color: const Color(0xFF64748B)),
-                            SizedBox(width: 4.w),
-                            Text(
-                              _email,
-                              style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF475569)),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.phone_outlined, size: 14.sp, color: const Color(0xFF64748B)),
-                            SizedBox(width: 4.w),
-                            Text(
-                              _phone,
-                              style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF475569)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+              Container(
+                padding: EdgeInsets.all(8.r),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
-              ),
-              SizedBox(width: isLarge ? 12.w : 0, height: isLarge ? 0 : 16.h),
-
-              // Update avatar action
-              OutlinedButton.icon(
-                onPressed: () {
-                  showToast(context, 'Avatar picker activated!');
-                },
-                icon: Icon(Icons.photo_camera_outlined, size: 14.sp, color: const Color(0xFF475569)),
-                label: Text(
-                  'Update Avatar',
-                  style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
-                ),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF8FAFC),
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-                ),
+                child: Icon(icon, color: color, size: 16.sp),
               ),
             ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatusSummaryGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        int cols = constraints.maxWidth > 550 ? 4 : 2;
-        double aspect = constraints.maxWidth > 550 ? 1.4 : 1.6;
-        return GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12.w,
-          mainAxisSpacing: 12.h,
-          childAspectRatio: aspect,
-          children: [
-            _buildStatusTile(
-              'Last Session',
-              _lastSession,
-              Icons.schedule,
-              const Color(0xFF3B82F6),
-              const Color(0xFFEFF6FF),
-            ),
-            GestureDetector(
-              onTap: _toggleActivityStatus,
-              child: _buildStatusTile(
-                'Activity Status',
-                _activityStatus,
-                Icons.emoji_emotions_outlined,
-                const Color(0xFF10B981),
-                const Color(0xFFECFDF5),
-              ),
-            ),
-            _buildStatusTile(
-              widget.role == 'teacher' ? 'Employment' : 'Enrollment',
-              widget.role.toUpperCase(),
-              Icons.work_outline,
-              const Color(0xFF8B5CF6),
-              const Color(0xFFF5F3FF),
-            ),
-            _buildStatusTile(
-              'Joined Date',
-              _joinedDate,
-              Icons.calendar_month_outlined,
-              const Color(0xFF0D9488),
-              const Color(0xFFF0FDFA),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-
-
-  Widget _buildLogoutDialog() {
-    return Container(
-      color: Colors.black.withValues(alpha: 0.6),
-      child: Center(
-        child: Container(
-          margin: EdgeInsets.all(32.r),
-          padding: EdgeInsets.all(24.r),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28.r)),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 64.w, height: 64.h, decoration: const BoxDecoration(color: Color(0xFFFEF2F2), shape: BoxShape.circle),
-              child: Icon(Icons.logout_rounded, color: AppColors.error, size: 30.sp)),
-            SizedBox(height: 16.h),
-            Text('Sign Out?', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
-            SizedBox(height: 8.h),
-            Text('Are you sure you want to logout?', style: GoogleFonts.inter(fontSize: 13.sp, color: AppColors.textMedium), textAlign: TextAlign.center),
-            SizedBox(height: 24.h),
-            Row(children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _showLogout = false),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 14.h),
-                    decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(16.r)),
-                    child: Text('Cancel', textAlign: TextAlign.center, style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textMedium)),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.pushAndRemoveUntil(context,
-                    PageRouteBuilder(pageBuilder: (_, __, ___) => const WelcomeScreen(), transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c), transitionDuration: const Duration(milliseconds: 400)),
-                    (r) => false),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 14.h),
-                    decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(16.r),
-                      boxShadow: [BoxShadow(color: AppColors.error.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]),
-                    child: Text('Yes, Logout', textAlign: TextAlign.center, style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.white)),
-                  ),
-                ),
-              ),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusTile(String title, String val, IconData icon, Color color, Color bg) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16.r),
-      child: Container(
+  Widget _buildCoreProfileCard(bool isDesktop) {
+    if (!isDesktop) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(24.r),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(color: const Color(0xFFE2E8F0)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.01),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             )
           ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(width: 4.w, color: color),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.all(12.r),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Initials circle avatar with edit overlays
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                Container(
+                  width: 90.r,
+                  height: 90.r,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                    image: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                        ? DecorationImage(image: NetworkImage(_avatarUrl!), fit: BoxFit.cover)
+                        : const DecorationImage(image: AssetImage('assets/images/bus.png'), fit: BoxFit.cover), // placeholder image like in mockup
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(6.r),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Icon(Icons.camera_alt_outlined, color: Colors.white, size: 12.sp),
+                ),
+              ],
+            ),
+            SizedBox(height: 16.h),
+
+            Text(
+              _userName,
+              style: GoogleFonts.inter(
+                fontSize: 22.sp,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0F2547),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 8.h),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDBEAFE),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Text(
+                widget.role.toUpperCase(),
+                style: GoogleFonts.inter(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF2563EB),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            SizedBox(height: 12.h),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16.w,
+              runSpacing: 8.h,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: GoogleFonts.inter(
-                              fontSize: 10.sp,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.all(6.r),
-                          decoration: BoxDecoration(
-                            color: bg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(icon, color: color, size: 14.sp),
-                        ),
-                      ],
-                    ),
+                    Icon(Icons.email_outlined, size: 16.sp, color: const Color(0xFF64748B)),
+                    SizedBox(width: 6.w),
                     Text(
-                      val,
-                      style: GoogleFonts.inter(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F172A),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      _email,
+                      style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF475569)),
                     ),
                   ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.phone_outlined, size: 16.sp, color: const Color(0xFF64748B)),
+                    SizedBox(width: 6.w),
+                    Text(
+                      _phone,
+                      style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF475569)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 24.h),
+
+            // Update avatar action
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  showToast(context, 'Avatar picker activated!');
+                },
+                icon: Icon(Icons.camera_alt_outlined, size: 16.sp, color: const Color(0xFF0F172A)),
+                label: Text(
+                  'Update Avatar',
+                  style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  side: const BorderSide(color: Color(0xFFE2EAF4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
                 ),
               ),
             ),
           ],
         ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(24.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Container(
+                width: 80.r,
+                height: 80.r,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                  image: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                      ? DecorationImage(image: NetworkImage(_avatarUrl!), fit: BoxFit.cover)
+                      : const DecorationImage(image: AssetImage('assets/images/bus.png'), fit: BoxFit.cover),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.all(4.r),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: Icon(Icons.camera_alt_outlined, color: Colors.white, size: 10.sp),
+              ),
+            ],
+          ),
+          SizedBox(width: 24.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _userName,
+                      style: GoogleFonts.inter(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F2547),
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 2.h),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDBEAFE),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      child: Text(
+                        widget.role.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          fontSize: 10.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF2563EB),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8.h),
+                Row(
+                  children: [
+                    Icon(Icons.email_outlined, size: 16.sp, color: const Color(0xFF64748B)),
+                    SizedBox(width: 6.w),
+                    Text(
+                      _email,
+                      style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF475569)),
+                    ),
+                    SizedBox(width: 24.w),
+                    Icon(Icons.phone_outlined, size: 16.sp, color: const Color(0xFF64748B)),
+                    SizedBox(width: 6.w),
+                    Text(
+                      _phone,
+                      style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF475569)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              showToast(context, 'Avatar picker activated!');
+            },
+            icon: Icon(Icons.camera_alt_outlined, size: 16.sp, color: const Color(0xFF0F172A)),
+            label: Text(
+              'Update Avatar',
+              style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+            ),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: const Color(0xFFF8FAFC),
+              side: const BorderSide(color: Color(0xFFE2EAF4)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListCard(String title, IconData titleIcon, List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(20.r),
+            child: Row(
+              children: [
+                Icon(titleIcon, color: const Color(0xFF0284C7), size: 20.sp),
+                SizedBox(width: 8.w),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F2547),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Padding(
+            padding: EdgeInsets.all(20.r),
+            child: Column(
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListItem(IconData icon, String label, String value, {bool isRedValue = false}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 16.h),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18.sp, color: const Color(0xFF64748B)),
+                  SizedBox(width: 12.w),
+                  Text(
+                    label,
+                    style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF475569)),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w700,
+                    color: isRedValue ? const Color(0xFFEF4444) : const Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+        ],
       ),
     );
   }
 
   Widget _buildPersonalInfoCard() {
-    return Container(
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.person_outline_rounded, color: widget.theme.primary, size: 20.sp),
-              SizedBox(width: 8.w),
-              Text(
-                'Personal Information',
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-          _buildInfoRow('Gender', _gender),
-          _buildDivider(),
-          _buildInfoRow('Date of Birth', _dob),
-          _buildDivider(),
-          _buildInfoRow('Blood Group', _bloodGroup),
-          _buildDivider(),
-          _buildInfoRow('Address', _address),
-        ],
-      ),
+    return _buildListCard(
+      'Personal Information',
+      Icons.person_outline,
+      [
+        _buildListItem(Icons.person_outline, 'Gender', _gender),
+        _buildListItem(Icons.calendar_today_outlined, 'Date of Birth', _dob),
+        _buildListItem(Icons.favorite_border, 'Blood Group', _bloodGroup),
+        _buildListItem(Icons.location_on_outlined, 'Address', _address),
+      ],
     );
   }
 
   Widget _buildIdentityInfoCard() {
-    final isTeacher = widget.role == 'teacher';
-    return Container(
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(isTeacher ? Icons.workspace_premium_outlined : Icons.school_outlined, color: widget.theme.primary, size: 20.sp),
-              SizedBox(width: 8.w),
-              Text(
-                isTeacher ? 'Professional Identity' : 'Academic Identity',
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-          if (isTeacher) ...[
-            _buildInfoRow('Employee ID', _employeeId),
-            _buildDivider(),
-            _buildInfoRow('Designation', _designation),
-            _buildDivider(),
-            _buildInfoRow('Department', _department),
-            _buildDivider(),
-            _buildInfoRow('Experience', _experience),
-          ] else ...[
-            _buildInfoRow('Roll Number', _rollNumber),
-            _buildDivider(),
-            _buildInfoRow('Class & Section', _className),
-            _buildDivider(),
-            _buildInfoRow('Admission ID', _admissionId),
-          ],
-        ],
-      ),
+    return _buildListCard(
+      'Professional Identity',
+      Icons.military_tech_outlined,
+      [
+        _buildListItem(Icons.badge_outlined, 'Employee ID', _employeeId),
+        _buildListItem(Icons.business_center_outlined, 'Designation', _designation),
+        _buildListItem(Icons.domain, 'Department', _department),
+      ],
     );
   }
 
   Widget _buildSecurityStatusCard() {
-    final reqAction = _lastPasswordChange == 'Action Required';
-    return Container(
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.security_outlined, color: widget.theme.primary, size: 20.sp),
-              SizedBox(width: 8.w),
-              Text(
-                'Security Status',
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
+    final bool isOwnProfile = widget.role == 'student' 
+        ? (widget.studentId == null) 
+        : (widget.teacherId == null || widget.teacherId == Supabase.instance.client.auth.currentUser?.id);
+
+    return _buildListCard(
+      'Security Status',
+      Icons.lock_outline,
+      [
+        _buildListItem(Icons.access_time, 'Last Password Change', _lastPasswordChange, isRedValue: _lastPasswordChange.contains('Action')),
+        if (isOwnProfile) ...[
+          SizedBox(height: 4.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _showChangePasswordSheet();
+              },
+              icon: Icon(Icons.vpn_key_outlined, size: 16.sp, color: const Color(0xFF0F172A)),
+              label: Text(
+                'Change Password',
+                style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
               ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Last Password Change',
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF64748B),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: const Color(0xFFF8FAFC),
+                side: const BorderSide(color: Color(0xFFE2EAF4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10.r),
                 ),
+                padding: EdgeInsets.symmetric(vertical: 12.h),
               ),
-              Text(
-                _lastPasswordChange,
-                style: GoogleFonts.inter(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w700,
-                  color: reqAction ? const Color(0xFFEF4444) : const Color(0xFF10B981),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-          ElevatedButton.icon(
-            onPressed: _showChangePasswordSheet,
-            icon: Icon(Icons.vpn_key_outlined, size: 14.sp, color: const Color(0xFF2563EB)),
-            label: Text(
-              'Change Password',
-              style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.bold, color: const Color(0xFF2563EB)),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEFF6FF),
-              elevation: 0,
-              side: const BorderSide(color: Color(0xFFBFDBFE)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-              minimumSize: Size(double.infinity, 44.h),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
   Widget _buildNotificationPreferencesCard() {
+    return _buildListCard(
+      'Notification Preferences',
+      Icons.notifications_outlined,
+      [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Push Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
+                SizedBox(height: 2.h),
+                Text('Receive browser push alerts', style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
+              ],
+            ),
+            Switch(
+              value: _pushEnabled,
+              onChanged: (val) {
+                setState(() => _pushEnabled = val);
+                SharedPreferences.getInstance().then((p) => p.setBool('notifications_enabled', val));
+              },
+              activeThumbColor: Colors.white,
+              activeTrackColor: const Color(0xFF3B82F6),
+            ),
+          ],
+        ),
+        SizedBox(height: 16.h),
+        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+        SizedBox(height: 16.h),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('In-App Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
+                SizedBox(height: 2.h),
+                Text('Show alerts inside dashboard', style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B))),
+              ],
+            ),
+            Switch(
+              value: _inAppEnabled,
+              onChanged: (val) {
+                setState(() => _inAppEnabled = val);
+                SharedPreferences.getInstance().then((p) => p.setBool('in_app_notifications', val));
+              },
+              activeThumbColor: Colors.white,
+              activeTrackColor: const Color(0xFF3B82F6),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTeacherDigitalIdentityCard(bool isDesktop) {
     return Container(
-      padding: EdgeInsets.all(20.r),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
+        borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.notifications_none_rounded, color: widget.theme.primary, size: 20.sp),
-              SizedBox(width: 8.w),
-              Text(
-                'Notification Preferences',
-                style: GoogleFonts.inter(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
+          Padding(
+            padding: EdgeInsets.all(20.r),
+            child: Row(
+              children: [
+                Icon(Icons.qr_code, color: const Color(0xFF0284C7), size: 20.sp),
+                SizedBox(width: 8.w),
+                Text(
+                  'Digital Identity & QR Attendance',
+                  style: GoogleFonts.inter(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F2547),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Push Notifications',
-                      style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold, color: const Color(0xFF334155)),
-                    ),
-                    Text(
-                      'Receive browser push alerts',
-                      style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: _pushEnabled,
-                onChanged: (val) => _updateNotificationPreference('notifications_enabled', val),
-                activeThumbColor: widget.theme.primary,
-              ),
-            ],
-          ),
-          _buildDivider(),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'In-App Notifications',
-                      style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold, color: const Color(0xFF334155)),
-                    ),
-                    Text(
-                      'Show alerts inside dashboard',
-                      style: GoogleFonts.inter(fontSize: 11.sp, color: const Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: _inAppEnabled,
-                onChanged: (val) => _updateNotificationPreference('in_app_notifications', val),
-                activeThumbColor: widget.theme.primary,
-              ),
-            ],
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Padding(
+            padding: EdgeInsets.all(20.r),
+            child: isDesktop
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 4, child: _buildTeacherQRCodeBox()),
+                      SizedBox(width: 24.w),
+                      Expanded(flex: 6, child: _buildTeacherQRInfoBox()),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _buildTeacherQRCodeBox(),
+                      SizedBox(height: 24.h),
+                      _buildTeacherQRInfoBox(),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTeacherDigitalIdentityCard(bool isDesktop) {
-    final qrBox = Container(
-      width: double.infinity,
+  Widget _buildTeacherQRCodeBox() {
+    return Container(
       padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'ATTENDANCE QR CODE',
-            style: GoogleFonts.inter(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF475569),
-              letterSpacing: 0.5,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.qr_code_2, size: 16.sp, color: const Color(0xFF475569)),
+              SizedBox(width: 6.w),
+              Text(
+                'ATTENDANCE QR CODE',
+                style: GoogleFonts.inter(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF475569),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
           SizedBox(height: 16.h),
-          // Custom locator pattern QR code or generated QR code
           Container(
-            width: 140.r,
-            height: 140.r,
-            padding: EdgeInsets.all(8.r),
+            width: 180.w,
+            height: 180.w,
+            padding: EdgeInsets.all(12.r),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12.r),
+              borderRadius: BorderRadius.circular(16.r),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: _dbQrCode != null && _dbQrCode!.startsWith('data:image')
@@ -4286,9 +4172,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
                   })()
                 : QrImageView(
-                    data: _employeeId,
+                    data: _employeeId.isNotEmpty ? _employeeId : 'TEACHER',
                     version: QrVersions.auto,
-                    size: 124.r,
+                    size: 156.w,
                     gapless: false,
                     eyeStyle: const QrEyeStyle(
                       eyeShape: QrEyeShape.square,
@@ -4311,229 +4197,149 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SizedBox(height: 16.h),
           Text(
             _userName,
-            style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+            style: GoogleFonts.inter(fontSize: 15.sp, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
           ),
           SizedBox(height: 4.h),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 2.h),
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
-              borderRadius: BorderRadius.circular(4.r),
+              color: const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(12.r),
             ),
             child: Text(
               widget.role.toUpperCase(),
-              style: GoogleFonts.inter(fontSize: 9.sp, fontWeight: FontWeight.w800, color: const Color(0xFF475569)),
+              style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF2563EB)),
             ),
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 20.h),
           ElevatedButton.icon(
             onPressed: () {
-              showToast(context, 'Simulated QR code download complete!');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF10B981),
+                  content: Text('Attendance QR Code downloaded to gallery!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                ),
+              );
             },
-            icon: const Icon(Icons.download, size: 16, color: Colors.white),
-            label: const Text('Download'),
+            icon: const Icon(Icons.file_download_outlined, size: 18, color: Colors.white),
+            label: Text('Download', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFC7D2FE),
+              backgroundColor: const Color(0xFF8B5CF6),
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-              minimumSize: Size(double.infinity, 40.h),
+              minimumSize: Size(double.infinity, 44.h),
             ),
           ),
-          SizedBox(height: 8.h),
-          ElevatedButton(
-            onPressed: _showDisplayIdDialog,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE0F2FE),
-              foregroundColor: const Color(0xFF0369A1),
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-              minimumSize: Size(double.infinity, 40.h),
-            ),
-            child: const Text('DISPLAY ID'),
-          ),
-        ],
-      ),
-    );
-
-    final infoBox = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '• QR Code Info',
-          style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-        ),
-        SizedBox(height: 4.h),
-        Text(
-          'This QR code is used for scanning attendance at QR scanner devices located throughout the campus.',
-          style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF475569)),
-        ),
-        SizedBox(height: 16.h),
-        _buildBulletPoint('Each user has a unique, permanent QR code linked to their account.'),
-        SizedBox(height: 12.h),
-        _buildBulletPoint('The QR is valid at any active scanner the user\'s role is allowed on.'),
-        SizedBox(height: 12.h),
-        _buildBulletPoint('Admins can regenerate the QR if it is lost or compromised.'),
-        SizedBox(height: 12.h),
-        _buildBulletPoint('GPS geofencing is enforced by the scanner device, not the QR code itself.'),
-      ],
-    );
-
-    return Container(
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.qr_code_2, color: widget.theme.primary, size: 22.sp),
-              SizedBox(width: 8.w),
-              Text(
-                'Digital Identity & QR Attendance',
-                style: GoogleFonts.inter(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
+          SizedBox(height: 16.h),
+          Center(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7),
+                borderRadius: BorderRadius.circular(20.r),
               ),
-            ],
+              child: Text(
+                'ISSUED & LOCKED',
+                style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5),
+              ),
+            ),
           ),
-          SizedBox(height: 20.h),
-          if (isDesktop)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 260.w, child: qrBox),
-                SizedBox(width: 24.w),
-                Expanded(child: Padding(padding: EdgeInsets.only(top: 10.h), child: infoBox)),
-              ],
-            )
-          else ...[
-            qrBox,
-            SizedBox(height: 20.h),
-            infoBox,
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildBulletPoint(String text) {
+  Widget _buildTeacherQRInfoBox() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(width: 8.r, height: 8.r, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
+            SizedBox(width: 8.w),
+            Text(
+              'QR Code Info',
+              style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+            ),
+            SizedBox(width: 6.w),
+            Icon(Icons.lock_outline, size: 14.sp, color: const Color(0xFF64748B)),
+          ],
+        ),
+        SizedBox(height: 8.h),
+        Text(
+          'This QR code is used for scanning attendance at QR scanner devices located throughout the campus.',
+          style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF64748B), height: 1.5),
+        ),
+        SizedBox(height: 16.h),
+        _buildInfoBulletPoint('Each user has a unique, permanent QR code tied to their account.'),
+        SizedBox(height: 12.h),
+        _buildInfoBulletPoint('The QR is valid at any active scanner the user\'s role is allowed on.'),
+        SizedBox(height: 12.h),
+        _buildInfoBulletPoint('Admins can regenerate the QR if it is lost or compromised.'),
+        SizedBox(height: 12.h),
+        _buildInfoBulletPoint('GPS geofencing is enforced by the scanner device, not the QR code itself.'),
+      ],
+    );
+  }
+
+
+
+  Widget _buildInfoBulletPoint(String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.check_circle, color: const Color(0xFF3B82F6), size: 16.sp),
-        SizedBox(width: 8.w),
+        Icon(Icons.check_circle_outline, color: const Color(0xFF0284C7), size: 18.sp),
+        SizedBox(width: 10.w),
         Expanded(
           child: Text(
             text,
-            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF475569)),
+            style: GoogleFonts.inter(fontSize: 12.sp, color: const Color(0xFF475569), height: 1.5),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4.h),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF64748B),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF1E293B),
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Divider(height: 16.h, color: const Color(0xFFF1F5F9));
-  }
-
-  Widget _detailCard(String label, String value, IconData icon, Color color, {bool isFullWidth = false}) {
+  Widget _buildLogoutDialog() {
     return Container(
-      width: isFullWidth ? double.infinity : null,
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: EdgeInsets.all(8.r),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 18.sp),
+      color: Colors.black54,
+      child: Center(
+        child: Container(
+          margin: EdgeInsets.symmetric(horizontal: 40.w),
+          padding: EdgeInsets.all(24.r),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16.r),
           ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF64748B),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Logout', style: GoogleFonts.inter(fontSize: 20.sp, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
+              SizedBox(height: 16.h),
+              Text('Are you sure you want to log out?', style: GoogleFonts.inter(fontSize: 14.sp, color: const Color(0xFF475569))),
+              SizedBox(height: 24.h),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => setState(() => _showLogout = false), child: Text('Cancel', style: GoogleFonts.inter(color: const Color(0xFF64748B)))),
+                  SizedBox(width: 16.w),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() => _showLogout = false);
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                    child: Text('Logout', style: GoogleFonts.inter(color: Colors.white)),
                   ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
-
-
 
   void _showChangePasswordSheet() {
     final currentPasswordCtrl = TextEditingController();
@@ -4761,118 +4567,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showDisplayIdDialog() {
-    final isTeacher = widget.role == 'teacher';
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
-        contentPadding: EdgeInsets.zero,
-        content: Container(
-          width: 320.w,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20.r),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ID Header banner
-              Container(
-                padding: EdgeInsets.all(16.r),
-                decoration: BoxDecoration(
-                  gradient: widget.theme.gradient,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'EDUSPHERE INTERNATIONAL SCHOOL',
-                      style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5),
-                    ),
-                    SizedBox(height: 12.h),
-                    CircleAvatar(
-                      radius: 36.r,
-                      backgroundColor: Colors.white,
-                      child: CircleAvatar(
-                        radius: 34.r,
-                        backgroundColor: widget.theme.light,
-                        child: Text(
-                          _getInitials(_userName),
-                          style: GoogleFonts.inter(fontSize: 22.sp, fontWeight: FontWeight.bold, color: widget.theme.primary),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // ID Details
-              Padding(
-                padding: EdgeInsets.all(20.r),
-                child: Column(
-                  children: [
-                    Text(
-                      _userName,
-                      style: GoogleFonts.inter(fontSize: 18.sp, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      isTeacher ? _designation : _className,
-                      style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
-                    ),
-                    SizedBox(height: 20.h),
-                    _buildIdCardRow(isTeacher ? 'EMPLOYEE ID' : 'ADMISSION ID', isTeacher ? _employeeId : _admissionId),
-                    SizedBox(height: 8.h),
-                    _buildIdCardRow(isTeacher ? 'DEPARTMENT' : 'ROLL NUMBER', isTeacher ? _department : _rollNumber),
-                    SizedBox(height: 24.h),
-                    // Fake barcode
-                    Container(
-                      height: 40.h,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          30,
-                          (index) => Container(
-                            width: (index % 3 == 0) ? 3.w : (index % 2 == 0) ? 1.5.w : 4.w,
-                            height: 30.h,
-                            color: Colors.black.withValues(alpha: index % 4 == 0 ? 0.2 : 0.8),
-                            margin: EdgeInsets.symmetric(horizontal: 1.w),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(height: 1.h, color: const Color(0xFFE2E8F0)),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  minimumSize: Size(double.infinity, 48.h),
-                ),
-                child: Text('Close', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF475569))),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildIdCardRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 11.sp, fontWeight: FontWeight.bold, color: const Color(0xFF94A3B8))),
-        Text(value, style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w900, color: const Color(0xFF334155))),
-      ],
-    );
-  }
 
 
 }

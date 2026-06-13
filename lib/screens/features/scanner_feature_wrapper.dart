@@ -47,7 +47,7 @@ class _ScannerFeatureWrapperState extends State<ScannerFeatureWrapper> {
         // Use the first scanner matching gate/main, or fall back to the first scanner
         final mainScanner = list.firstWhere(
           (s) => s['name'].toString().toLowerCase().contains('gate') || s['name'].toString().toLowerCase().contains('main'),
-          orElse: () => list.first,
+          orElse: () => Map<String, dynamic>.from(list.first),
         );
         debugPrint('[Scanner Startup] Selected existing scanner: ${mainScanner['id']} - ${mainScanner['name']}');
         setState(() {

@@ -8,6 +8,7 @@ import 'package:qr_code_scanner/qr_code_scanner.dart';
 import '../../config/supabase_config.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
+import '../profile_screen.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -72,7 +73,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
 
   void _setupRealtimeSubscription() {
     try {
-      final supabaseUrl = SupabaseConfig.supabaseUrl;
+      const supabaseUrl = SupabaseConfig.supabaseUrl;
       debugPrint('⚡ [Realtime Subscription Status] Subscribing to AttendanceRecord realtime changes. URL: $supabaseUrl');
       
       _realtimeChannel = Supabase.instance.client
@@ -171,18 +172,90 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     debugPrint('📦 QR payload: $rawCode');
 
     try {
-      final admissionNo = rawCode.trim();
+      final codeTrimmed = rawCode.trim();
+
+      // Check if it's a teacher employeeId first
+      final teacherRes = await Supabase.instance.client
+          .from('Teacher')
+          .select('id, userId, employeeId, user:User(firstName, lastName)')
+          .eq('employeeId', codeTrimmed)
+          .maybeSingle();
+
+      if (teacherRes != null) {
+        final teacherId = teacherRes['id'].toString();
+        final teacherUserId = teacherRes['userId']?.toString();
+        final user = teacherRes['user'] as Map<String, dynamic>? ?? {};
+        final teacherName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        debugPrint('👤 Teacher Identified - ID: $teacherId, Name: $teacherName, UserID: $teacherUserId');
+
+        // Ensure the scanner exists in the database
+        await _ensureScannerExists(widget.scannerId);
+
+        final dateStr = widget.sessionDate != null
+            ? widget.sessionDate!.toIso8601String().substring(0, 10)
+            : DateTime.now().toIso8601String().substring(0, 10);
+            
+        final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' || widget.sessionAction?.toLowerCase() == 'check_in';
+        
+        final Map<String, dynamic> scanData = {
+          'attendeeType': 'TEACHER',
+          'teacherId': teacherId,
+          'date': dateStr,
+          'status': 'PRESENT',
+          'scannedByQR': true,
+          'scannerId': widget.scannerId,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        if (isCheckIn) {
+          scanData['checkInTime'] = DateTime.now().toIso8601String();
+        } else {
+          scanData['checkOutTime'] = DateTime.now().toIso8601String();
+        }
+
+        debugPrint('📤 Teacher Attendance insert payload: $scanData');
+        
+        final insertResponse = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(scanData)
+            .select()
+            .single();
+
+        debugPrint('📥 Teacher Attendance insert response: $insertResponse');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Successfully scanned Teacher: $teacherName'), backgroundColor: AppColors.success),
+          );
+          if (teacherUserId != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProfileScreen(
+                  role: 'teacher',
+                  theme: widget.theme,
+                  teacherId: teacherUserId,
+                ),
+              ),
+            );
+          }
+        }
+        await _loadLiveFeed();
+        return;
+      }
+
+      // Check if it's a student admission number
       final studentRes = await Supabase.instance.client
           .from('Student')
           .select('id, user:User(firstName, lastName)')
-          .eq('admissionNumber', admissionNo)
+          .eq('admissionNumber', codeTrimmed)
           .maybeSingle();
 
       if (studentRes == null) {
-        debugPrint('❌ [QR SCAN ERROR] Student not found for QR payload: $admissionNo');
+        debugPrint('❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Student not found for QR: $admissionNo'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Student/Teacher not found for QR: $codeTrimmed'), backgroundColor: AppColors.error),
           );
         }
         return;
