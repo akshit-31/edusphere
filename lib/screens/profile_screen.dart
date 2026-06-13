@@ -14,6 +14,7 @@ import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'main_screen.dart';
 import '../config/api_config.dart';
+import '../widgets/teacher_app_bar.dart';
 
 // ── CUSTOM QR SIMULATOR PAINTER ──
 class QRSimulatorPainter extends CustomPainter {
@@ -3375,37 +3376,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       drawer: isPushed ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Profile') : null,
       bottomNavigationBar: isPushed ? const TeacherBottomNavBar(activeIndex: 13) : null,
       backgroundColor: const Color(0xFFEFF6FF), // From image background color
-      appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => _teacherScaffoldKey.currentState?.openDrawer(),
-              ),
-              actions: [
-                IconButton(
-                  icon: Stack(
-                    children: [
-                      Icon(Icons.notifications_none, color: const Color(0xFF0F172A), size: 22.sp),
-                      Positioned(
-                        right: 2,
-                        top: 2,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
-                        ),
-                      )
-                    ],
-                  ),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
-          : null,
+      appBar: widget.showAppBar ? const TeacherAppBar(title: 'EduSphere') : null,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(isDesktop ? 32.r : 16.r, 20.r, isDesktop ? 32.r : 16.r, 120.r),

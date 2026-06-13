@@ -7,15 +7,18 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../welcome_screen.dart';
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String role;
   final RoleTheme theme;
+  final bool showAppBar;
 
   const SettingsScreen({
     super.key,
     required this.role,
     required this.theme,
+    this.showAppBar = true,
   });
 
   @override
@@ -567,6 +570,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: (widget.role == 'teacher' && widget.showAppBar)
+          ? const TeacherAppBar(title: 'EduSphere')
+          : null,
       bottomNavigationBar: widget.role == 'teacher' ? const TeacherBottomNavBar(activeIndex: 13) : null,
       body: Column(
         children: [

@@ -12,6 +12,7 @@ import '../../services/api_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 class ExamReportCardScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -419,6 +420,7 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
       key: _scaffoldKey,
       drawer: (isPushed && isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic') : null,
       backgroundColor: AppColors.background,
+      appBar: isTeacher ? const TeacherAppBar(title: 'Report Card') : null,
       bottomNavigationBar: (isPushed && isTeacher) ? const TeacherBottomNavBar(activeIndex: 7) : null,
       body: Column(
         children: [

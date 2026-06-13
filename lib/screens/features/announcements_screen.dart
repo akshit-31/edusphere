@@ -9,6 +9,8 @@ import '../main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/supabase_config.dart';
 import 'announcement_details_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
+
 
 
 class AnnouncementModel {
@@ -784,43 +786,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       bottomNavigationBar: (widget.showAppBar && isTeacher)
           ? const TeacherBottomNavBar(activeIndex: 11)
           : null,
-      appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-              leading: IconButton(
-                icon: Icon(Icons.menu, size: 24.sp, color: const Color(0xFF475569)),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              actions: [
-                IconButton(
-                  icon: Stack(
-                    children: [
-                      Icon(Icons.notifications_none_rounded, size: 24.sp, color: const Color(0xFF2563EB)),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          width: 8.r,
-                          height: 8.r,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  onPressed: () {},
-                ),
-                IconButton(
-                  icon: Icon(Icons.notifications_none_rounded, size: 24.sp, color: const Color(0xFF475569)),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
+      appBar: (widget.showAppBar && isTeacher)
+          ? const TeacherAppBar(title: 'Announcements')
           : null,
       body: Stack(
         children: [

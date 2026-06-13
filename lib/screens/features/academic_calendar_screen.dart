@@ -8,6 +8,7 @@ import 'package:gal/gal.dart';
 import '../../services/api_service.dart';
 import 'dart:developer' as dev;
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Event model
@@ -320,33 +321,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
           ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic Calendar')
           : null,
       appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: Icon(Icons.menu, size: 28.sp, color: const Color(0xFF0F172A)),
-                onPressed: () {
-                  _scaffoldKey.currentState?.openDrawer();
-                  widget.onOpenDrawer?.call();
-                },
-              ),
-              title: Text(
-                'EduSphere',
-                style: GoogleFonts.outfit(
-                  fontSize: 22.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon:
-                      Icon(Icons.notifications_none_rounded, size: 26.sp),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
+          ? const TeacherAppBar(title: 'EduSphere')
           : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
