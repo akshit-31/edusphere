@@ -1,0 +1,2061 @@
+﻿diff --git a/lib/screens/features/exam_detail_screen.dart b/lib/screens/features/exam_detail_screen.dart
+index 903bd51..1ea3f3f 100644
+--- a/lib/screens/features/exam_detail_screen.dart
++++ b/lib/screens/features/exam_detail_screen.dart
+@@ -1,11 +1,21 @@
+ import 'package:flutter/material.dart';
+ import 'package:flutter_screenutil/flutter_screenutil.dart';
+ import 'package:google_fonts/google_fonts.dart';
++import 'package:supabase_flutter/supabase_flutter.dart';
++import 'package:intl/intl.dart' as intl;
++import 'dart:developer' as dev;
++import 'dart:io';
++import 'dart:typed_data';
++import 'package:file_picker/file_picker.dart';
++import 'package:printing/printing.dart';
++import 'package:path_provider/path_provider.dart';
+ import '../main_screen.dart';
++
+ class ExamDetailScreen extends StatefulWidget {
+   final String examName;
++  final String examId;
+ 
+-  const ExamDetailScreen({super.key, required this.examName});
++  const ExamDetailScreen({super.key, required this.examName, required this.examId});
+ 
+   @override
+   State<ExamDetailScreen> createState() => _ExamDetailScreenState();
+@@ -13,69 +23,740 @@ class ExamDetailScreen extends StatefulWidget {
+ 
+ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+-  int _activeTabIndex = 0; // 0=Schedule, 1=Overview;
++  int _activeTabIndex = 0; // 0=Schedule, 1=Marks Entry, 2=Bulk Upload, 3=Overview
+   bool _isChatOpen = false;
++  bool _isLoading = true;
+ 
+   final List<String> _tabs = [
+     'Schedule',
+-    'Overview'
++    'Marks Entry',
++    'Bulk Upload',
++    'Overview',
+   ];
+ 
+-  final List<Map<String, dynamic>> _scheduleData = [
+-    {
+-      'Subject': 'Mathematics',
+-      'Date': '16/09/2024',
+-      'Time': '10:00',
+-      'Theory': '70',
+-      'Practical': '20',
+-      'Internal': '10',
+-      'Total': '100'
+-    },
+-    {
+-      'Subject': 'Hindi',
+-      'Date': '18/09/2024',
+-      'Time': '10:00',
+-      'Theory': '70',
+-      'Practical': '20',
+-      'Internal': '10',
+-      'Total': '100'
+-    },
+-    {
+-      'Subject': 'English',
+-      'Date': '15/09/2024',
+-      'Time': '10:00',
+-      'Theory': '70',
+-      'Practical': '20',
+-      'Internal': '10',
+-      'Total': '100'
+-    },
+-    {
+-      'Subject': 'Science',
+-      'Date': '17/09/2024',
+-      'Time': '10:00',
+-      'Theory': '70',
+-      'Practical': '20',
+-      'Internal': '10',
+-      'Total': '100'
+-    },
+-  ];
++  Map<String, dynamic>? _examData;
++  List<Map<String, dynamic>> _subjects = [];
++  List<Map<String, dynamic>> _students = [];
++  List<Map<String, dynamic>> _examResults = [];
++  List<Map<String, dynamic>> _examMarks = [];
++
++  // For Marks Entry Tab
++  String? _selectedSubjectId;
++  final Map<String, TextEditingController> _theoryControllers = {};
++  final Map<String, TextEditingController> _pracControllers = {};
++  final Map<String, TextEditingController> _intControllers = {};
++  final Map<String, bool> _absentStatus = {};
++  bool _isSavingMarks = false;
++
++  // For Bulk Upload Tab
++  String _uploadedFileName = 'No file chosen';
++  bool _isUploading = false;
++
++  RealtimeChannel? _detailChannel;
++
++  @override
++  void initState() {
++    super.initState();
++    _loadData();
++    _setupRealtime();
++  }
++
++  @override
++  void dispose() {
++    if (_detailChannel != null) {
++      try {
++        Supabase.instance.client.removeChannel(_detailChannel!);
++      } catch (_) {}
++    }
++    for (var c in _theoryControllers.values) {
++      c.dispose();
++    }
++    for (var c in _pracControllers.values) {
++      c.dispose();
++    }
++    for (var c in _intControllers.values) {
++      c.dispose();
++    }
++    super.dispose();
++  }
++
++  void _setupRealtime() {
++    try {
++      final client = Supabase.instance.client;
++      if (_detailChannel != null) {
++        client.removeChannel(_detailChannel!);
++      }
++
++      _detailChannel = client.channel('public:exam_detail_sync')
++        .onPostgresChanges(
++          event: PostgresChangeEvent.all,
++          schema: 'public',
++          table: 'ExamMark',
++          callback: (_) {
++            dev.log('ΓÜí Realtime database change detected on ExamMark table!', name: 'ExamDetailScreen');
++            if (mounted) _loadData();
++          },
++        )
++        .onPostgresChanges(
++          event: PostgresChangeEvent.all,
++          schema: 'public',
++          table: 'ExamResult',
++          callback: (_) {
++            dev.log('ΓÜí Realtime database change detected on ExamResult table!', name: 'ExamDetailScreen');
++            if (mounted) _loadData();
++          },
++        );
++      _detailChannel!.subscribe();
++    } catch (e) {
++      dev.log('Failed to connect to Supabase Realtime in Detail: $e');
++    }
++  }
++
++  Future<void> _loadData() async {
++    if (!mounted) return;
++    setState(() => _isLoading = true);
++
++    try {
++      final client = Supabase.instance.client;
++
++      // 1. Fetch Exam details
++      final examRes = await client
++          .from('Exam')
++          .select('*, Class(*), AcademicYear(*)')
++          .eq('id', widget.examId)
++          .single();
++
++      _examData = examRes;
++      final classId = examRes['classId'];
++
++      // 2. Fetch Subjects for the class
++      final subjectsRes = await client
++          .from('Subject')
++          .select('*')
++          .eq('classId', classId);
++      
++      _subjects = List<Map<String, dynamic>>.from(subjectsRes);
++
++      // 3. Fetch Students for the class
++      final studentsRes = await client
++          .from('Student')
++          .select('*, User(*)')
++          .eq('currentClassId', classId)
++          .eq('status', 'ACTIVE');
++
++      _students = List<Map<String, dynamic>>.from(studentsRes);
++
++      // Sort alphabetically by Student Name (Matches mockup exactly!)
++      _students.sort((a, b) {
++        final userA = a['User'] as Map?;
++        final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'.trim().toLowerCase();
++
++        final userB = b['User'] as Map?;
++        final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'.trim().toLowerCase();
++
++        return nameA.compareTo(nameB);
++      });
++
++      // Initialize Marks Entry lists
++      if (_subjects.isNotEmpty && _selectedSubjectId == null) {
++        _selectedSubjectId = _subjects[0]['id'] as String;
++      }
++
++      // 4. Fetch ExamResults for the exam
++      final resultsRes = await client
++          .from('ExamResult')
++          .select('*, Student(*, User(*))')
++          .eq('examId', widget.examId);
++
++      _examResults = List<Map<String, dynamic>>.from(resultsRes);
++      
++      // Sort alphabetically by Student Name (Matches mockup exactly!)
++      _examResults.sort((a, b) {
++        final studentA = a['Student'] as Map?;
++        final userA = studentA != null ? studentA['User'] as Map? : null;
++        final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'.trim().toLowerCase();
++
++        final studentB = b['Student'] as Map?;
++        final userB = studentB != null ? studentB['User'] as Map? : null;
++        final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'.trim().toLowerCase();
++
++        return nameA.compareTo(nameB);
++      });
++
++      // 5. Fetch ExamMarks for the exam (via ExamResult inner join)
++      if (_examResults.isNotEmpty) {
++        final marksRes = await client
++            .from('ExamMark')
++            .select('*, ExamResult!inner(id, examId)')
++            .eq('ExamResult.examId', widget.examId);
++        
++        _examMarks = List<Map<String, dynamic>>.from(marksRes);
++      } else {
++        _examMarks = [];
++      }
++
++      // Initialize controllers for Marks Entry
++      _initializeMarksControllers();
++
++      if (mounted) {
++        setState(() => _isLoading = false);
++      }
++    } catch (e) {
++      dev.log('Error loading exam details data: $e', name: 'ExamDetailScreen');
++      if (mounted) {
++        setState(() => _isLoading = false);
++      }
++    }
++  }
++
++  void _initializeMarksControllers() {
++    if (_selectedSubjectId == null || _subjects.isEmpty) return;
++    final selectedSubject = _subjects.firstWhere(
++      (s) => s['id'] == _selectedSubjectId,
++      orElse: () => _subjects[0],
++    );
++    final subjectName = selectedSubject['name'] as String;
++
++    for (var student in _students) {
++      final studentId = student['id'] as String;
++
++      final result = _examResults.firstWhere(
++        (r) => r['studentId'] == studentId,
++        orElse: () => <String, dynamic>{},
++      );
++
++      Map<String, dynamic>? existingMark;
++      if (result.isNotEmpty) {
++        final resultId = result['id'] as String;
++        existingMark = _examMarks.firstWhere(
++          (m) => m['examResultId'] == resultId && m['subjectName'].toString().toLowerCase() == subjectName.toLowerCase(),
++          orElse: () => <String, dynamic>{},
++        );
++      }
++
++      final String theoryVal = existingMark != null && existingMark.isNotEmpty ? (existingMark['theoryObtained']?.toString() ?? '0') : '0';
++      final String pracVal = existingMark != null && existingMark.isNotEmpty ? (existingMark['practicalObtained']?.toString() ?? '0') : '0';
++      final String intVal = existingMark != null && existingMark.isNotEmpty ? (existingMark['internalObtained']?.toString() ?? '0') : '0';
++      final bool absentVal = existingMark != null && existingMark.isNotEmpty && (existingMark['isAbsent'] == true || existingMark['isAbsent'].toString().toLowerCase() == 'true');
++
++      if (_theoryControllers.containsKey(studentId)) {
++        _theoryControllers[studentId]!.text = theoryVal;
++        _pracControllers[studentId]!.text = pracVal;
++        _intControllers[studentId]!.text = intVal;
++        _absentStatus[studentId] = absentVal;
++      } else {
++        _theoryControllers[studentId] = TextEditingController(text: theoryVal);
++        _pracControllers[studentId] = TextEditingController(text: pracVal);
++        _intControllers[studentId] = TextEditingController(text: intVal);
++        _absentStatus[studentId] = absentVal;
++      }
++    }
++  }
++
++  String _computeGrade(num pct) {
++    if (pct >= 90) return 'A+';
++    if (pct >= 80) return 'A';
++    if (pct >= 70) return 'B+';
++    if (pct >= 60) return 'B';
++    if (pct >= 50) return 'C';
++    if (pct >= 33) return 'D';
++    return 'F';
++  }
++
++  Future<void> _saveMarks() async {
++    if (_selectedSubjectId == null || _isSavingMarks || _subjects.isEmpty) return;
++    setState(() => _isSavingMarks = true);
++
++    try {
++      final client = Supabase.instance.client;
++      final selectedSubject = _subjects.firstWhere((s) => s['id'] == _selectedSubjectId);
++      final subjectName = selectedSubject['name'] as String;
++      final subjectCode = selectedSubject['code'] as String? ?? '';
++      final subjectTotal = (selectedSubject['totalMarks'] as num? ?? 100).toInt();
++
++      final resultsRes = await client
++          .from('ExamResult')
++          .select('*')
++          .eq('examId', widget.examId);
++      final currentResults = List<Map<String, dynamic>>.from(resultsRes);
++
++      final List<Map<String, dynamic>> marksToUpsert = [];
++
++      for (var student in _students) {
++        final studentId = student['id'] as String;
++        final isAbsent = _absentStatus[studentId] ?? false;
++
++        final theory = isAbsent ? 0 : (int.tryParse(_theoryControllers[studentId]?.text ?? '0') ?? 0);
++        final practical = isAbsent ? 0 : (int.tryParse(_pracControllers[studentId]?.text ?? '0') ?? 0);
++        final internal = isAbsent ? 0 : (int.tryParse(_intControllers[studentId]?.text ?? '0') ?? 0);
++        final obtained = theory + practical + internal;
++
++        var resultRow = currentResults.firstWhere(
++          (r) => r['studentId'] == studentId,
++          orElse: () => <String, dynamic>{},
++        );
++
++        String resultId;
++        if (resultRow.isEmpty) {
++          final newResult = {
++            'examId': widget.examId,
++            'studentId': studentId,
++            'totalMarks': _subjects.length * 100,
++            'obtainedMarks': obtained,
++            'percentage': (obtained / (_subjects.length * 100)) * 100,
++            'grade': _computeGrade((obtained / (_subjects.length * 100)) * 100),
++            'rank': 1,
++            'result': obtained >= (_subjects.length * 33) ? 'PASS' : 'FAIL',
++            'isPublished': true,
++          };
++          
++          final insertRes = await client.from('ExamResult').insert(newResult).select('id').single();
++          resultId = insertRes['id'] as String;
++          currentResults.add({
++            'id': resultId,
++            'examId': widget.examId,
++            'studentId': studentId,
++          });
++        } else {
++          resultId = resultRow['id'] as String;
++        }
++
++        final existingMark = _examMarks.firstWhere(
++          (m) => m['examResultId'] == resultId && m['subjectName'].toString().toLowerCase() == subjectName.toLowerCase(),
++          orElse: () => <String, dynamic>{},
++        );
++
++        final markData = {
++          if (existingMark.isNotEmpty) 'id': existingMark['id'],
++          'examResultId': resultId,
++          'subjectName': subjectName,
++          'subjectCode': subjectCode,
++          'totalMarks': subjectTotal,
++          'obtainedMarks': obtained,
++          'grade': _computeGrade((obtained / subjectTotal) * 100),
++          'theoryObtained': theory,
++          'practicalObtained': practical,
++          'internalObtained': internal,
++          'isAbsent': isAbsent,
++        };
++
++        marksToUpsert.add(markData);
++      }
++
++      if (marksToUpsert.isNotEmpty) {
++        await client.from('ExamMark').upsert(marksToUpsert);
++      }
++
++      final allMarks = await client
++          .from('ExamMark')
++          .select('*, ExamResult!inner(id, examId)')
++          .eq('ExamResult.examId', widget.examId);
++
++      final groupedMarks = <String, List<dynamic>>{};
++      for (var m in allMarks) {
++        final resId = m['examResultId'] as String;
++        groupedMarks.putIfAbsent(resId, () => []).add(m);
++      }
++
++      final List<Map<String, dynamic>> resultsUpdates = [];
++      final List<MapEntry<String, double>> studentPcts = [];
++
++      for (var res in currentResults) {
++        final resId = res['id'] as String;
++        final studentMarks = groupedMarks[resId] ?? [];
++
++        int totalMax = 0;
++        int totalObt = 0;
++        for (var m in studentMarks) {
++          totalMax += (m['totalMarks'] as num? ?? 100).toInt();
++          totalObt += (m['obtainedMarks'] as num? ?? 0).toInt();
++        }
++
++        if (totalMax == 0) totalMax = _subjects.length * 100;
++        final pct = totalMax > 0 ? (totalObt / totalMax * 100) : 0.0;
++        studentPcts.add(MapEntry(resId, pct));
++
++        resultsUpdates.add({
++          'id': resId,
++          'examId': widget.examId,
++          'studentId': res['studentId'],
++          'totalMarks': totalMax,
++          'obtainedMarks': totalObt,
++          'percentage': pct,
++          'grade': _computeGrade(pct),
++          'result': pct >= 33 ? 'PASS' : 'FAIL',
++        });
++      }
++
++      studentPcts.sort((a, b) => b.value.compareTo(a.value));
++      final Map<String, int> ranks = {};
++      for (int rankIdx = 0; rankIdx < studentPcts.length; rankIdx++) {
++        ranks[studentPcts[rankIdx].key] = rankIdx + 1;
++      }
++
++      for (var update in resultsUpdates) {
++        update['rank'] = ranks[update['id']] ?? 1;
++      }
++
++      if (resultsUpdates.isNotEmpty) {
++        await client.from('ExamResult').upsert(resultsUpdates);
++      }
++
++      await _loadData();
++
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Marks saved successfully!', style: GoogleFonts.inter()),
++          backgroundColor: const Color(0xFF10B981),
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    } catch (e) {
++      dev.log('Error saving marks: $e', name: 'ExamDetailScreen');
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Error saving marks: $e', style: GoogleFonts.inter()),
++          backgroundColor: Colors.red,
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    } finally {
++      if (mounted) {
++        setState(() => _isSavingMarks = false);
++      }
++    }
++  }
++
++  Future<void> _downloadTemplate() async {
++    try {
++      final List<String> headerParts = ['Admission Number', 'Student Name', 'Roll Number'];
++      for (var s in _subjects) {
++        final name = s['name'] as String;
++        headerParts.add('$name Theory');
++        headerParts.add('$name Practical');
++        headerParts.add('$name Internal');
++        headerParts.add('$name Absent(Y/N)');
++      }
++      final String header = headerParts.join(',');
++
++      final List<String> rows = [header];
++      for (var student in _students) {
++        final userData = student['User'] as Map?;
++        final firstName = userData?['firstName'] ?? '';
++        final lastName = userData?['lastName'] ?? '';
++        final studentName = '$firstName $lastName'.trim().isNotEmpty 
++            ? '$firstName $lastName' 
++            : (student['name'] ?? 'Student');
++        final admissionNumber = student['admissionNumber'] ?? '';
++        final rollNumber = student['rollNumber'] ?? student['roll_no'] ?? '';
++
++        final List<String> rowParts = [
++          admissionNumber,
++          '"$studentName"',
++          rollNumber.toString(),
++        ];
++
++        for (var s in _subjects) {
++          final name = s['name'] as String;
++          final result = _examResults.firstWhere(
++            (r) => r['studentId'] == student['id'],
++            orElse: () => <String, dynamic>{},
++          );
++          Map<String, dynamic>? existingMark;
++          if (result.isNotEmpty) {
++            existingMark = _examMarks.firstWhere(
++              (m) => m['examResultId'] == result['id'] && m['subjectName'].toString().toLowerCase() == name.toLowerCase(),
++              orElse: () => <String, dynamic>{},
++            );
++          }
++
++          if (existingMark != null && existingMark.isNotEmpty) {
++            rowParts.add(existingMark['theoryObtained']?.toString() ?? '0');
++            rowParts.add(existingMark['practicalObtained']?.toString() ?? '0');
++            rowParts.add(existingMark['internalObtained']?.toString() ?? '0');
++            rowParts.add(existingMark['isAbsent'] == true ? 'Y' : 'N');
++          } else {
++            rowParts.add('0');
++            rowParts.add('0');
++            rowParts.add('0');
++            rowParts.add('N');
++          }
++        }
++        rows.add(rowParts.join(','));
++      }
++      final String csvContent = rows.join('\n');
++
++      final directory = await getTemporaryDirectory();
++      final fileName = '${widget.examName.replaceAll(' ', '_')}_template.csv';
++      final file = File('${directory.path}/$fileName');
++      await file.writeAsString(csvContent);
++
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Template saved: $fileName', style: GoogleFonts.inter()),
++          backgroundColor: const Color(0xFF2563EB),
++          behavior: SnackBarBehavior.floating,
++          duration: const Duration(seconds: 6),
++          action: SnackBarAction(
++            label: 'Share',
++            textColor: Colors.white,
++            onPressed: () {
++              final bytes = Uint8List.fromList(csvContent.codeUnits);
++              Printing.sharePdf(bytes: bytes, filename: fileName);
++            },
++          ),
++        ));
++      }
++    } catch (e) {
++      dev.log('Error downloading template: $e', name: 'ExamDetailScreen');
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Error saving template: $e', style: GoogleFonts.inter()),
++          backgroundColor: Colors.red,
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    }
++  }
++
++  Future<void> _pickAndUploadFile() async {
++    setState(() => _isUploading = true);
++    try {
++      final result = await FilePicker.platform.pickFiles(
++        type: FileType.custom,
++        allowedExtensions: ['csv'],
++      );
++
++      if (result != null && result.files.single.path != null) {
++        final filePath = result.files.single.path!;
++        final file = File(filePath);
++        final content = await file.readAsString();
++        
++        setState(() {
++          _uploadedFileName = result.files.single.name;
++        });
++
++        await _parseAndSaveCSV(content);
++      } else {
++        setState(() {
++          _isUploading = false;
++        });
++      }
++    } catch (e) {
++      dev.log('Error picking/uploading file: $e', name: 'ExamDetailScreen');
++      setState(() => _isUploading = false);
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Error uploading file: $e', style: GoogleFonts.inter()),
++          backgroundColor: Colors.red,
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    }
++  }
++
++  Future<void> _parseAndSaveCSV(String content) async {
++    try {
++      final client = Supabase.instance.client;
++      final lines = content.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
++      if (lines.length < 2) {
++        throw 'The CSV file is empty or missing data rows.';
++      }
++
++      final headerParts = lines[0].split(',');
++      if (headerParts.length < 3) {
++        throw 'Invalid CSV header format.';
++      }
++
++      final Map<String, int> subjectTheoryIdx = {};
++      final Map<String, int> subjectPracIdx = {};
++      final Map<String, int> subjectIntIdx = {};
++      final Map<String, int> subjectAbsentIdx = {};
++
++      for (var s in _subjects) {
++        final sName = s['name'] as String;
++        subjectTheoryIdx[sName] = headerParts.indexWhere((h) => h.toLowerCase() == '$sName theory'.toLowerCase());
++        subjectPracIdx[sName] = headerParts.indexWhere((h) => h.toLowerCase() == '$sName practical'.toLowerCase());
++        subjectIntIdx[sName] = headerParts.indexWhere((h) => h.toLowerCase() == '$sName internal'.toLowerCase());
++        subjectAbsentIdx[sName] = headerParts.indexWhere((h) => h.toLowerCase() == '$sName absent(y/n)'.toLowerCase());
++      }
++
++      final resultsRes = await client
++          .from('ExamResult')
++          .select('*')
++          .eq('examId', widget.examId);
++      final currentResults = List<Map<String, dynamic>>.from(resultsRes);
++
++      final List<Map<String, dynamic>> marksToUpsert = [];
++
++      for (int i = 1; i < lines.length; i++) {
++        final rowParts = lines[i].split(',');
++        if (rowParts.length < 3) continue;
++
++        final admissionNumber = rowParts[0].trim();
++        final student = _students.firstWhere(
++          (s) => s['admissionNumber']?.toString().trim().toLowerCase() == admissionNumber.toLowerCase(),
++          orElse: () => <String, dynamic>{},
++        );
++
++        if (student.isEmpty) {
++          dev.log('ΓÜá∩╕Å Student with Admission ID $admissionNumber not found in class.', name: 'ExamDetailScreen');
++          continue;
++        }
++
++        final studentId = student['id'] as String;
++
++        var resultRow = currentResults.firstWhere(
++          (r) => r['studentId'] == studentId,
++          orElse: () => <String, dynamic>{},
++        );
++
++        String resultId;
++        if (resultRow.isEmpty) {
++          final newResult = {
++            'examId': widget.examId,
++            'studentId': studentId,
++            'totalMarks': _subjects.length * 100,
++            'obtainedMarks': 0,
++            'percentage': 0.0,
++            'grade': 'F',
++            'rank': 1,
++            'result': 'FAIL',
++            'isPublished': true,
++          };
++          
++          final insertRes = await client.from('ExamResult').insert(newResult).select('id').single();
++          resultId = insertRes['id'] as String;
++          currentResults.add({
++            'id': resultId,
++            'examId': widget.examId,
++            'studentId': studentId,
++          });
++        } else {
++          resultId = resultRow['id'] as String;
++        }
++
++        for (var s in _subjects) {
++          final sName = s['name'] as String;
++          final sCode = s['code'] as String? ?? '';
++          final sTotal = (s['totalMarks'] as num? ?? 100).toInt();
++
++          final tIdx = subjectTheoryIdx[sName] ?? -1;
++          final pIdx = subjectPracIdx[sName] ?? -1;
++          final iIdx = subjectIntIdx[sName] ?? -1;
++          final abIdx = subjectAbsentIdx[sName] ?? -1;
++
++          final isAbsent = abIdx != -1 && abIdx < rowParts.length && rowParts[abIdx].trim().toUpperCase() == 'Y';
++
++          final theory = (!isAbsent && tIdx != -1 && tIdx < rowParts.length) ? (int.tryParse(rowParts[tIdx].trim()) ?? 0) : 0;
++          final practical = (!isAbsent && pIdx != -1 && pIdx < rowParts.length) ? (int.tryParse(rowParts[pIdx].trim()) ?? 0) : 0;
++          final internal = (!isAbsent && iIdx != -1 && iIdx < rowParts.length) ? (int.tryParse(rowParts[iIdx].trim()) ?? 0) : 0;
++          final obtained = theory + practical + internal;
++
++          final existingMark = _examMarks.firstWhere(
++            (m) => m['examResultId'] == resultId && m['subjectName'].toString().toLowerCase() == sName.toLowerCase(),
++            orElse: () => <String, dynamic>{},
++          );
++
++          marksToUpsert.add({
++            if (existingMark.isNotEmpty) 'id': existingMark['id'],
++            'examResultId': resultId,
++            'subjectName': sName,
++            'subjectCode': sCode,
++            'totalMarks': sTotal,
++            'obtainedMarks': obtained,
++            'grade': _computeGrade((obtained / sTotal) * 100),
++            'theoryObtained': theory,
++            'practicalObtained': practical,
++            'internalObtained': internal,
++            'isAbsent': isAbsent,
++          });
++        }
++      }
++
++      if (marksToUpsert.isNotEmpty) {
++        await client.from('ExamMark').upsert(marksToUpsert);
++      }
++
++      final allMarks = await client
++          .from('ExamMark')
++          .select('*, ExamResult!inner(id, examId)')
++          .eq('ExamResult.examId', widget.examId);
++
++      final groupedMarks = <String, List<dynamic>>{};
++      for (var m in allMarks) {
++        final resId = m['examResultId'] as String;
++        groupedMarks.putIfAbsent(resId, () => []).add(m);
++      }
++
++      final List<Map<String, dynamic>> resultsUpdates = [];
++      final List<MapEntry<String, double>> studentPcts = [];
++
++      for (var res in currentResults) {
++        final resId = res['id'] as String;
++        final studentMarks = groupedMarks[resId] ?? [];
++
++        int totalMax = 0;
++        int totalObt = 0;
++        for (var m in studentMarks) {
++          totalMax += (m['totalMarks'] as num? ?? 100).toInt();
++          totalObt += (m['obtainedMarks'] as num? ?? 0).toInt();
++        }
++
++        if (totalMax == 0) totalMax = _subjects.length * 100;
++        final pct = totalMax > 0 ? (totalObt / totalMax * 100) : 0.0;
++        studentPcts.add(MapEntry(resId, pct));
++
++        resultsUpdates.add({
++          'id': resId,
++          'examId': widget.examId,
++          'studentId': res['studentId'],
++          'totalMarks': totalMax,
++          'obtainedMarks': totalObt,
++          'percentage': pct,
++          'grade': _computeGrade(pct),
++          'result': pct >= 33 ? 'PASS' : 'FAIL',
++        });
++      }
++
++      studentPcts.sort((a, b) => b.value.compareTo(a.value));
++      final Map<String, int> ranks = {};
++      for (int rankIdx = 0; rankIdx < studentPcts.length; rankIdx++) {
++        ranks[studentPcts[rankIdx].key] = rankIdx + 1;
++      }
+ 
+-  final List<Map<String, dynamic>> _studentsData = List.generate(9, (index) {
+-    int sNum = index + 1;
+-    String section = sNum <= 5 ? 'A' : 'B';
+-    // Just to match the exact mockup numbering where 10 is inserted in the middle, but we'll stick to a simple sequence
+-    if (index == 5) sNum = 10;
+-    if (index > 5) sNum = index;
+-    return {
+-      'name': 'Student$sNum Grade1$section',
+-      'id': 'ADM-2024-$sNum',
+-      'theory': sNum == 1 ? '23' : '0',
+-      'prac': '0',
+-      'int': '0',
+-      'total': sNum == 1 ? '23' : '0',
+-      'absent': false,
+-    };
+-  });
++      for (var update in resultsUpdates) {
++        update['rank'] = ranks[update['id']] ?? 1;
++      }
++
++      if (resultsUpdates.isNotEmpty) {
++        await client.from('ExamResult').upsert(resultsUpdates);
++      }
++
++      await _loadData();
++
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Marks imported and processed successfully!', style: GoogleFonts.inter()),
++          backgroundColor: const Color(0xFF10B981),
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    } catch (e) {
++      dev.log('Error parsing/saving CSV: $e', name: 'ExamDetailScreen');
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++          content: Text('Error parsing CSV: $e', style: GoogleFonts.inter()),
++          backgroundColor: Colors.red,
++          behavior: SnackBarBehavior.floating,
++        ));
++      }
++    } finally {
++      if (mounted) {
++        setState(() => _isUploading = false);
++      }
++    }
++  }
+ 
+   void _toggleChat() {
+     setState(() {
+@@ -83,169 +764,253 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+     });
+   }
+ 
++  String abbreviateSubject(String name) {
++    final lower = name.toLowerCase();
++    if (lower.contains('social')) return 'Soc';
++    if (lower.contains('science') || lower.contains('sci')) return 'Sci';
++    if (lower.contains('math')) return 'Mat';
++    if (lower.contains('english') || lower.contains('eng')) return 'Eng';
++    if (lower.contains('hindi') || lower.contains('hin')) return 'Hin';
++    return name.length > 3 ? name.substring(0, 3) : name;
++  }
++
++  String formatPct(double pct) {
++    if (pct == pct.toInt()) {
++      return '${pct.toInt()}%';
++    }
++    return '${pct.toString()}%';
++  }
++
+   @override
+   Widget build(BuildContext context) {
++    String subtitle = 'Class Schedule';
++    if (_examData != null) {
++      final className = (_examData!['Class']?['name']?.toString() ?? 'Class').replaceAll('Class', 'Grade');
++      final ayName = _examData!['AcademicYear']?['name']?.toString() ?? '2024-2025';
++      subtitle = '$className ΓÇó $ayName';
++    }
++
+     return Scaffold(
+       key: _scaffoldKey,
+-      backgroundColor: const Color(0xFFF0F4F8),
++      backgroundColor: const Color(0xFFF1F5F9),
+       drawer: const EduSphereDrawer(role: 'teacher', activeLabel: 'Examinations'),
+       appBar: _buildAppBar(),
+-      body: Stack(
+-        children: [
+-          Positioned.fill(
+-            child: SingleChildScrollView(
+-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
+-              physics: const BouncingScrollPhysics(),
+-              child: Column(
+-                crossAxisAlignment: CrossAxisAlignment.start,
+-                children: [
+-                  _buildTabs(),
+-                  SizedBox(height: 24.h),
+-                  if (_activeTabIndex == 0) _buildScheduleTab(),
+-                  if (_activeTabIndex == 1) _buildOverviewTab(),
+-                  SizedBox(height: 100.h), // space for FAB
+-                ],
+-              ),
+-            ),
+-          ),
+-          
+-          // Chat Overlay (Simulated)
+-          if (_isChatOpen)
+-            Positioned.fill(
+-              child: GestureDetector(
+-                onTap: _toggleChat,
+-                child: Container(
+-                  color: Colors.black.withValues(alpha: 0.1),
+-                ),
+-              ),
+-            ),
++      body: _isLoading
++          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
++          : Stack(
++              children: [
++                Positioned.fill(
++                  child: SingleChildScrollView(
++                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
++                    physics: const BouncingScrollPhysics(),
++                    child: Column(
++                      crossAxisAlignment: CrossAxisAlignment.start,
++                      children: [
++                        Row(
++                          crossAxisAlignment: CrossAxisAlignment.start,
++                          children: [
++                            GestureDetector(
++                              onTap: () => Navigator.pop(context),
++                              child: Container(
++                                padding: EdgeInsets.all(4.r),
++                                child: Icon(Icons.arrow_back_rounded, size: 24.sp, color: const Color(0xFF0F172A)),
++                              ),
++                            ),
++                            SizedBox(width: 8.w),
++                            Expanded(
++                              child: Column(
++                                crossAxisAlignment: CrossAxisAlignment.start,
++                                children: [
++                                  Text(
++                                    widget.examName,
++                                    style: GoogleFonts.outfit(
++                                      fontSize: 22.sp,
++                                      fontWeight: FontWeight.w800,
++                                      color: const Color(0xFF0F172A),
++                                    ),
++                                  ),
++                                  SizedBox(height: 2.h),
++                                  Text(
++                                    subtitle,
++                                    style: GoogleFonts.inter(
++                                      fontSize: 13.sp,
++                                      color: const Color(0xFF64748B),
++                                      fontWeight: FontWeight.w500,
++                                    ),
++                                  ),
++                                ],
++                              ),
++                            ),
++                          ],
++                        ),
++                        SizedBox(height: 14.h),
+ 
+-          if (_isChatOpen)
+-            Positioned(
+-              bottom: 80.h,
+-              right: 16.w,
+-              child: Material(
+-                color: Colors.transparent,
+-                child: Container(
+-                  width: 280.w,
+-                  height: 360.h,
+-                  decoration: BoxDecoration(
+-                    color: Colors.white,
+-                    borderRadius: BorderRadius.circular(16.r),
+-                    boxShadow: [
+-                      BoxShadow(
++                        OutlinedButton.icon(
++                          style: OutlinedButton.styleFrom(
++                            backgroundColor: const Color(0xFFEFF6FF),
++                            side: const BorderSide(color: Color(0xFFDBEAFE)),
++                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
++                            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
++                          ),
++                          icon: Icon(Icons.assignment_outlined, size: 16.sp, color: const Color(0xFF1E40AF)),
++                          label: Text(
++                            'Class Review',
++                            style: GoogleFonts.inter(
++                              fontSize: 13.sp,
++                              fontWeight: FontWeight.w600,
++                              color: const Color(0xFF1E40AF),
++                            ),
++                          ),
++                          onPressed: () {},
++                        ),
++                        SizedBox(height: 18.h),
++
++                        _buildTabs(),
++                        SizedBox(height: 18.h),
++
++                        if (_activeTabIndex == 0) _buildScheduleTab(),
++                        if (_activeTabIndex == 1) _buildMarksEntryTab(),
++                        if (_activeTabIndex == 2) _buildBulkUploadTab(),
++                        if (_activeTabIndex == 3) _buildOverviewTab(),
++                        SizedBox(height: 100.h),
++                      ],
++                    ),
++                  ),
++                ),
++                
++                if (_isChatOpen)
++                  Positioned.fill(
++                    child: GestureDetector(
++                      onTap: _toggleChat,
++                      child: Container(
+                         color: Colors.black.withValues(alpha: 0.1),
+-                        blurRadius: 10,
+-                        offset: const Offset(0, 4),
+                       ),
+-                    ],
++                    ),
+                   ),
+-                  child: Column(
+-                    children: [
+-                      Container(
+-                        padding: EdgeInsets.all(16.r),
++
++                if (_isChatOpen)
++                  Positioned(
++                    bottom: 80.h,
++                    right: 16.w,
++                    child: Material(
++                      color: Colors.transparent,
++                      child: Container(
++                        width: 280.w,
++                        height: 360.h,
+                         decoration: BoxDecoration(
+-                          color: const Color(0xFF2563EB),
+-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
++                          color: Colors.white,
++                          borderRadius: BorderRadius.circular(16.r),
++                          boxShadow: [
++                            BoxShadow(
++                              color: Colors.black.withValues(alpha: 0.1),
++                              blurRadius: 10,
++                              offset: const Offset(0, 4),
++                            ),
++                          ],
+                         ),
+-                        child: Row(
++                        child: Column(
+                           children: [
+-                            Icon(Icons.assistant, color: Colors.white, size: 20.sp),
+-                            SizedBox(width: 8.w),
+-                            Text(
+-                              'EduSphere Assistant',
+-                              style: GoogleFonts.outfit(
+-                                fontSize: 14.sp,
+-                                fontWeight: FontWeight.w600,
+-                                color: Colors.white,
++                            Container(
++                              padding: EdgeInsets.all(16.r),
++                              decoration: BoxDecoration(
++                                color: const Color(0xFF2563EB),
++                                borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
++                              ),
++                              child: Row(
++                                children: [
++                                  Icon(Icons.assistant, color: Colors.white, size: 20.sp),
++                                  SizedBox(width: 8.w),
++                                  Text(
++                                    'EduSphere Assistant',
++                                    style: GoogleFonts.outfit(
++                                      fontSize: 14.sp,
++                                      fontWeight: FontWeight.w600,
++                                      color: Colors.white,
++                                    ),
++                                  ),
++                                  const Spacer(),
++                                  GestureDetector(
++                                    onTap: _toggleChat,
++                                    child: Icon(Icons.close, color: Colors.white, size: 20.sp),
++                                  ),
++                                ],
+                               ),
+                             ),
+-                            const Spacer(),
+-                            GestureDetector(
+-                              onTap: _toggleChat,
+-                              child: Icon(Icons.close, color: Colors.white, size: 20.sp),
++                            Expanded(
++                              child: Center(
++                                child: Text(
++                                  'How can I help you?',
++                                  style: GoogleFonts.inter(
++                                    color: const Color(0xFF64748B),
++                                  ),
++                                ),
++                              ),
+                             ),
+                           ],
+                         ),
+                       ),
+-                      Expanded(
+-                        child: Center(
+-                          child: Text(
+-                            'How can I help you?',
+-                            style: GoogleFonts.inter(
+-                              color: const Color(0xFF64748B),
+-                            ),
+-                          ),
+-                        ),
+-                      ),
+-                    ],
++                    ),
+                   ),
+-                ),
+-              ),
+-            ),
+ 
+-          // Assistant Pop-up (Mockup style)
+-          if (!_isChatOpen)
+-            Positioned(
+-              bottom: 80.h,
+-              right: 16.w,
+-              child: Container(
+-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+-                decoration: BoxDecoration(
+-                  color: Colors.white,
+-                  borderRadius: BorderRadius.only(
+-                    topLeft: Radius.circular(16.r),
+-                    topRight: Radius.circular(16.r),
+-                    bottomLeft: Radius.circular(16.r),
+-                  ),
+-                  boxShadow: [
+-                    BoxShadow(
+-                      color: Colors.black.withValues(alpha: 0.1),
+-                      blurRadius: 8,
+-                      offset: const Offset(0, 2),
+-                    ),
+-                  ],
+-                ),
+-                child: Column(
+-                  crossAxisAlignment: CrossAxisAlignment.start,
+-                  mainAxisSize: MainAxisSize.min,
+-                  children: [
+-                    Text(
+-                      'HI TEACHER!',
+-                      style: GoogleFonts.inter(
+-                        fontSize: 10.sp,
+-                        fontWeight: FontWeight.w900,
+-                        color: const Color(0xFF0F172A),
+-                        letterSpacing: 0.5,
++                if (!_isChatOpen)
++                  Positioned(
++                    bottom: 80.h,
++                    right: 16.w,
++                    child: Container(
++                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
++                      decoration: BoxDecoration(
++                        color: Colors.white,
++                        borderRadius: BorderRadius.only(
++                          topLeft: Radius.circular(16.r),
++                          topRight: Radius.circular(16.r),
++                          bottomLeft: Radius.circular(16.r),
++                        ),
++                        boxShadow: [
++                          BoxShadow(
++                            color: Colors.black.withValues(alpha: 0.1),
++                            blurRadius: 8,
++                            offset: const Offset(0, 2),
++                          ),
++                        ],
+                       ),
+-                    ),
+-                    Text(
+-                      'HOW CAN I\nHELP?',
+-                      style: GoogleFonts.inter(
+-                        fontSize: 10.sp,
+-                        fontWeight: FontWeight.w900,
+-                        color: const Color(0xFF2563EB),
+-                        letterSpacing: 0.5,
++                      child: Column(
++                        crossAxisAlignment: CrossAxisAlignment.start,
++                        mainAxisSize: MainAxisSize.min,
++                        children: [
++                          Text(
++                            'HI TEACHER!',
++                            style: GoogleFonts.inter(
++                              fontSize: 10.sp,
++                              fontWeight: FontWeight.w900,
++                              color: const Color(0xFF0F172A),
++                              letterSpacing: 0.5,
++                            ),
++                          ),
++                          Text(
++                            'HOW CAN I\nHELP?',
++                            style: GoogleFonts.inter(
++                              fontSize: 10.sp,
++                              fontWeight: FontWeight.w900,
++                              color: const Color(0xFF2563EB),
++                              letterSpacing: 0.5,
++                            ),
++                          ),
++                        ],
+                       ),
+                     ),
+-                  ],
+-                ),
+-              ),
++                  ),
++              ],
+             ),
+-        ],
+-      ),
+       floatingActionButton: FloatingActionButton(
+         heroTag: 'exam_detail_chatbot_fab',
+-        backgroundColor: const Color(0xFF0284C7), // Blue matching mockup
+-        shape: RoundedRectangleBorder(
+-            borderRadius: BorderRadius.circular(28.r)),
++        backgroundColor: const Color(0xFF0284C7),
++        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.r)),
+         onPressed: _toggleChat,
+         child: Icon(
+           _isChatOpen ? Icons.close_rounded : Icons.assistant_navigation,
+           color: Colors.white,
+         ),
+       ),
+-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 7),
+     );
+   }
+ 
+@@ -282,7 +1047,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+       child: Container(
+         padding: EdgeInsets.all(4.r),
+         decoration: BoxDecoration(
+-          color: const Color(0xFFF1F5F9), // Light grey capsule background
++          color: const Color(0xFFE2E8F0),
+           borderRadius: BorderRadius.circular(24.r),
+         ),
+         child: Row(
+@@ -359,9 +1124,8 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+     return Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+-        // Header row
+         Container(
+-          width: 800.w, // Fixed width for horizontal scrolling
++          width: 800.w,
+           padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+           decoration: const BoxDecoration(
+             color: Colors.white,
+@@ -382,53 +1146,83 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+           ),
+         ),
+ 
+-        // Data rows
+-        ..._scheduleData.asMap().entries.map((entry) {
+-          final e = entry.value;
+-          final isLast = entry.key == _scheduleData.length - 1;
+-
+-          return Container(
+-            width: 800.w, // Fixed width for horizontal scrolling
+-            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 16.h),
+-            decoration: BoxDecoration(
+-              color: Colors.white,
+-              border: isLast
+-                  ? null
+-                  : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
++        if (_subjects.isEmpty)
++          Container(
++            width: 800.w,
++            padding: EdgeInsets.symmetric(vertical: 32.h),
++            child: Center(
++              child: Text(
++                'No subjects configured for this class.',
++                style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF64748B)),
++              ),
+             ),
+-            child: Row(
+-              children: [
+-                Expanded(
+-                  flex: 3,
+-                  child: Text(
+-                    e['Subject']!,
+-                    style: GoogleFonts.inter(
+-                      fontSize: 11.sp,
+-                      fontWeight: FontWeight.w700,
+-                      color: const Color(0xFF0F172A),
++          )
++        else
++          ..._subjects.asMap().entries.map((entry) {
++            final idx = entry.key;
++            final s = entry.value;
++            final isLast = idx == _subjects.length - 1;
++
++            final subjectName = s['name'] as String? ?? 'Subject';
++            
++            final startDateStr = _examData?['startDate']?.toString();
++            String displayDate = '10/09/2024';
++            String displayTime = '09:00';
++            if (startDateStr != null) {
++              try {
++                final parsedDate = DateTime.parse(startDateStr).toLocal().add(Duration(days: idx));
++                displayDate = intl.DateFormat('dd/MM/yyyy').format(parsedDate);
++                displayTime = intl.DateFormat('HH:mm').format(parsedDate);
++              } catch (_) {}
++            }
++
++            final totalMarks = (s['totalMarks'] as num? ?? 100).toInt();
++            final theory = (totalMarks * 0.8).toInt();
++            final internal = (totalMarks * 0.2).toInt();
++            const practical = 0;
++
++            return Container(
++              width: 800.w,
++              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 16.h),
++              decoration: BoxDecoration(
++                color: Colors.white,
++                border: isLast
++                    ? null
++                    : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
++              ),
++              child: Row(
++                children: [
++                  Expanded(
++                    flex: 3,
++                    child: Text(
++                      subjectName,
++                      style: GoogleFonts.inter(
++                        fontSize: 12.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
+                     ),
+                   ),
+-                ),
+-                Expanded(flex: 2, child: Text(e['Date']!, style: _cellStyle())),
+-                Expanded(flex: 2, child: Text(e['Time']!, style: _cellStyle())),
+-                Expanded(flex: 2, child: Text(e['Theory']!, style: _cellStyle())),
+-                Expanded(flex: 2, child: Text(e['Practical']!, style: _cellStyle())),
+-                Expanded(flex: 2, child: Text(e['Internal']!, style: _cellStyle())),
+-                Expanded(
+-                  flex: 2,
+-                  child: Text(
+-                    e['Total']!,
+-                    style: GoogleFonts.inter(
+-                      fontSize: 11.sp,
+-                      fontWeight: FontWeight.w700,
+-                      color: const Color(0xFF0F172A),
++                  Expanded(flex: 2, child: Text(displayDate, style: _cellStyle())),
++                  Expanded(flex: 2, child: Text(displayTime, style: _cellStyle())),
++                  Expanded(flex: 2, child: Text('$theory', style: _cellStyle())),
++                  Expanded(flex: 2, child: Text('$practical', style: _cellStyle())),
++                  Expanded(flex: 2, child: Text('$internal', style: _cellStyle())),
++                  Expanded(
++                    flex: 2,
++                    child: Text(
++                      '$totalMarks',
++                      style: GoogleFonts.inter(
++                        fontSize: 12.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
+                     ),
+                   ),
+-                ),
+-              ],
+-            ),
+-          );
+-        }),
++                ],
++              ),
++            );
++          }),
+       ],
+     );
+   }
+@@ -436,7 +1230,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+   TextStyle _headerStyle() {
+     return GoogleFonts.inter(
+       fontSize: 10.sp,
+-      fontWeight: FontWeight.w600,
++      fontWeight: FontWeight.w700,
+       color: const Color(0xFF64748B),
+     );
+   }
+@@ -479,122 +1273,607 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
+     );
+   }
+ 
++  Widget _tableCell(Widget child, double width, {bool hasBottomBorder = true}) {
++    return Container(
++      width: width,
++      height: 52.h,
++      alignment: Alignment.centerLeft,
++      padding: EdgeInsets.symmetric(horizontal: 4.w),
++      decoration: BoxDecoration(
++        border: Border(
++          bottom: hasBottomBorder ? const BorderSide(color: Color(0xFFE2E8F0)) : BorderSide.none,
++        ),
++      ),
++      child: child,
++    );
++  }
++
++  Widget _headerCell(String text, double width) {
++    return Container(
++      width: width,
++      height: 40.h,
++      alignment: Alignment.centerLeft,
++      padding: EdgeInsets.symmetric(horizontal: 4.w),
++      decoration: const BoxDecoration(
++        color: Color(0xFFF8FAFC),
++        border: Border(
++          bottom: BorderSide(color: Color(0xFFE2E8F0)),
++        ),
++      ),
++      child: Text(text, style: _headerStyle()),
++    );
++  }
++
+   Widget _buildOverviewTable() {
+-    return Column(
+-      crossAxisAlignment: CrossAxisAlignment.start,
+-      children: [
+-        // Header row
+-        Container(
+-          width: 1000.w, // Fixed width for horizontal scrolling
+-          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+-          decoration: const BoxDecoration(
+-            color: Colors.white,
+-            border: Border(
+-              bottom: BorderSide(color: Color(0xFFE2E8F0)),
+-            ),
+-          ),
+-          child: Row(
++    final bool isLandscape = MediaQuery.of(context).size.width > 500;
++
++    final List<Map<String, dynamic>> activeSubjects;
++    if (_examMarks.isNotEmpty) {
++      final Set<String> subjectsWithMarks = _examMarks
++          .map((m) => m['subjectName'].toString().toLowerCase())
++          .toSet();
++      activeSubjects = _subjects.where((s) {
++        final name = s['name'].toString().toLowerCase();
++        return subjectsWithMarks.contains(name);
++      }).toList();
++    } else {
++      activeSubjects = _subjects;
++    }
++
++    final double rankWidth = 32.w;
++    final double studentWidth = isLandscape ? 130.w : 100.w;
++    final double subjectWidth = 35.w;
++    final double totalWidth = 40.w;
++    final double pctWidth = isLandscape ? 140.w : 60.w;
++    final double gradeWidth = 50.w;
++
++    final double tableWidth = rankWidth + studentWidth + (activeSubjects.length * subjectWidth) + totalWidth + pctWidth + gradeWidth + 2.0;
++
++    return Container(
++      width: tableWidth,
++      decoration: BoxDecoration(
++        color: Colors.white,
++        borderRadius: BorderRadius.circular(8.r),
++        border: Border.all(color: const Color(0xFFE2E8F0)),
++      ),
++      clipBehavior: Clip.hardEdge,
++      child: Column(
++        children: [
++          // Header row
++          Row(
+             children: [
+-              Expanded(flex: 1, child: Text('Rank', style: _headerStyle())),
+-              Expanded(flex: 4, child: Text('Student', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Mat', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Hin', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Eng', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Sci', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Total', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('%', style: _headerStyle())),
+-              Expanded(flex: 1, child: Text('Grade', style: _headerStyle())),
++              _headerCell('Rank', rankWidth),
++              _headerCell('Student', studentWidth),
++              ...activeSubjects.map((s) {
++                return _headerCell(abbreviateSubject(s['name'] as String), subjectWidth);
++              }),
++              _headerCell('Total', totalWidth),
++              _headerCell('%', pctWidth),
++              _headerCell('Grade', gradeWidth),
+             ],
+           ),
+-        ),
+ 
+-        // Data rows
+-        ..._studentsData.asMap().entries.map((entry) {
+-          final idx = entry.key;
+-          final e = entry.value;
+-          final isLast = idx == _studentsData.length - 1;
++          // Data rows
++          if (_students.isEmpty)
++            Container(
++              width: tableWidth,
++              padding: EdgeInsets.symmetric(vertical: 32.h),
++              child: Center(
++                child: Text(
++                  'No active students in this class.',
++                  style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF64748B)),
++                ),
++              ),
++            )
++          else
++            ..._students.asMap().entries.map((entry) {
++              final idx = entry.key;
++              final student = entry.value;
++              final studentId = student['id'] as String;
++              final isLast = idx == _students.length - 1;
++
++              final userData = student['User'] as Map?;
++              final firstName = userData?['firstName'] ?? '';
++              final lastName = userData?['lastName'] ?? '';
++              final studentName = '$firstName $lastName'.trim().isNotEmpty 
++                  ? '$firstName $lastName' 
++                  : (student['name'] ?? 'Student');
++
++              // Find the student's result
++              final res = _examResults.firstWhere(
++                (r) => r['studentId'] == studentId,
++                orElse: () => <String, dynamic>{},
++              );
++
++              final rank = res.isNotEmpty ? (res['rank']?.toString() ?? '-') : '-';
++              final pctDouble = res.isNotEmpty ? (res['percentage'] as num? ?? 0.0).toDouble() : null;
++              final totalObtained = res.isNotEmpty ? (res['obtainedMarks']?.toString() ?? '-') : '-';
++              final grade = res.isNotEmpty ? (res['grade']?.toString() ?? '-') : '-';
++
++              final studentMarks = res.isNotEmpty
++                  ? _examMarks.where((m) => m['examResultId'] == res['id']).toList()
++                  : [];
++
++              return Row(
++                children: [
++                  _tableCell(
++                    Text(
++                      rank,
++                      style: GoogleFonts.inter(
++                        fontSize: 12.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
++                      maxLines: 1,
++                      overflow: TextOverflow.ellipsis,
++                    ),
++                    rankWidth,
++                    hasBottomBorder: !isLast,
++                  ),
++                  _tableCell(
++                    Text(
++                      studentName,
++                      style: GoogleFonts.inter(
++                        fontSize: 11.sp,
++                        fontWeight: FontWeight.w500,
++                        color: const Color(0xFF334155),
++                      ),
++                      maxLines: 1,
++                      overflow: TextOverflow.ellipsis,
++                    ),
++                    studentWidth,
++                    hasBottomBorder: !isLast,
++                  ),
++                  ...activeSubjects.map((s) {
++                    final name = s['name'] as String;
++                    final mark = studentMarks.firstWhere(
++                      (m) => m['subjectName'].toString().toLowerCase() == name.toLowerCase(),
++                      orElse: () => <String, dynamic>{},
++                    );
++                    final isMarkAbsent = mark.isNotEmpty && (mark['isAbsent'] == true || mark['isAbsent'].toString().toLowerCase() == 'true');
++                    final displayMark = mark.isNotEmpty 
++                        ? (isMarkAbsent ? 'Ab' : mark['obtainedMarks']?.toString() ?? '-')
++                        : '-';
++                    return _tableCell(
++                      Text(
++                        displayMark, 
++                        style: _cellStyle(),
++                        maxLines: 1,
++                        overflow: TextOverflow.ellipsis,
++                      ),
++                      subjectWidth,
++                      hasBottomBorder: !isLast,
++                    );
++                  }),
++                  _tableCell(
++                    Text(
++                      totalObtained,
++                      style: GoogleFonts.inter(
++                        fontSize: 12.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
++                      maxLines: 1,
++                      overflow: TextOverflow.ellipsis,
++                    ),
++                    totalWidth,
++                    hasBottomBorder: !isLast,
++                  ),
++                  _tableCell(
++                    Text(
++                      pctDouble != null ? formatPct(pctDouble) : '-', 
++                      style: _cellStyle(),
++                      maxLines: 1,
++                      overflow: TextOverflow.clip,
++                    ),
++                    pctWidth,
++                    hasBottomBorder: !isLast,
++                  ),
++                  _tableCell(
++                    Center(
++                      child: Container(
++                        width: 24.r,
++                        height: 24.r,
++                        decoration: BoxDecoration(
++                          shape: BoxShape.circle,
++                          border: Border.all(color: const Color(0xFFCBD5E1)),
++                        ),
++                        child: Center(
++                          child: Text(
++                            grade,
++                            style: GoogleFonts.inter(
++                              fontSize: 10.sp,
++                              fontWeight: FontWeight.w700,
++                              color: const Color(0xFF334155),
++                            ),
++                          ),
++                        ),
++                      ),
++                    ),
++                    gradeWidth,
++                    hasBottomBorder: !isLast,
++                  ),
++                ],
++              );
++            }),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildMarksEntryTab() {
++    if (_subjects.isEmpty) {
++      return const Center(child: Text('No subjects configured for this class.'));
++    }
++
++    return Container(
++      width: double.infinity,
++      decoration: BoxDecoration(
++        color: Colors.white,
++        borderRadius: BorderRadius.circular(16.r),
++        border: Border.all(color: const Color(0xFFE2E8F0)),
++      ),
++      padding: EdgeInsets.all(20.r),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            'Enter Subject Marks',
++            style: GoogleFonts.outfit(
++              fontSize: 16.sp,
++              fontWeight: FontWeight.w800,
++              color: const Color(0xFF0F172A),
++            ),
++          ),
++          SizedBox(height: 16.h),
+           
+-          final rank = (idx + 1).toString();
+-          final mat = e['theory'] == '23' ? '23' : '0';
+-          final total = e['theory'] == '23' ? '23' : '0';
+-          final percent = e['theory'] == '23' ? '23%' : '0%';
+-          const grade = 'F';
+-
+-          return Container(
+-            width: 1000.w, // Fixed width for horizontal scrolling
+-            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 16.h),
++          DropdownButtonFormField<String>(
++            initialValue: _selectedSubjectId,
++            decoration: InputDecoration(
++              labelText: 'Select Subject',
++              contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
++              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
++            ),
++            items: _subjects.map((s) {
++              return DropdownMenuItem(
++                value: s['id'] as String,
++                child: Text(s['name'] as String),
++              );
++            }).toList(),
++            onChanged: (val) {
++              setState(() {
++                _selectedSubjectId = val;
++                _initializeMarksControllers();
++              });
++            },
++          ),
++          SizedBox(height: 24.h),
++
++          ListView.builder(
++            shrinkWrap: true,
++            physics: const NeverScrollableScrollPhysics(),
++            itemCount: _students.length,
++            itemBuilder: (context, idx) {
++              final student = _students[idx];
++              final studentId = student['id'] as String;
++              final userData = student['User'] as Map?;
++              final firstName = userData?['firstName'] ?? '';
++              final lastName = userData?['lastName'] ?? '';
++              final studentName = '$firstName $lastName'.trim().isNotEmpty 
++                  ? '$firstName $lastName' 
++                  : (student['name'] ?? 'Student');
++              final isAbsent = _absentStatus[studentId] ?? false;
++
++              return Container(
++                margin: EdgeInsets.only(bottom: 16.h),
++                padding: EdgeInsets.all(12.r),
++                decoration: BoxDecoration(
++                  color: isAbsent ? Colors.grey.shade50 : const Color(0xFFF8FAFC),
++                  borderRadius: BorderRadius.circular(12.r),
++                  border: Border.all(color: const Color(0xFFE2E8F0)),
++                ),
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Row(
++                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
++                      children: [
++                        Text(
++                          studentName,
++                          style: GoogleFonts.inter(
++                            fontSize: 13.sp,
++                            fontWeight: FontWeight.w700,
++                            color: const Color(0xFF0F172A),
++                          ),
++                        ),
++                        Row(
++                          children: [
++                            Text(
++                              'Absent',
++                              style: GoogleFonts.inter(
++                                fontSize: 12.sp,
++                                color: const Color(0xFF64748B),
++                              ),
++                            ),
++                            Checkbox(
++                              value: isAbsent,
++                              onChanged: (val) {
++                                setState(() {
++                                  _absentStatus[studentId] = val ?? false;
++                                });
++                              },
++                            ),
++                          ],
++                        ),
++                      ],
++                    ),
++                    SizedBox(height: 12.h),
++                    Row(
++                      children: [
++                        Expanded(
++                          child: Column(
++                            crossAxisAlignment: CrossAxisAlignment.start,
++                            children: [
++                              Text('Theory', style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B))),
++                              SizedBox(height: 4.h),
++                              TextField(
++                                controller: _theoryControllers[studentId],
++                                keyboardType: TextInputType.number,
++                                enabled: !isAbsent,
++                                decoration: InputDecoration(
++                                  contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
++                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.r)),
++                                  fillColor: isAbsent ? Colors.grey.shade200 : Colors.white,
++                                  filled: true,
++                                ),
++                              ),
++                            ],
++                          ),
++                        ),
++                        SizedBox(width: 8.w),
++                        Expanded(
++                          child: Column(
++                            crossAxisAlignment: CrossAxisAlignment.start,
++                            children: [
++                              Text('Practical', style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B))),
++                              SizedBox(height: 4.h),
++                              TextField(
++                                controller: _pracControllers[studentId],
++                                keyboardType: TextInputType.number,
++                                enabled: !isAbsent,
++                                decoration: InputDecoration(
++                                  contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
++                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.r)),
++                                  fillColor: isAbsent ? Colors.grey.shade200 : Colors.white,
++                                  filled: true,
++                                ),
++                              ),
++                            ],
++                          ),
++                        ),
++                        SizedBox(width: 8.w),
++                        Expanded(
++                          child: Column(
++                            crossAxisAlignment: CrossAxisAlignment.start,
++                            children: [
++                              Text('Internal', style: GoogleFonts.inter(fontSize: 10.sp, color: const Color(0xFF64748B))),
++                              SizedBox(height: 4.h),
++                              TextField(
++                                controller: _intControllers[studentId],
++                                keyboardType: TextInputType.number,
++                                enabled: !isAbsent,
++                                decoration: InputDecoration(
++                                  contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
++                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.r)),
++                                  fillColor: isAbsent ? Colors.grey.shade200 : Colors.white,
++                                  filled: true,
++                                ),
++                              ),
++                            ],
++                          ),
++                        ),
++                      ],
++                    ),
++                  ],
++                ),
++              );
++            },
++          ),
++          SizedBox(height: 20.h),
++          
++          SizedBox(
++            width: double.infinity,
++            height: 48.h,
++            child: ElevatedButton(
++              style: ElevatedButton.styleFrom(
++                backgroundColor: const Color(0xFF2563EB),
++                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
++              ),
++              onPressed: _isSavingMarks ? null : _saveMarks,
++              child: _isSavingMarks
++                  ? const SizedBox(
++                      width: 20,
++                      height: 20,
++                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
++                    )
++                  : Text(
++                      'Save Marks',
++                      style: GoogleFonts.inter(
++                        fontSize: 14.sp,
++                        fontWeight: FontWeight.w700,
++                        color: Colors.white,
++                      ),
++                    ),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildBulkUploadTab() {
++    return Container(
++      width: double.infinity,
++      decoration: BoxDecoration(
++        color: Colors.white,
++        borderRadius: BorderRadius.circular(16.r),
++        border: Border.all(color: const Color(0xFFE2E8F0)),
++        boxShadow: [
++          BoxShadow(
++            color: Colors.black.withValues(alpha: 0.04),
++            blurRadius: 12,
++            offset: const Offset(0, 4),
++          ),
++        ],
++      ),
++      padding: EdgeInsets.all(24.r),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            'Excel Bulk Upload',
++            style: GoogleFonts.outfit(
++              fontSize: 16.sp,
++              fontWeight: FontWeight.w800,
++              color: const Color(0xFF0F172A),
++            ),
++          ),
++          SizedBox(height: 4.h),
++          Text(
++            'Upload marks using Excel',
++            style: GoogleFonts.inter(
++              fontSize: 12.sp,
++              color: const Color(0xFF64748B),
++              fontWeight: FontWeight.w500,
++            ),
++          ),
++          SizedBox(height: 24.h),
++
++          Container(
++            width: double.infinity,
++            padding: EdgeInsets.all(16.r),
+             decoration: BoxDecoration(
+               color: Colors.white,
+-              border: isLast
+-                  ? null
+-                  : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
++              borderRadius: BorderRadius.circular(12.r),
++              border: Border.all(color: const Color(0xFFE2E8F0)),
+             ),
+-            child: Row(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+-                Expanded(
+-                  flex: 1,
+-                  child: Text(
+-                    rank,
+-                    style: GoogleFonts.inter(
+-                      fontSize: 11.sp,
+-                      fontWeight: FontWeight.w700,
+-                      color: const Color(0xFF0F172A),
++                Row(
++                  children: [
++                    Icon(Icons.download_rounded, size: 20.sp, color: const Color(0xFF0F172A)),
++                    SizedBox(width: 8.w),
++                    Text(
++                      '1. Download Template',
++                      style: GoogleFonts.inter(
++                        fontSize: 14.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
+                     ),
+-                  ),
++                  ],
+                 ),
+-                Expanded(
+-                  flex: 4,
++                SizedBox(height: 12.h),
++                ElevatedButton(
++                  style: ElevatedButton.styleFrom(
++                    backgroundColor: const Color(0xFFEFF6FF), // light blue
++                    elevation: 0,
++                    side: const BorderSide(color: Color(0xFFDBEAFE)),
++                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
++                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
++                  ),
++                  onPressed: _downloadTemplate,
+                   child: Text(
+-                    e['name']!,
++                    'Download XLSX',
+                     style: GoogleFonts.inter(
+-                      fontSize: 11.sp,
+-                      color: const Color(0xFF334155),
++                      fontSize: 13.sp,
++                      fontWeight: FontWeight.w600,
++                      color: const Color(0xFF1E40AF),
+                     ),
+                   ),
+                 ),
+-                Expanded(flex: 1, child: Text(mat, style: _cellStyle())),
+-                Expanded(flex: 1, child: Text('-', style: _cellStyle())),
+-                Expanded(flex: 1, child: Text('-', style: _cellStyle())),
+-                Expanded(flex: 1, child: Text('-', style: _cellStyle())),
+-                Expanded(
+-                  flex: 1,
+-                  child: Text(
+-                    total,
+-                    style: GoogleFonts.inter(
+-                      fontSize: 11.sp,
+-                      fontWeight: FontWeight.w700,
+-                      color: const Color(0xFF0F172A),
++              ],
++            ),
++          ),
++          SizedBox(height: 18.h),
++
++          Container(
++            width: double.infinity,
++            padding: EdgeInsets.all(16.r),
++            decoration: BoxDecoration(
++              color: Colors.white,
++              borderRadius: BorderRadius.circular(12.r),
++              border: Border.all(color: const Color(0xFFE2E8F0)),
++            ),
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                Row(
++                  children: [
++                    Icon(Icons.upload_rounded, size: 20.sp, color: const Color(0xFF0F172A)),
++                    SizedBox(width: 8.w),
++                    Text(
++                      '2. Upload File',
++                      style: GoogleFonts.inter(
++                        fontSize: 14.sp,
++                        fontWeight: FontWeight.w700,
++                        color: const Color(0xFF0F172A),
++                      ),
+                     ),
+-                  ),
++                  ],
+                 ),
+-                Expanded(flex: 1, child: Text(percent, style: _cellStyle())),
+-                Expanded(
+-                  flex: 1,
+-                  child: Row(
+-                    children: [
+-                      Container(
+-                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
++                SizedBox(height: 16.h),
++                _isUploading
++                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
++                    : Container(
++                        width: double.infinity,
++                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                         decoration: BoxDecoration(
++                          color: const Color(0xFFF8FAFC),
++                          borderRadius: BorderRadius.circular(8.r),
+                           border: Border.all(color: const Color(0xFFE2E8F0)),
+-                          borderRadius: BorderRadius.circular(16.r),
+                         ),
+-                        child: Text(
+-                          grade,
+-                          style: GoogleFonts.inter(
+-                            fontSize: 10.sp,
+-                            fontWeight: FontWeight.w600,
+-                            color: const Color(0xFF64748B),
+-                          ),
++                        child: Row(
++                          children: [
++                            ElevatedButton(
++                              style: ElevatedButton.styleFrom(
++                                backgroundColor: Colors.white,
++                                elevation: 0,
++                                side: const BorderSide(color: Color(0xFFCBD5E1)),
++                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.r)),
++                                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
++                              ),
++                              onPressed: _pickAndUploadFile,
++                              child: Text(
++                                'Choose file',
++                                style: GoogleFonts.inter(
++                                  fontSize: 12.sp,
++                                  fontWeight: FontWeight.w600,
++                                  color: const Color(0xFF475569),
++                                ),
++                              ),
++                            ),
++                            SizedBox(width: 12.w),
++                            Expanded(
++                              child: Text(
++                                _uploadedFileName,
++                                style: GoogleFonts.inter(
++                                  fontSize: 13.sp,
++                                  color: const Color(0xFF475569),
++                                  fontWeight: FontWeight.w500,
++                                ),
++                                overflow: TextOverflow.ellipsis,
++                              ),
++                            ),
++                          ],
+                         ),
+                       ),
+-                    ],
+-                  ),
+-                ),
+               ],
+             ),
+-          );
+-        }),
+-      ],
++          ),
++        ],
++      ),
+     );
+   }
+ }

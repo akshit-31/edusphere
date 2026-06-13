@@ -8,7 +8,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart' as intl;
-import '../main_screen.dart';
 
 class AssignmentsScreen extends StatefulWidget {
   const AssignmentsScreen({super.key});
@@ -26,7 +25,6 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
 
   final List<Map<String, dynamic>> _assignments = [];
   final String _selectedSubject = 'All';
-  final List<String> _subjects = ['All', 'Hindi', 'English', 'Math', 'Science', 'Computer'];
 
   RealtimeChannel? _assignmentsChannel;
   Timer? _assignmentsPollTimer;

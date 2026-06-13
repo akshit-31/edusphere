@@ -26,41 +26,7 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
   // Mapping of term ID to exam count for teachers
   final Map<String, int> _examsCountMap = {};
 
-  // Mock terms as a high-quality fallback (Dynamic statuses calculated based on today: May 30, 2026)
-  final List<Map<String, dynamic>> _mockTerms = [
-    {
-      'id': 'exam_term1',
-      'name': 'Term 1',
-      'start_date': '2025-04-01',
-      'end_date': '2025-09-15',
-    },
-    {
-      'id': 'exam_term2',
-      'name': 'Term 2',
-      'start_date': '2025-10-01',
-      'end_date': '2026-02-28',
-    },
-    {
-      'id': 'exam_annual',
-      'name': 'Annual Assessment',
-      'start_date': '2026-03-01',
-      'end_date': '2026-05-30', // Ends today, evaluates as Active
-    },
-    {
-      'id': 'exam_term3',
-      'name': 'Term 3 (Upcoming)',
-      'start_date': '2026-06-15',
-      'end_date': '2026-10-30', // Evaluates as Upcoming
-    }
-  ];
 
-  // Mock exam counts per term for offline fallback
-  final Map<String, int> _mockExamsCount = {
-    'exam_term1': 5,
-    'exam_term2': 4,
-    'exam_annual': 6,
-    'exam_term3': 0,
-  };
 
   @override
   void initState() {
@@ -76,46 +42,40 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
     });
 
     try {
-      // 1. Fetch terms from Supabase terms table, ordered by start_date ascending
+      // 1. Fetch terms from Supabase Term table, ordered by startDate ascending
       final termsResponse = await Supabase.instance.client
-          .from('terms')
+          .from('Term')
           .select()
-          .order('start_date', ascending: true);
+          .order('startDate', ascending: true);
 
       final List<Map<String, dynamic>> termsData = List<Map<String, dynamic>>.from(termsResponse);
 
-      if (termsData.isNotEmpty) {
-        _termsList = termsData;
+      _termsList = termsData;
 
-        // 2. Fetch exam counts to build mapping
-        try {
-          final examsResponse = await Supabase.instance.client
-              .from('exams')
-              .select('id, term_id');
-          
-          final List<Map<String, dynamic>> examsData = List<Map<String, dynamic>>.from(examsResponse);
-          
-          _examsCountMap.clear();
-          for (var exam in examsData) {
-            final termId = exam['term_id'] as String?;
-            if (termId != null) {
-              _examsCountMap[termId] = (_examsCountMap[termId] ?? 0) + 1;
-            }
+      // 2. Fetch exam counts to build mapping from Exam table
+      try {
+        final examsResponse = await Supabase.instance.client
+            .from('Exam')
+            .select('id, termId');
+        
+        final List<Map<String, dynamic>> examsData = List<Map<String, dynamic>>.from(examsResponse);
+        
+        _examsCountMap.clear();
+        for (var exam in examsData) {
+          final termId = exam['termId'] as String?;
+          if (termId != null) {
+            _examsCountMap[termId] = (_examsCountMap[termId] ?? 0) + 1;
           }
-        } catch (e) {
-          // If exams table schema is missing term_id, fallback to mock counts
-          _loadMockExamsCount();
         }
-
-        setState(() {});
-        return;
+      } catch (e) {
+        debugPrint('Error loading exam counts: $e');
+        _examsCountMap.clear();
       }
 
-      // Empty DB fallback
-      _loadFallbackData();
+      setState(() {});
     } catch (e) {
-      // Offline fallback
-      _loadFallbackData();
+      _termsList = [];
+      _examsCountMap.clear();
       debugPrint('Error loading academic terms: $e');
     } finally {
       if (mounted) {
@@ -124,16 +84,6 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
         });
       }
     }
-  }
-
-  void _loadFallbackData() {
-    _termsList = _mockTerms;
-    _loadMockExamsCount();
-  }
-
-  void _loadMockExamsCount() {
-    _examsCountMap.clear();
-    _examsCountMap.addAll(_mockExamsCount);
   }
 
   // Format date helper: returns "DD MMM YYYY" (e.g. "20 May 2026")
@@ -247,8 +197,8 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
                           ..._termsList.map((term) {
                             final termId = term['id'] as String;
                             final name = term['name'] as String;
-                            final start = term['start_date'] as String?;
-                            final end = term['end_date'] as String?;
+                            final start = term['startDate'] as String?;
+                            final end = term['endDate'] as String?;
 
                             // Dynamic calculations
                             final statusInfo = _getTermStatus(start, end);

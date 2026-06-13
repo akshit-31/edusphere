@@ -36,64 +36,15 @@ class _TimetableScreenState extends State<TimetableScreen> {
   ];
 
   final List<List<dynamic>> _defaultGridData = [
-    [
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-    ],
-    [
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
-    ],
-    [
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      null,
-    ],
+    [null, null, null, null, null, null],
+    [null, null, null, null, null, null],
+    [null, null, null, null, null, null],
     List.generate(6, (index) => 'Break'),
-    [
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 8A', 'rm': 'Room 201', 'color': const Color(0xFFDCFCE7), 'text': const Color(0xFF166534)},
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
-      null,
-    ],
-    [
-      null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      {'sub': 'Mathematics', 'cls': 'Class 8B', 'rm': 'Room 201', 'color': const Color(0xFFF3E8FF), 'text': const Color(0xFF6B21A8)},
-      {'sub': 'Mathematics', 'cls': 'Class 9B', 'rm': 'Room 203', 'color': const Color(0xFFFEF9C3), 'text': const Color(0xFF854D0E)},
-      null,
-    ],
+    [null, null, null, null, null, null],
+    [null, null, null, null, null, null],
     List.generate(6, (index) => 'Lunch'),
-    [
-      null,
-      null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
-      null,
-      {'sub': 'Mathematics', 'cls': 'Class 10A', 'rm': 'Room 205', 'color': const Color(0xFFDBEAFE), 'text': const Color(0xFF1E40AF)},
-      null,
-    ],
-    [
-      null,
-      null,
-      null,
-      {'sub': 'Mathematics', 'cls': 'Class 9A', 'rm': 'Room 202', 'color': const Color(0xFFF0FDF4), 'text': const Color(0xFF15803D)},
-      null,
-      null,
-    ],
+    [null, null, null, null, null, null],
+    [null, null, null, null, null, null],
   ];
 
   List<List<dynamic>> _gridData = [];

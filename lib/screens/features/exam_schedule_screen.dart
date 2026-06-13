@@ -1054,10 +1054,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                       child: GestureDetector(
                         onTap: () {
                           final examName = e['name'] as String? ?? 'Untitled';
+                          final examId = e['id'] as String? ?? '';
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ExamDetailScreen(examName: examName),
+                              builder: (context) => ExamDetailScreen(examName: examName, examId: examId),
                             ),
                           );
                         },
