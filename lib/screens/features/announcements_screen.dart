@@ -17,10 +17,9 @@ class AnnouncementModel {
   final String content;
   final String priority; // 'URGENT' | 'HIGH' | 'NORMAL' | 'LOW'
   final String audience; // 'ALL' | 'STUDENTS' | 'TEACHERS'
-  final String date;
-  final String? expiresAt;
   final String dateStr;
   final DateTime date;
+  final String? expiresAt;
   bool isRead;
 
   AnnouncementModel({
@@ -41,10 +40,9 @@ class AnnouncementModel {
         'content': content,
         'priority': priority,
         'audience': audience,
-        'date': date,
-        'expiresAt': expiresAt,
         'dateStr': dateStr,
         'date': date.toIso8601String(),
+        'expiresAt': expiresAt,
         'isRead': isRead,
       };
 
@@ -54,10 +52,9 @@ class AnnouncementModel {
         content: json['content'] as String,
         priority: json['priority'] as String,
         audience: json['audience'] as String,
-        date: json['date'] as String,
-        expiresAt: json['expiresAt'] as String?,
         dateStr: json['dateStr'] as String? ?? '',
         date: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+        expiresAt: json['expiresAt'] as String?,
         isRead: json['isRead'] as bool? ?? false,
       );
 }
@@ -310,10 +307,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               content: e['content'] as String? ?? '',
               priority: priorityStr,
               audience: aud.isEmpty ? 'ALL' : aud.join(', '),
-              date: formattedDate,
               expiresAt: e['expiresAt'] as String?,
-            );
-          }).toList();
               dateStr: formattedDate,
               date: parsedDate,
               isRead: readIds.contains(annId),
@@ -712,6 +706,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                                       content: contentCtrl.text.trim(),
                                       priority: selectedPriority,
                                       audience: selectedAudience,
+                                      dateStr: editItem.dateStr,
                                       date: editItem.date,
                                       expiresAt: expiryIso,
                                     );
@@ -723,7 +718,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                                       content: contentCtrl.text.trim(),
                                       priority: selectedPriority,
                                       audience: selectedAudience,
-                                      date: "Today",
+                                      dateStr: "Today",
+                                      date: DateTime.now(),
                                       expiresAt: expiryIso,
                                     );
                                     _addAnnouncement(newAnn);
@@ -752,30 +748,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
                                   ),
-                              return;
-                            }
-
-                            final newAnn = AnnouncementModel(
-                              id: DateTime.now().millisecondsSinceEpoch.toString(),
-                              title: titleCtrl.text.trim(),
-                              content: contentCtrl.text.trim(),
-                              priority: selectedPriority,
-                              audience: selectedAudience,
-                              dateStr: "Today",
-                              date: DateTime.now(),
-                            );
-
-                            _addAnnouncement(newAnn);
-                            Navigator.pop(context);
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    const Icon(Icons.check_circle_rounded, color: Colors.white),
-                                    SizedBox(width: 8.w),
-                                    Text('Announcement published!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-                                  ],
                                 ),
                               ),
                             ),
@@ -1664,22 +1636,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             ),
                           ),
                         )),
-                        )).toList(),
-                      ),
-                      SizedBox(height: 12.h),
-                    ],
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF6B7A90)),
-                        SizedBox(width: 6.w),
-                        Text(
-                          ann.dateStr,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            color: const Color(0xFF6B7A90),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -1710,7 +1666,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   Icon(Icons.calendar_today_outlined, size: 14.sp, color: const Color(0xFF64748B)),
                   SizedBox(width: 6.w),
                   Text(
-                    ann.date,
+                    ann.dateStr,
                     style: GoogleFonts.inter(
                       fontSize: 12.sp,
                       color: const Color(0xFF64748B),

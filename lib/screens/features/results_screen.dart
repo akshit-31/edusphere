@@ -2,7 +2,6 @@ import 'dart:developer' as dev;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -271,7 +270,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           final res = await ApiService.instance.get('students/$_studentId/results');
           if (res != null && res['success'] == true) {
             final List<dynamic> rawResults = res['results'] ?? res['data'] ?? [];
-            final String mockExamId = 'mock_exam_1';
+            const String mockExamId = 'mock_exam_1';
             groupedExamsMap[mockExamId] = GroupedExam(
               id: mockExamId,
               name: 'Latest Examination',
@@ -444,7 +443,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       pw.Row(
                         children: [
                           _buildSummaryBox('TOTAL MARKS', '$total / $maxTotal', PdfColors.black),
-                          _buildSummaryBox('PERCENTAGE', '${pct.toStringAsFixed(1)}%', PdfColor.fromInt(0xFF0EA5E9)),
+                          _buildSummaryBox('PERCENTAGE', '${pct.toStringAsFixed(1)}%', const PdfColor.fromInt(0xFF0EA5E9)),
                           _buildSummaryBox('GRADE', overallGrade, const PdfColor.fromInt(0xFF22C55E)),
                           _buildSummaryBox('RESULT', isPass ? 'PASS' : 'FAIL', isPass ? const PdfColor.fromInt(0xFF22C55E) : PdfColors.red, noBorderRight: true),
                         ],
@@ -458,9 +457,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       
                       pw.TableHelper.fromTextArray(
                         context: ctx,
-                        border: pw.TableBorder(
-                          bottom: const pw.BorderSide(color: PdfColors.grey300),
-                          horizontalInside: const pw.BorderSide(color: PdfColors.grey300),
+                        border: const pw.TableBorder(
+                          bottom: pw.BorderSide(color: PdfColors.grey300),
+                          horizontalInside: pw.BorderSide(color: PdfColors.grey300),
                         ),
                         headerStyle: pw.TextStyle(
                           fontWeight: pw.FontWeight.bold,
@@ -684,7 +683,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           )

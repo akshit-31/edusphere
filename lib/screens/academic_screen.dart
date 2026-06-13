@@ -69,7 +69,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
   String _sectionId = '';
   List<Map<String, dynamic>> _studentSubjects = [];
   List<Map<String, dynamic>> _timetableSlots = [];
-  List<Map<String, dynamic>> _attendanceRecords = [];
+  final List<Map<String, dynamic>> _attendanceRecords = [];
   double _attendanceRate = 100.0;
   bool _hasAttendanceData = false;
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();

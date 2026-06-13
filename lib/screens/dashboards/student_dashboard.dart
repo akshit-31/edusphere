@@ -302,35 +302,31 @@ class _StudentDashboardState extends State<StudentDashboard>
           final monthStart =
               '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
           
-          List<dynamic> records = [];
-          
-          final attRes = await ApiService.instance.get(
-            'students/$studentId/attendance',
-            queryParams: {'startDate': monthStart},
-          );
-          
-          if (attRes['success'] == true) {
-            final stats = attRes['stats'] as Map? ?? {};
-            final pct = (stats['percentage'] ?? 0) as num;
-            if (mounted) {
-              setState(() {
-                attendanceRate = pct.toDouble();
-                _attendanceLoaded = true;
-              });
+          bool apiLoaded = false;
+          try {
+            final attRes = await ApiService.instance.get(
+              'students/$studentId/attendance',
+              queryParams: {'startDate': monthStart},
+            );
+            
+            if (attRes['success'] == true) {
+              final stats = attRes['stats'] as Map? ?? {};
+              final pct = (stats['percentage'] ?? 0) as num;
+              if (mounted) {
+                setState(() {
+                  attendanceRate = pct.toDouble();
+                  _attendanceLoaded = true;
+                });
+              }
+              apiLoaded = true;
             }
-          } else {
-            if (mounted) {
-              setState(() {
-                attendanceRate = 100.0;
-                _attendanceLoaded = true;
-              });
-            }
+          } catch (e) {
+            dev.log('Error loading attendance from API: $e');
           }
-        } catch (e) {
-          dev.log('Error loading attendance from API: $e');
-            records = attRes['attendance'] as List? ?? [];
-          } else {
+
+          if (!apiLoaded) {
             // Fallback to Supabase
+            List<dynamic> records = [];
             try {
               records = await Supabase.instance.client
                   .from('AttendanceRecord')
@@ -341,22 +337,22 @@ class _StudentDashboardState extends State<StudentDashboard>
             } catch (e) {
               dev.log('Fallback attendance fetch failed: $e');
             }
-          }
-          
-          double pct = 0.0;
-          if (records.isNotEmpty) {
-            final presentOrLate = records.where((r) {
-              final status = r['status']?.toString().toUpperCase();
-              return status == 'PRESENT' || status == 'LATE';
-            }).length;
-            pct = (presentOrLate / records.length) * 100.0;
-          }
-          
-          if (mounted) {
-            setState(() {
-              attendanceRate = pct;
-              _attendanceLoaded = true;
-            });
+            
+            double pct = 0.0;
+            if (records.isNotEmpty) {
+              final presentOrLate = records.where((r) {
+                final status = r['status']?.toString().toUpperCase();
+                return status == 'PRESENT' || status == 'LATE';
+              }).length;
+              pct = (presentOrLate / records.length) * 100.0;
+            }
+            
+            if (mounted) {
+              setState(() {
+                attendanceRate = pct;
+                _attendanceLoaded = true;
+              });
+            }
           }
         } catch (e) {
           dev.log('Error loading attendance: $e');

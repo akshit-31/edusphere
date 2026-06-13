@@ -248,16 +248,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         String statusLabel = 'Not Marked';
         if (record != null) {
           final status = record['status'] as String? ?? '';
-          if (status == 'PRESENT' || status == 'P') statusLabel = 'Present';
-          else if (status == 'ABSENT' || status == 'A') statusLabel = 'Absent';
-          else if (status == 'LATE' || status == 'Late') statusLabel = 'Late';
-          else if (status == 'HALF_DAY') statusLabel = 'Half Day';
-          else if (status == 'ON_LEAVE') statusLabel = 'Leave';
-          else if (status == 'HOLIDAY') statusLabel = 'Holiday';
-          else if (status == 'EVENT') statusLabel = 'Event';
-          else if (status == 'EXAM') statusLabel = 'Exam';
-          else if (status == 'EMERGENCY') statusLabel = 'Emergency';
-          else if (status == 'NOTICE') statusLabel = 'Notice';
+          if (status == 'PRESENT' || status == 'P') {
+            statusLabel = 'Present';
+          } else if (status == 'ABSENT' || status == 'A') {
+            statusLabel = 'Absent';
+          } else if (status == 'LATE' || status == 'Late') {
+            statusLabel = 'Late';
+          } else if (status == 'HALF_DAY') {
+            statusLabel = 'Half Day';
+          } else if (status == 'ON_LEAVE') {
+            statusLabel = 'Leave';
+          } else if (status == 'HOLIDAY') {
+            statusLabel = 'Holiday';
+          } else if (status == 'EVENT') {
+            statusLabel = 'Event';
+          } else if (status == 'EXAM') {
+            statusLabel = 'Exam';
+          } else if (status == 'EMERGENCY') {
+            statusLabel = 'Emergency';
+          } else if (status == 'NOTICE') {
+            statusLabel = 'Notice';
+          }
         } else if (isWeekend) {
           statusLabel = 'Weekend';
         }
@@ -283,7 +294,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               pw.SizedBox(height: 20),
               pw.Container(
                 padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(color: PdfColors.grey100, borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8))),
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100, borderRadius: pw.BorderRadius.all(pw.Radius.circular(8))),
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
@@ -327,26 +338,42 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     
                     if (record != null) {
                       final status = record['status'] as String? ?? '';
-                      if (status == 'PRESENT' || status == 'P') statusLabel = 'Present';
-                      else if (status == 'ABSENT' || status == 'A') statusLabel = 'Absent';
-                      else if (status == 'LATE' || status == 'Late') statusLabel = 'Late';
-                      else if (status == 'HALF_DAY') statusLabel = 'Half Day';
-                      else if (status == 'ON_LEAVE') statusLabel = 'Leave';
-                      else if (status == 'HOLIDAY') statusLabel = 'Holiday';
-                      else if (status == 'EVENT') statusLabel = 'Event';
-                      else if (status == 'EXAM') statusLabel = 'Exam';
-                      else if (status == 'EMERGENCY') statusLabel = 'Emergency';
-                      else if (status == 'NOTICE') statusLabel = 'Notice';
+                      if (status == 'PRESENT' || status == 'P') {
+                        statusLabel = 'Present';
+                      } else if (status == 'ABSENT' || status == 'A') {
+                        statusLabel = 'Absent';
+                      } else if (status == 'LATE' || status == 'Late') {
+                        statusLabel = 'Late';
+                      } else if (status == 'HALF_DAY') {
+                        statusLabel = 'Half Day';
+                      } else if (status == 'ON_LEAVE') {
+                        statusLabel = 'Leave';
+                      } else if (status == 'HOLIDAY') {
+                        statusLabel = 'Holiday';
+                      } else if (status == 'EVENT') {
+                        statusLabel = 'Event';
+                      } else if (status == 'EXAM') {
+                        statusLabel = 'Exam';
+                      } else if (status == 'EMERGENCY') {
+                        statusLabel = 'Emergency';
+                      } else if (status == 'NOTICE') {
+                        statusLabel = 'Notice';
+                      }
                       
                       final checkInVal = record['checkInTime'] ?? record['createdAt'];
                       if (checkInVal != null) {
                         try { checkInStr = intl.DateFormat('hh:mm a').format(DateTime.parse(checkInVal.toString()).toLocal()); } catch (_) {}
                       }
                       
-                      if (record['scannedByQR'] == true) markedByStr = 'QR Scan';
-                      else if (record['scannedByRFID'] == true) markedByStr = 'RFID';
-                      else if (record['markedBy'] != null) markedByStr = 'Teacher';
-                      else markedByStr = 'System';
+                      if (record['scannedByQR'] == true) {
+                        markedByStr = 'QR Scan';
+                      } else if (record['scannedByRFID'] == true) {
+                        markedByStr = 'RFID';
+                      } else if (record['markedBy'] != null) {
+                        markedByStr = 'Teacher';
+                      } else {
+                        markedByStr = 'System';
+                      }
                     } else if (isWeekend) {
                       statusLabel = 'Weekend';
                     }
@@ -428,7 +455,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -565,7 +592,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           child: Container(
                             padding: EdgeInsets.all(8.r),
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFF0052CC).withOpacity(0.3)),
+                              border: Border.all(color: const Color(0xFF0052CC).withValues(alpha: 0.3)),
                               color: const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(8.r),
                             ),
@@ -715,7 +742,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -808,16 +835,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             String statusLabel = 'Not Marked';
                             if (record != null) {
                               final status = record['status'] as String? ?? '';
-                              if (status == 'PRESENT' || status == 'P') statusLabel = 'Present';
-                              else if (status == 'ABSENT' || status == 'A') statusLabel = 'Absent';
-                              else if (status == 'LATE' || status == 'Late') statusLabel = 'Late';
-                              else if (status == 'HALF_DAY') statusLabel = 'Half Day';
-                              else if (status == 'ON_LEAVE') statusLabel = 'Leave';
-                              else if (status == 'HOLIDAY') statusLabel = 'Holiday';
-                              else if (status == 'EVENT') statusLabel = 'Event';
-                              else if (status == 'EXAM') statusLabel = 'Exam';
-                              else if (status == 'EMERGENCY') statusLabel = 'Emergency';
-                              else if (status == 'NOTICE') statusLabel = 'Notice';
+                              if (status == 'PRESENT' || status == 'P') {
+                                statusLabel = 'Present';
+                              } else if (status == 'ABSENT' || status == 'A') {
+                                statusLabel = 'Absent';
+                              } else if (status == 'LATE' || status == 'Late') {
+                                statusLabel = 'Late';
+                              } else if (status == 'HALF_DAY') {
+                                statusLabel = 'Half Day';
+                              } else if (status == 'ON_LEAVE') {
+                                statusLabel = 'Leave';
+                              } else if (status == 'HOLIDAY') {
+                                statusLabel = 'Holiday';
+                              } else if (status == 'EVENT') {
+                                statusLabel = 'Event';
+                              } else if (status == 'EXAM') {
+                                statusLabel = 'Exam';
+                              } else if (status == 'EMERGENCY') {
+                                statusLabel = 'Emergency';
+                              } else if (status == 'NOTICE') {
+                                statusLabel = 'Notice';
+                              }
                             } else if (isWeekend) {
                               statusLabel = 'Weekend';
                             }
