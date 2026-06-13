@@ -437,6 +437,47 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     );
   }
 
+  Widget _actionBtn(
+    IconData icon,
+    String label, {
+    IconData? trailingIcon,
+    bool isActive = false,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFE0F2FE) : Colors.white,
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(
+            color: isActive ? const Color(0xFF0066CC) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16.sp, color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569)),
+            SizedBox(width: 6.w),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12.sp,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569),
+              ),
+            ),
+            if (trailingIcon != null) ...[
+              SizedBox(width: 4.w),
+              Icon(trailingIcon, size: 16.sp, color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showFiltersMenu(BuildContext context, RenderBox button) {
     final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
     final RelativeRect position = RelativeRect.fromRect(
