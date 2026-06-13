@@ -7,6 +7,8 @@ import '../../theme/colors.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import '../../config/api_config.dart';
+import '../../widgets/teacher_app_bar.dart';
+import '../main_screen.dart';
 
 
 // ── Student Model ────────────────────────────────────────────────────────────
@@ -222,32 +224,9 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: Navigator.canPop(context)
-                  ? const BackButton(color: Colors.black)
-                  : IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.black),
-                      onPressed: widget.onOpenDrawer,
-                    ),
-              title: Text(
-                'EduSphere',
-                style: GoogleFonts.outfit(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_none_rounded, color: Colors.black),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
+          ? const TeacherAppBar(title: 'EduSphere')
           : null,
+      bottomNavigationBar: widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 2) : null,
       body: RefreshIndicator(
         onRefresh: _fetchStudents,
         color: const Color(0xFF0066CC),

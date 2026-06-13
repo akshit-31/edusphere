@@ -8,6 +8,7 @@ import 'package:gal/gal.dart';
 import '../../services/api_service.dart';
 import 'dart:developer' as dev;
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Event model
@@ -320,33 +321,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
           ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic Calendar')
           : null,
       appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: Icon(Icons.menu, size: 28.sp, color: const Color(0xFF0F172A)),
-                onPressed: () {
-                  _scaffoldKey.currentState?.openDrawer();
-                  widget.onOpenDrawer?.call();
-                },
-              ),
-              title: Text(
-                'EduSphere',
-                style: GoogleFonts.outfit(
-                  fontSize: 22.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon:
-                      Icon(Icons.notifications_none_rounded, size: 26.sp),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
+          ? const TeacherAppBar(title: 'EduSphere')
           : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -447,10 +422,8 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     const activeColor = Color(0xFF0066CC);
     const inactiveColor = Color(0xFF475569);
     final bg = isActive ? const Color(0xFFE0F2FE) : Colors.white;
-    final borderCol = isActive ? const Color(0xFFBAE6FD) : const Color(0xFFE2E8F0);
+    final borderCol = isActive ? const Color(0xFF0066CC) : const Color(0xFFE2E8F0);
 
-    required VoidCallback onTap,
-  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -466,11 +439,6 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
               offset: const Offset(0, 2),
             ),
           ],
-          color: isActive ? const Color(0xFFE0F2FE) : Colors.white,
-          borderRadius: BorderRadius.circular(8.r),
-          border: Border.all(
-            color: isActive ? const Color(0xFF0066CC) : const Color(0xFFE2E8F0),
-          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -480,16 +448,13 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
               size: 16.sp,
               color: isActive ? activeColor : inactiveColor,
             ),
-            Icon(icon, size: 16.sp, color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569)),
             SizedBox(width: 6.w),
             Text(
               label,
               style: GoogleFonts.inter(
                 fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-                color: isActive ? activeColor : const Color(0xFF0F172A),
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569),
+                color: isActive ? activeColor : const Color(0xFF0F172A),
               ),
             ),
             if (trailingIcon != null) ...[
@@ -499,7 +464,6 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
                 size: 16.sp,
                 color: isActive ? activeColor : inactiveColor,
               ),
-              Icon(trailingIcon, size: 16.sp, color: isActive ? const Color(0xFF0066CC) : const Color(0xFF475569)),
             ],
           ],
         ),

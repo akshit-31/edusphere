@@ -7,6 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import '../../theme/colors.dart';
 import '../profile_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
+import '../main_screen.dart';
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TeacherScanScreen – Camera QR scanner for marking student attendance
@@ -394,21 +397,8 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4FF),
-      appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              iconTheme: const IconThemeData(color: Color(0xFF0F2547)),
-              title: Text(
-                'QR Attendance Scanner',
-                style: GoogleFonts.outfit(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F2547),
-                ),
-              ),
-            )
-          : null,
+      appBar: widget.showAppBar ? const TeacherAppBar(title: 'QR Attendance Scanner') : null,
+      bottomNavigationBar: widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 5) : null,
       body: SafeArea(
         child: Column(
           children: [

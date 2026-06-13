@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import '../../theme/colors.dart';
 import 'announcements_screen.dart'; // To access AnnouncementModel
 
 class AnnouncementDetailsScreen extends StatelessWidget {

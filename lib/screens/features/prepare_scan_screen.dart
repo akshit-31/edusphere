@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../theme/colors.dart';
 import 'scanner_live_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
+import '../main_screen.dart';
 
 class PrepareScanScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -84,19 +86,10 @@ class _PrepareScanScreenState extends State<PrepareScanScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: (isDesktop || !widget.showAppBar)
           ? null
-          : AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              leading: const BackButton(color: Colors.black),
-              title: Text(
-                'Prepare Scanning',
-                style: GoogleFonts.outfit(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-            ),
+          : const TeacherAppBar(title: 'Prepare Scanning'),
+      bottomNavigationBar: (isDesktop || !widget.showAppBar)
+          ? null
+          : const TeacherBottomNavBar(activeIndex: 5),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 20.h),

@@ -8,6 +8,7 @@ import 'package:qr_code_scanner/qr_code_scanner.dart';
 import '../../config/supabase_config.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 import '../profile_screen.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
@@ -496,33 +497,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     final isDesktop = size.width > 800;
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-        leading: IconButton(
-          icon: const Icon(Icons.menu, size: 28),
-          onPressed: () {
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            MainScreen.openDrawer();
-          },
-        ),
-        title: Text(
-          'EduSphere',
-          style: GoogleFonts.outfit(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, size: 28),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: const TeacherAppBar(title: 'EduSphere'),
 
       backgroundColor: const Color(0xFFF8FAFC),
       bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 5),

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart' as intl;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as dev;
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 import 'exam_detail_screen.dart';
 
 class ExamScheduleScreen extends StatefulWidget {
@@ -481,44 +482,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       drawer: isPushed ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Examinations') : null,
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              leading: IconButton(
-                icon: const Icon(Icons.menu, color: Color(0xFF0F172A)),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              actions: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_active_outlined, color: Color(0xFF3B82F6)),
-                      onPressed: () {},
-                    ),
-                    Positioned(
-                      right: 12.w,
-                      top: 12.h,
-                      child: Container(
-                        width: 8.r,
-                        height: 8.r,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF10B981), // green dot
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.notifications_none_outlined, color: Color(0xFF0F172A)),
-                  onPressed: () {},
-                ),
-                SizedBox(width: 8.w),
-              ],
-            )
+          ? const TeacherAppBar(title: 'EduSphere')
           : null,
       body: Stack(
         children: [

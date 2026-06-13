@@ -382,7 +382,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     controller: _emailCtrl,
                     decoration: _inputDeco(hintText: 'admin@school.com'),
                     style: GoogleFonts.inter(
-                      fontSize: 14.0,
                       fontSize: 14.sp > 0 ? 14.sp : 14.0,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF0F172A),
@@ -411,7 +410,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     ),
                     style: GoogleFonts.inter(
-                      fontSize: 14.0,
                       fontSize: 14.sp > 0 ? 14.sp : 14.0,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF0F172A),
@@ -490,7 +488,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return InputDecoration(
       hintText: hintText,
       hintStyle: GoogleFonts.inter(
-        fontSize: 14.0,
         fontSize: 14.sp > 0 ? 14.sp : 14.0,
         color: const Color(0xFF94A3B8),
         fontWeight: FontWeight.w400,

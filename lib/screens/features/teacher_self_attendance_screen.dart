@@ -8,6 +8,8 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
+import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 class TeacherPersonalAttendanceScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -255,6 +257,8 @@ class _TeacherPersonalAttendanceScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      appBar: const TeacherAppBar(title: 'My Attendance'),
+      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 3),
       body: Column(
         children: [
           PageHeader(

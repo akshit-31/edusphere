@@ -7,6 +7,7 @@ import '../../widgets/common_widgets.dart';
 import 'exam_report_card_screen.dart';
 import 'exam_approval_screen.dart';
 import '../main_screen.dart';
+import '../../widgets/teacher_app_bar.dart';
 
 class ExamTermsScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -156,6 +157,7 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
       key: _scaffoldKey,
       drawer: (isPushed && _isTeacher) ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Academic') : null,
       backgroundColor: AppColors.background,
+      appBar: _isTeacher ? const TeacherAppBar(title: 'Academic Terms') : null,
       bottomNavigationBar: _isTeacher ? const TeacherBottomNavBar(activeIndex: 7) : null,
       body: Column(
         children: [
