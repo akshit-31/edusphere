@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'dart:developer' as dev;
 import 'package:intl/intl.dart' as intl;
 import '../../services/api_service.dart';
+import 'package:edusphere/theme/typography.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -204,13 +205,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       lastDate: DateTime(2100),
       builder: (context, child) {
         return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+          data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(
               primary: Color(0xFF0052CC), 
               onPrimary: Colors.white,
               onSurface: AppColors.textDark,
-            ),
-          ),
+            )),
           child: child!,
         );
       },
@@ -287,7 +286,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Attendance Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF0052CC))),
-                    pw.Text('Generated: $dateStr', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                    pw.Text('Generated: $dateStr', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600)),
                   ],
                 ),
               ),
@@ -320,10 +319,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               pw.SizedBox(height: 20),
               pw.TableHelper.fromTextArray(
                 context: ctx,
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 11),
+                headerStyle: pw.TextStyle(fontSize: 12, color: PdfColors.white),
                 headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF0052CC)),
                 oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
-                cellStyle: const pw.TextStyle(fontSize: 11),
+                cellStyle: const pw.TextStyle(fontSize: 12),
                 data: <List<String>>[
                   ['Date', 'Status', 'Marked By', 'Check-in Time'],
                   ...filteredDates.map((date) {
@@ -412,7 +411,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           icon: Icon(Icons.arrow_back, color: const Color(0xFF0052CC), size: 24.sp),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Back', style: GoogleFonts.inter(color: const Color(0xFF0052CC), fontSize: 14.sp, fontWeight: FontWeight.w600)),
+        title: Text('Back', style: AppTypography.small.copyWith(color: const Color(0xFF0052CC))),
         titleSpacing: -8, // pull "Back" closer to the arrow
       ),
       body: _isLoading 
@@ -429,20 +428,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   // Title Section
                   Text(
                     'Attendance Record',
-                    style: GoogleFonts.inter(
-                      fontSize: 24.sp,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0052CC),
-                    ),
+                    style: AppTypography.h3.copyWith(color: const Color(0xFF0052CC)),
                   ),
                   SizedBox(height: 6.h),
                   Text(
                     'History of your academic presence.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF64748B),
-                    ),
+                    style: AppTypography.small.copyWith(color: const Color(0xFF64748B)),
                   ),
                   SizedBox(height: 24.h),
 
@@ -471,7 +462,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               children: [
                                 Text(
                                   'START DATE',
-                                  style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                 ),
                                 SizedBox(height: 4.h),
                                 Row(
@@ -482,7 +473,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                         alignment: Alignment.centerLeft,
                                         child: Text(
                                           intl.DateFormat('dd-MM-yyyy').format(_startDate),
-                                          style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF334155)),
+                                          style: AppTypography.caption.copyWith(color: const Color(0xFF334155)),
                                         ),
                                       ),
                                     ),
@@ -506,7 +497,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               children: [
                                 Text(
                                   'END DATE',
-                                  style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w700, color: const Color(0xFF475569)),
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                 ),
                                 SizedBox(height: 4.h),
                                 Row(
@@ -517,7 +508,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                         alignment: Alignment.centerLeft,
                                         child: Text(
                                           intl.DateFormat('dd-MM-yyyy').format(_endDate),
-                                          style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF334155)),
+                                          style: AppTypography.caption.copyWith(color: const Color(0xFF334155)),
                                         ),
                                       ),
                                     ),
@@ -556,7 +547,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 SizedBox(width: 8.w),
                                 Text(
                                   'Filters',
-                                  style: GoogleFonts.inter(fontSize: 13.sp, color: const Color(0xFF1E293B), fontWeight: FontWeight.w400),
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF1E293B)),
                                 ),
                                 SizedBox(width: 8.w),
                                 Icon(Icons.keyboard_arrow_down, size: 16.sp, color: const Color(0xFF64748B)),
@@ -577,11 +568,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               ),
                               child: Text(
                                 filter,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13.sp, 
-                                  fontWeight: FontWeight.w400,
-                                  color: const Color(0xFF1E293B),
-                                ),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF1E293B)),
                               ),
                             ),
                           )).toList(),
@@ -626,7 +613,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   children: [
                                     Text(
                                       'TOTAL PRESENT',
-                                      style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF16A34A)),
+                                      style: AppTypography.caption.copyWith(color: const Color(0xFF16A34A)),
                                     ),
                                     SizedBox(width: 4.w),
                                     Icon(Icons.check_circle_outline, size: 16.sp, color: const Color(0xFF16A34A)),
@@ -637,11 +624,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text('$_presentCount', style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFF16A34A))),
+                                  Text('$_presentCount', style: AppTypography.h3.copyWith(color: const Color(0xFF16A34A))),
                                   SizedBox(width: 4.w),
                                   Padding(
                                     padding: EdgeInsets.only(bottom: 4.h),
-                                    child: Text(_presentCount == 1 ? 'day' : 'days', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF16A34A))),
+                                    child: Text(_presentCount == 1 ? 'day' : 'days', style: AppTypography.caption.copyWith(color: const Color(0xFF16A34A))),
                                   ),
                                 ],
                               ),
@@ -669,7 +656,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   children: [
                                     Text(
                                       'TOTAL ABSENT',
-                                      style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFFDC2626)),
+                                      style: AppTypography.caption.copyWith(color: const Color(0xFFDC2626)),
                                     ),
                                     SizedBox(width: 4.w),
                                     Icon(Icons.cancel_outlined, size: 16.sp, color: const Color(0xFFDC2626)),
@@ -680,11 +667,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text('$_absentCount', style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFFDC2626))),
+                                  Text('$_absentCount', style: AppTypography.h3.copyWith(color: const Color(0xFFDC2626))),
                                   SizedBox(width: 4.w),
                                   Padding(
                                     padding: EdgeInsets.only(bottom: 4.h),
-                                    child: Text(_absentCount == 1 ? 'day' : 'days', style: GoogleFonts.inter(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFFDC2626))),
+                                    child: Text(_absentCount == 1 ? 'day' : 'days', style: AppTypography.caption.copyWith(color: const Color(0xFFDC2626))),
                                   ),
                                 ],
                               ),
@@ -712,7 +699,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   children: [
                                     Text(
                                       'ATTENDANCE %',
-                                      style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w800, color: const Color(0xFF0052CC)),
+                                      style: AppTypography.caption.copyWith(color: const Color(0xFF0052CC)),
                                     ),
                                     SizedBox(width: 4.w),
                                     Icon(Icons.calendar_today_outlined, size: 16.sp, color: const Color(0xFF0052CC)),
@@ -722,7 +709,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               SizedBox(height: 12.h),
                               Text(
                                 '${_attendanceRate.toStringAsFixed(0)}%', 
-                                style: GoogleFonts.inter(fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFF0052CC))
+                                style: AppTypography.h3.copyWith(color: const Color(0xFF0052CC))
                               ),
                             ],
                           ),
@@ -753,19 +740,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       children: [
                         Text(
                           'Detailed Logs',
-                          style: GoogleFonts.inter(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1E293B),
-                          ),
+                          style: AppTypography.body.copyWith(color: const Color(0xFF1E293B)),
                         ),
                         SizedBox(height: 4.h),
                         Text(
                           'Comprehensive history showing all dates in the range.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12.sp,
-                            color: const Color(0xFF64748B),
-                          ),
+                          style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
                         ),
                         SizedBox(height: 24.h),
                         
@@ -776,22 +756,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               flex: 3,
                               child: Text(
                                 'Date',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF475569),
-                                ),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                               ),
                             ),
                             Expanded(
                               flex: 2,
                               child: Text(
                                 'Status',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF475569),
-                                ),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                               ),
                             ),
                             Expanded(
@@ -799,11 +771,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               child: Center(
                                 child: Text(
                                   'Marked By',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF475569),
-                                  ),
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                 ),
                               ),
                             ),
@@ -811,11 +779,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               flex: 2,
                               child: Text(
                                 'Check-in Time',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF475569),
-                                ),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                 textAlign: TextAlign.right,
                               ),
                             ),
@@ -868,11 +832,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               child: Center(
                                 child: Text(
                                   'No records match your filter',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    color: const Color(0xFF94A3B8),
-                                    fontStyle: FontStyle.italic,
-                                  ),
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8), fontStyle: FontStyle.italic),
                                 ),
                               ),
                             );
@@ -990,21 +950,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                         children: [
                                           Text(
                                             dateStr,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12.sp,
-                                              fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF1E293B),
-                                            ),
+                                            style: AppTypography.caption.copyWith(color: const Color(0xFF1E293B)),
                                           ),
                                           if (isWeekend && record == null) ...[
                                             SizedBox(height: 2.h),
                                             Text(
                                               'HOLIDAY/WEEKEND',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 9.sp,
-                                                fontWeight: FontWeight.w600,
-                                                color: const Color(0xFF94A3B8),
-                                              ),
+                                              style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
                                             ),
                                           ],
                                         ],
@@ -1029,11 +981,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                                   ),
                                                   child: Text(
                                                     statusLabel,
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 10.sp,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: statusText,
-                                                    ),
+                                                    style: AppTypography.caption.copyWith(color: statusText),
                                                   ),
                                                 ),
                                               ),
@@ -1046,11 +994,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       child: Center(
                                         child: Text(
                                           markedByStr,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 12.sp,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFF475569),
-                                          ),
+                                          style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                         ),
                                       ),
                                     ),
@@ -1060,11 +1004,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                       flex: 2,
                                       child: Text(
                                         checkInStr,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12.sp,
-                                          fontWeight: FontWeight.w500,
-                                          color: const Color(0xFF475569),
-                                        ),
+                                        style: AppTypography.caption.copyWith(color: const Color(0xFF475569)),
                                         textAlign: TextAlign.right,
                                       ),
                                     ),

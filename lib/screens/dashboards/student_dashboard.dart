@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
+import 'package:edusphere/theme/typography.dart';
 
 class StudentDashboard extends StatefulWidget {
   final RoleTheme theme;
@@ -303,14 +304,14 @@ class _StudentDashboardState extends State<StudentDashboard>
           final now = DateTime.now();
           final monthStart =
               '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
-          
+
           bool apiLoaded = false;
           try {
             final attRes = await ApiService.instance.get(
               'students/$studentId/attendance',
               queryParams: {'startDate': monthStart},
             );
-            
+
             if (attRes['success'] == true) {
               final stats = attRes['stats'] as Map? ?? {};
               final pct = (stats['percentage'] ?? 0) as num;
@@ -339,7 +340,7 @@ class _StudentDashboardState extends State<StudentDashboard>
             } catch (e) {
               dev.log('Fallback attendance fetch failed: $e');
             }
-            
+
             double pct = 0.0;
             if (records.isNotEmpty) {
               final presentOrLate = records.where((r) {
@@ -348,7 +349,7 @@ class _StudentDashboardState extends State<StudentDashboard>
               }).length;
               pct = (presentOrLate / records.length) * 100.0;
             }
-            
+
             if (mounted) {
               setState(() {
                 attendanceRate = pct;
@@ -572,12 +573,8 @@ class _StudentDashboardState extends State<StudentDashboard>
               SizedBox(height: 12.h),
               Text(
                 'No events scheduled',
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  color: Colors.grey.shade500,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: AppTypography.caption.copyWith(
+                    color: Colors.grey.shade500, fontStyle: FontStyle.italic),
               ),
             ],
           ),
@@ -636,11 +633,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                               Expanded(
                                 child: Text(
                                   event['title'] ?? 'Academic Event',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13.5.sp,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textDark,
-                                  ),
+                                  style: AppTypography.caption
+                                      .copyWith(color: AppColors.textDark),
                                 ),
                               ),
                               Container(
@@ -652,11 +646,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                                 ),
                                 child: Text(
                                   type,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 9.sp,
-                                    fontWeight: FontWeight.w800,
-                                    color: accentColor,
-                                  ),
+                                  style: AppTypography.caption
+                                      .copyWith(color: accentColor),
                                 ),
                               ),
                             ],
@@ -666,11 +657,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                             SizedBox(height: 4.h),
                             Text(
                               event['description'],
-                              style: GoogleFonts.inter(
-                                fontSize: 11.sp,
-                                color: AppColors.textLight,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textLight),
                             ),
                           ],
                         ],
@@ -715,10 +703,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           children: [
             Text(
               'View Full Academic Schedule',
-              style: GoogleFonts.inter(
-                fontSize: 13.sp,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.caption,
             ),
             SizedBox(width: 6.w),
             Icon(Icons.chevron_right_rounded, size: 18.sp),
@@ -786,22 +771,18 @@ class _StudentDashboardState extends State<StudentDashboard>
                                 Flexible(
                                   child: Text(
                                     'Hi, ${studentName.split(' ').first} ',
-                                    style: GoogleFonts.inter(
-                                        fontSize: 22.sp,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.textDark),
+                                    style: AppTypography.h4
+                                        .copyWith(color: AppColors.textDark),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                Text('👋', style: TextStyle(fontSize: 22.sp)),
+                                Text('👋', style: AppTypography.h4),
                               ],
                             ),
                             SizedBox(height: 4.h),
                             Text("Here's your personal summary.",
-                                style: GoogleFonts.inter(
-                                    fontSize: 13.sp,
-                                    color: AppColors.textMedium,
-                                    fontWeight: FontWeight.w500)),
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textMedium)),
                           ],
                         ),
                       ),
@@ -810,7 +791,9 @@ class _StudentDashboardState extends State<StudentDashboard>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: _isRefreshing ? null : () => _loadStudentData(showLoading: true),
+                            onPressed: _isRefreshing
+                                ? null
+                                : () => _loadStudentData(showLoading: true),
                             icon: _isRefreshing
                                 ? SizedBox(
                                     width: 14.sp,
@@ -821,10 +804,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                                 : Icon(Icons.history_rounded,
                                     size: 14.sp, color: AppColors.textMedium),
                             label: Text('Refresh',
-                                style: GoogleFonts.inter(
-                                    fontSize: 11.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textMedium)),
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textMedium)),
                             style: OutlinedButton.styleFrom(
                               padding: EdgeInsets.symmetric(
                                   horizontal: 10.w, vertical: 8.h),
@@ -848,10 +829,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                             ),
                             child: Text(
                               dateFormatted,
-                              style: GoogleFonts.inter(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF2563EB)),
+                              style: AppTypography.caption
+                                  .copyWith(color: const Color(0xFF2563EB)),
                             ),
                           ),
                         ],
@@ -940,11 +919,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                       children: [
                         Text(
                           studentName,
-                          style: GoogleFonts.inter(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textDark,
-                          ),
+                          style: AppTypography.h4
+                              .copyWith(color: AppColors.textDark),
                         ),
                         Container(
                           padding: EdgeInsets.symmetric(
@@ -955,11 +931,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                           ),
                           child: Text(
                             'ACTIVE',
-                            style: GoogleFonts.inter(
-                              fontSize: 10.sp,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
+                            style: AppTypography.caption
+                                .copyWith(color: Colors.white),
                           ),
                         ),
                       ],
@@ -967,11 +940,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                     SizedBox(height: 4.h),
                     Text(
                       'ADM: $admissionNo  •  $className - $sectionName',
-                      style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textLight,
-                      ),
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textLight),
                     ),
                   ],
                 ),
@@ -1053,12 +1023,8 @@ class _StudentDashboardState extends State<StudentDashboard>
       children: [
         Text(
           title,
-          style: GoogleFonts.inter(
-            fontSize: 10.sp,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textLight,
-            letterSpacing: 0.8,
-          ),
+          style: AppTypography.caption
+              .copyWith(color: AppColors.textLight, letterSpacing: 0.8),
         ),
         SizedBox(height: 8.h),
         ...children,
@@ -1071,10 +1037,7 @@ class _StudentDashboardState extends State<StudentDashboard>
       padding: EdgeInsets.only(bottom: 4.h),
       child: RichText(
         text: TextSpan(
-          style: GoogleFonts.inter(
-            fontSize: 12.sp,
-            color: AppColors.textDark,
-          ),
+          style: AppTypography.caption.copyWith(color: AppColors.textDark),
           children: [
             TextSpan(
               text: '$label: ',
@@ -1094,12 +1057,8 @@ class _StudentDashboardState extends State<StudentDashboard>
   Widget _buildInfoText(String value) {
     return Text(
       value,
-      style: GoogleFonts.inter(
-        fontSize: 12.sp,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textDark,
-        height: 1.3,
-      ),
+      style: AppTypography.caption
+          .copyWith(color: AppColors.textDark, height: 1.3),
     );
   }
 
@@ -1149,10 +1108,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                 title: 'RESULTS',
                 value: 'View Report',
                 lineColor: const Color(0xFF0EA5E9),
-                onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ResultsScreen())),
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ResultsScreen())),
               )),
             ],
           )
@@ -1248,11 +1205,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.inter(
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textMedium,
-                        letterSpacing: 0.8),
+                    style: AppTypography.caption.copyWith(
+                        color: AppColors.textMedium, letterSpacing: 0.8),
                   ),
                   Icon(Icons.arrow_forward_rounded,
                       size: 14.sp, color: AppColors.textMedium),
@@ -1261,10 +1215,7 @@ class _StudentDashboardState extends State<StudentDashboard>
               SizedBox(height: 12.h),
               Text(
                 value,
-                style: GoogleFonts.inter(
-                    fontSize: 22.sp,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textDark),
+                style: AppTypography.h4.copyWith(color: AppColors.textDark),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1342,21 +1293,15 @@ class _StudentDashboardState extends State<StudentDashboard>
                           Text(
                             'School Calendar',
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textDark,
-                            ),
+                            style: AppTypography.body
+                                .copyWith(color: AppColors.textDark),
                           ),
                           SizedBox(height: 2.h),
                           Text(
                             'Academic schedule & events',
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              fontSize: 11.sp,
-                              color: AppColors.textLight,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textLight),
                           ),
                         ],
                       ),
@@ -1382,11 +1327,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                   SizedBox(width: 8.w),
                   Text(
                     '$monthName ${_selectedMonth.year}',
-                    style: GoogleFonts.inter(
-                      fontSize: 13.5.sp,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textDark,
-                    ),
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textDark),
                   ),
                   SizedBox(width: 8.w),
                   IconButton(
@@ -1416,10 +1358,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                 child: Center(
                   child: Text(
                     d,
-                    style: GoogleFonts.inter(
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textLight),
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textLight),
                   ),
                 ),
               );
@@ -1478,13 +1418,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                     children: [
                       Text(
                         dayVal.toString(),
-                        style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          fontWeight: isSelected || isToday
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                          color: textColor,
-                        ),
+                        style: AppTypography.caption.copyWith(color: textColor),
                       ),
                       if (dotColor != null) ...[
                         SizedBox(height: 2.h),
@@ -1511,12 +1445,8 @@ class _StudentDashboardState extends State<StudentDashboard>
           // Header: EVENTS FOR X
           Text(
             'EVENTS FOR ${_selectedDay.day} ${_getMonthAbbreviation(_selectedDay.month)}',
-            style: GoogleFonts.inter(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF334155),
-              letterSpacing: 1.0,
-            ),
+            style: AppTypography.caption
+                .copyWith(color: const Color(0xFF334155), letterSpacing: 1.0),
           ),
           SizedBox(height: 16.h),
 
@@ -1560,10 +1490,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                   SizedBox(width: 8.w),
                   Text(
                     'Upcoming Events',
-                    style: GoogleFonts.inter(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white),
+                    style: AppTypography.small.copyWith(color: Colors.white),
                   ),
                 ],
               ),
@@ -1581,10 +1508,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                   SizedBox(width: 4.w),
                   Text(
                     'LIVE',
-                    style: GoogleFonts.inter(
-                        fontSize: 9.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF22C55E)),
+                    style: AppTypography.caption
+                        .copyWith(color: const Color(0xFF22C55E)),
                   ),
                 ],
               ),
@@ -1593,10 +1518,8 @@ class _StudentDashboardState extends State<StudentDashboard>
           SizedBox(height: 2.h),
           Text(
             'School activities & schedule',
-            style: GoogleFonts.inter(
-                fontSize: 11.sp,
-                color: Colors.white.withValues(alpha: 0.5),
-                fontWeight: FontWeight.w600),
+            style: AppTypography.caption
+                .copyWith(color: Colors.white.withValues(alpha: 0.5)),
           ),
           SizedBox(height: 16.h),
 
@@ -1627,18 +1550,14 @@ class _StudentDashboardState extends State<StudentDashboard>
                     SizedBox(height: 10.h),
                     Text(
                       'No upcoming events scheduled',
-                      style: GoogleFonts.inter(
-                          fontSize: 13.sp,
-                          color: Colors.white.withValues(alpha: 0.4),
-                          fontWeight: FontWeight.w600),
+                      style: AppTypography.caption
+                          .copyWith(color: Colors.white.withValues(alpha: 0.4)),
                     ),
                     SizedBox(height: 4.h),
                     Text(
                       'Check back later for new events',
-                      style: GoogleFonts.inter(
-                          fontSize: 11.sp,
-                          color: Colors.white.withValues(alpha: 0.25),
-                          fontWeight: FontWeight.w500),
+                      style: AppTypography.caption.copyWith(
+                          color: Colors.white.withValues(alpha: 0.25)),
                     ),
                   ],
                 ),
@@ -1736,10 +1655,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                         children: [
                           Text(
                             parsedDate != null ? '${parsedDate.day}' : '—',
-                            style: GoogleFonts.inter(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w900,
-                                color: typeColor),
+                            style:
+                                AppTypography.body.copyWith(color: typeColor),
                           ),
                           Text(
                             [
@@ -1757,10 +1674,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                               'Nov',
                               'Dec'
                             ][parsedDate?.month ?? 1],
-                            style: GoogleFonts.inter(
-                                fontSize: 9.sp,
-                                fontWeight: FontWeight.w700,
-                                color: typeColor),
+                            style: AppTypography.caption
+                                .copyWith(color: typeColor),
                           ),
                         ],
                       ),
@@ -1776,10 +1691,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                               Expanded(
                                 child: Text(
                                   title,
-                                  style: GoogleFonts.inter(
-                                      fontSize: 13.sp,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white),
+                                  style: AppTypography.caption
+                                      .copyWith(color: Colors.white),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1803,10 +1716,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                                           ? 'Event'
                                           : type[0] +
                                               type.substring(1).toLowerCase(),
-                                      style: GoogleFonts.inter(
-                                          fontSize: 8.5.sp,
-                                          fontWeight: FontWeight.w800,
-                                          color: typeColor),
+                                      style: AppTypography.caption
+                                          .copyWith(color: typeColor),
                                     ),
                                   ],
                                 ),
@@ -1817,10 +1728,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                             SizedBox(height: 3.h),
                             Text(
                               description,
-                              style: GoogleFonts.inter(
-                                  fontSize: 10.5.sp,
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontWeight: FontWeight.w500),
+                              style: AppTypography.caption.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.55)),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1834,10 +1743,9 @@ class _StudentDashboardState extends State<StudentDashboard>
                               SizedBox(width: 4.w),
                               Text(
                                 '$dayName, $displayDate',
-                                style: GoogleFonts.inter(
-                                    fontSize: 10.sp,
-                                    color: Colors.white.withValues(alpha: 0.45),
-                                    fontWeight: FontWeight.w600),
+                                style: AppTypography.caption.copyWith(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.45)),
                               ),
                               if (location != null && location.isNotEmpty) ...[
                                 SizedBox(width: 8.w),
@@ -1848,11 +1756,9 @@ class _StudentDashboardState extends State<StudentDashboard>
                                 Expanded(
                                   child: Text(
                                     location,
-                                    style: GoogleFonts.inter(
-                                        fontSize: 10.sp,
+                                    style: AppTypography.caption.copyWith(
                                         color: Colors.white
-                                            .withValues(alpha: 0.45),
-                                        fontWeight: FontWeight.w600),
+                                            .withValues(alpha: 0.45)),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -1889,10 +1795,8 @@ class _StudentDashboardState extends State<StudentDashboard>
                 children: [
                   Text(
                     'View Full Schedule',
-                    style: GoogleFonts.inter(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0284C7)),
+                    style: AppTypography.caption
+                        .copyWith(color: const Color(0xFF0284C7)),
                   ),
                   SizedBox(width: 4.w),
                   Icon(Icons.arrow_forward_ios_rounded,
