@@ -1568,40 +1568,26 @@ class _OldStudentProfileScreenState extends State<OldStudentProfileScreen> {
         }
       }
 
-      // Local mock fallback if no routes exist in database
-      setState(() {
-        _transportAllocation = {
-          'status': 'ACTIVE',
-          'stop': {'name': 'Rohini Sector 15 Crossing'},
-          'route': {
-            'name': 'Route 102 - North Delhi Bypass',
-            'startLocation': 'School Campus',
-            'endLocation': 'Rohini Bus Depot'
-          },
-        };
-      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            content: Text('Mock Transport allocated!',
+            backgroundColor: Colors.red,
+            content: Text('Failed to allocate transport: No routes available.',
                 style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
           ),
         );
       }
     } catch (e) {
       debugPrint('Error allocating transport: $e');
-      setState(() {
-        _transportAllocation = {
-          'status': 'ACTIVE',
-          'stop': {'name': 'Rohini Sector 15 Crossing'},
-          'route': {
-            'name': 'Route 102 - North Delhi Bypass',
-            'startLocation': 'School Campus',
-            'endLocation': 'Rohini Bus Depot'
-          },
-        };
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Error allocating transport',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

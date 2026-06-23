@@ -622,6 +622,15 @@ class _AdvancedAssignmentModalState extends State<AdvancedAssignmentModal>
           throw Exception(res['message'] ?? 'Failed to submit assignment');
         }
       }
+      await Supabase.instance.client.from('AssignmentSubmission').upsert({
+        'assignmentId': widget.assignment['id'],
+        'studentId': widget.studentIdStr,
+        'filePath': selectedFile!.name,
+        'status': 'SUBMITTED',
+        'grade': 'Pending',
+        'feedback': null,
+        'submittedAt': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'assignmentId,studentId');
 
       if (mounted) {
         setState(() {

@@ -355,17 +355,19 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           _upcomingEventsLoaded = true;
         });
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _upcomingEventsLoaded = true;
           });
+        }
       }
     } catch (e) {
       dev.log('Error loading teacher upcoming events from API: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _upcomingEventsLoaded = true;
         });
+      }
     }
     await _loadCalendarEvents();
   }
@@ -485,184 +487,201 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   }
 
   Widget _buildHeader(bool isDesktop) {
-    if (isDesktop) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth;
+        // Even if isDesktop is true, if the available width is narrow (e.g. less than 650),
+        // we lay it out vertically to avoid horizontal overflow.
+        final showVertical = !isDesktop || maxWidth < 650;
+
+        if (!showVertical) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Teacher Dashboard',
+                      style: GoogleFonts.outfit(
+                          fontSize: 24.sp,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(width: 16.w),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8.r),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8.r),
+                          onTap: _isRefreshing ? null : _refreshDashboard,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16.w, vertical: 8.h),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8.r),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              children: [
+                                _isRefreshing
+                                    ? SizedBox(
+                                        width: 16.sp,
+                                        height: 16.sp,
+                                        child: const CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF0EA5E9),
+                                        ),
+                                      )
+                                    : Icon(Icons.refresh_rounded,
+                                        size: 16.sp,
+                                        color: const Color(0xFF475569)),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  _isRefreshing ? 'Refreshing...' : 'Refresh',
+                                  style: AppTypography.caption.copyWith(
+                                      color: _isRefreshing
+                                          ? const Color(0xFF0EA5E9)
+                                          : const Color(0xFF475569)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0F2FE),
+                          borderRadius: BorderRadius.circular(8.r),
+                          border: Border.all(color: const Color(0xFFBAE6FD)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_month_rounded,
+                                size: 16.sp, color: const Color(0xFF0284C7)),
+                            SizedBox(width: 6.w),
+                            Text(
+                                DateFormat('EEEE, d MMMM yyyy')
+                                    .format(DateTime.now()),
+                                style: AppTypography.caption
+                                    .copyWith(color: const Color(0xFF0284C7))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              SizedBox(height: 6.h),
+              Text(
+                  'Good day, $_teacherName. Here\'s what\'s happening in your classes.',
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF64748B))),
+            ],
+          );
+        } else {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Teacher Dashboard',
                   style: GoogleFonts.outfit(
                       fontSize: 24.sp,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF0F172A))),
+              SizedBox(height: 4.h),
+              Text(
+                  'Good day, $_teacherName. Here\'s what\'s happening in your classes.',
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF64748B))),
+              SizedBox(height: 16.h),
               Row(
                 children: [
-                  Material(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8.r),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8.r),
-                      onTap: _isRefreshing ? null : _refreshDashboard,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 16.w, vertical: 8.h),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          children: [
-                            _isRefreshing
-                                ? SizedBox(
-                                    width: 16.sp,
-                                    height: 16.sp,
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Color(0xFF0EA5E9),
-                                    ),
-                                  )
-                                : Icon(Icons.refresh_rounded,
-                                    size: 16.sp,
-                                    color: const Color(0xFF475569)),
-                            SizedBox(width: 6.w),
-                            Text(
-                              _isRefreshing ? 'Refreshing...' : 'Refresh',
-                              style: AppTypography.caption.copyWith(
-                                  color: _isRefreshing
-                                      ? const Color(0xFF0EA5E9)
-                                      : const Color(0xFF475569)),
+                  Expanded(
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10.r),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10.r),
+                        onTap: _isRefreshing ? null : _refreshDashboard,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 10.h),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10.r),
+                            border: Border.all(
+                              color: _isRefreshing
+                                  ? const Color(0xFF93C5FD)
+                                  : const Color(0xFFD2E2F4),
                             ),
-                          ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _isRefreshing
+                                  ? SizedBox(
+                                      width: 16.sp,
+                                      height: 16.sp,
+                                      child: const CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF0EA5E9),
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.refresh_rounded,
+                                      size: 16.sp,
+                                      color: const Color(0xFF475569),
+                                    ),
+                              SizedBox(width: 6.w),
+                              Text(
+                                _isRefreshing ? 'Refreshing...' : 'Refresh',
+                                style: AppTypography.caption.copyWith(
+                                    color: _isRefreshing
+                                        ? const Color(0xFF0EA5E9)
+                                        : const Color(0xFF475569)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                   SizedBox(width: 12.w),
-                  Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2FE),
-                      borderRadius: BorderRadius.circular(8.r),
-                      border: Border.all(color: const Color(0xFFBAE6FD)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.calendar_month_rounded,
-                            size: 16.sp, color: const Color(0xFF0284C7)),
-                        SizedBox(width: 6.w),
-                        Text(
-                            DateFormat('EEEE, d MMMM yyyy')
-                                .format(DateTime.now()),
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF0284C7))),
-                      ],
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 10.h),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0F2FE),
+                        borderRadius: BorderRadius.circular(10.r),
+                        border: Border.all(color: const Color(0xFFBAE6FD)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                          textAlign: TextAlign.center,
+                          style: AppTypography.caption
+                              .copyWith(color: const Color(0xFF0284C7)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ],
-          ),
-          SizedBox(height: 6.h),
-          Text(
-              'Good day, $_teacherName. Here\'s what\'s happening in your classes.',
-              style: AppTypography.caption
-                  .copyWith(color: const Color(0xFF64748B))),
-        ],
-      );
-    } else {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Teacher Dashboard',
-              style: GoogleFonts.outfit(
-                  fontSize: 24.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A))),
-          SizedBox(height: 4.h),
-          Text(
-              'Good day, $_teacherName. Here\'s what\'s happening in your classes.',
-              style: AppTypography.caption
-                  .copyWith(color: const Color(0xFF64748B))),
-          SizedBox(height: 16.h),
-          Row(
-            children: [
-              Expanded(
-                child: Material(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10.r),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10.r),
-                    onTap: _isRefreshing ? null : _refreshDashboard,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 10.h),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10.r),
-                        border: Border.all(
-                          color: _isRefreshing
-                              ? const Color(0xFF93C5FD)
-                              : const Color(0xFFD2E2F4),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _isRefreshing
-                              ? SizedBox(
-                                  width: 16.sp,
-                                  height: 16.sp,
-                                  child: const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF0EA5E9),
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.refresh_rounded,
-                                  size: 16.sp,
-                                  color: const Color(0xFF475569),
-                                ),
-                          SizedBox(width: 6.w),
-                          Text(
-                            _isRefreshing ? 'Refreshing...' : 'Refresh',
-                            style: AppTypography.caption.copyWith(
-                                color: _isRefreshing
-                                    ? const Color(0xFF0EA5E9)
-                                    : const Color(0xFF475569)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: 10.h),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2FE),
-                    borderRadius: BorderRadius.circular(10.r),
-                    border: Border.all(color: const Color(0xFFBAE6FD)),
-                  ),
-                  child: Center(
-                    child: Text(
-                      DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-                      textAlign: TextAlign.center,
-                      style: AppTypography.caption
-                          .copyWith(color: const Color(0xFF0284C7)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    }
+          );
+        }
+      },
+    );
   }
 
   Widget _buildMetricsGrid(bool isDesktop) {
@@ -753,12 +772,17 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: AppTypography.caption.copyWith(
-                    color: const Color(0xFF475569), letterSpacing: 0.5),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.caption.copyWith(
+                      color: const Color(0xFF475569), letterSpacing: 0.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              if (onTap != null)
+              if (onTap != null) ...[
+                SizedBox(width: 8.w),
                 Container(
                   padding: EdgeInsets.all(4.r),
                   decoration: BoxDecoration(
@@ -771,6 +795,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                     color: color,
                   ),
                 ),
+              ],
             ],
           ),
           SizedBox(height: 12.h),
@@ -843,17 +868,23 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                     Icon(Icons.calendar_today_rounded,
                         color: const Color(0xFF0EA5E9), size: 20.sp),
                     SizedBox(width: 8.w),
-                    Text('School Calendar',
-                        style: GoogleFonts.outfit(
-                            fontSize: 18.sp,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A))),
+                    Expanded(
+                      child: Text('School Calendar',
+                          style: GoogleFonts.outfit(
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
                   ],
                 ),
                 SizedBox(height: 4.h),
                 Text('Academic schedule & events',
                     style: AppTypography.caption
-                        .copyWith(color: const Color(0xFF64748B))),
+                        .copyWith(color: const Color(0xFF64748B)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -963,11 +994,13 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                       final time = event['startTime']?.toString() ?? '';
 
                       Color typeColor = const Color(0xFF0EA5E9);
-                      if (type == 'HOLIDAY')
+                      if (type == 'HOLIDAY') {
                         typeColor = const Color(0xFFEF4444);
+                      }
                       if (type == 'EXAM') typeColor = const Color(0xFFF59E0B);
-                      if (type == 'MEETING')
+                      if (type == 'MEETING') {
                         typeColor = const Color(0xFF8B5CF6);
+                      }
 
                       return Container(
                         margin: EdgeInsets.only(bottom: 8.h),
@@ -1081,28 +1114,38 @@ class _TeacherDashboardState extends State<TeacherDashboard>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_month_rounded,
-                            color: const Color(0xFF0EA5E9), size: 20.sp),
-                        SizedBox(width: 8.w),
-                        Text('Upcoming Events',
-                            style: GoogleFonts.outfit(
-                                fontSize: 18.sp,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white)),
-                      ],
-                    ),
-                    SizedBox(height: 4.h),
-                    Text('School activities & schedule',
-                        style: AppTypography.caption
-                            .copyWith(color: const Color(0xFF94A3B8))),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_month_rounded,
+                              color: const Color(0xFF0EA5E9), size: 20.sp),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text('Upcoming Events',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 18.sp,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4.h),
+                      Text('School activities & schedule',
+                          style: AppTypography.caption
+                              .copyWith(color: const Color(0xFF94A3B8)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
                 ),
+                SizedBox(width: 8.w),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 7.w,

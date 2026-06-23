@@ -38,12 +38,6 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
   String section = 'A';
   String rollNo = '24';
 
-  // Realistic mock exams
-  final List<Map<String, dynamic>> _mockExams = [];
-
-  // Realistic mock results mapped by exam_id
-  final Map<String, List<Map<String, dynamic>>> _mockResults = {};
-
   @override
   void initState() {
     super.initState();
@@ -80,15 +74,8 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
       dev.log('⚠️ Error loading exams from Supabase: $e', name: 'ExamReportCard');
     }
 
-    // Fallback to mock data
-    _examsList = _mockExams;
-    if (_mockExams.isNotEmpty) {
-      _selectedExamId = widget.initialExamId ?? _mockExams.first['id'] as String;
-      _loadFallbackMockResults();
-    } else {
-      _selectedExamId = null;
-      _reportData = [];
-    }
+    _selectedExamId = null;
+    _reportData = [];
 
     if (mounted) setState(() => _loading = false);
   }
@@ -133,15 +120,8 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
       dev.log('⚠️ Error fetching report card from backend: $e', name: 'ExamReportCard');
     }
 
-    // Fall through to mock results
-    _loadFallbackMockResults();
+    _reportData = [];
     if (mounted) setState(() => _loading = false);
-  }
-
-  void _loadFallbackMockResults() {
-    setState(() {
-      _reportData = _mockResults[_selectedExamId] ?? (_mockResults.isNotEmpty ? _mockResults.values.first : []);
-    });
   }
 
   // Double value helpers for calculations

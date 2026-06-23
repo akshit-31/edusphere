@@ -331,7 +331,9 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
         // Class filter
         if (_analyticsClass != 'All Classes' &&
-            mappedClassName != _analyticsClass) continue;
+            mappedClassName != _analyticsClass) {
+          continue;
+        }
 
         final userMap = student['User'] as Map? ?? {};
         final firstName = userMap['firstName']?.toString() ?? '';
@@ -372,15 +374,18 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
             'L': 0,
             'total': 0
           };
-          if (isPresent)
+          if (isPresent) {
             studentMap[studentId]!['P'] =
                 (studentMap[studentId]!['P'] as int) + 1;
-          if (isAbsent)
+          }
+          if (isAbsent) {
             studentMap[studentId]!['A'] =
                 (studentMap[studentId]!['A'] as int) + 1;
-          if (isLate)
+          }
+          if (isLate) {
             studentMap[studentId]!['L'] =
                 (studentMap[studentId]!['L'] as int) + 1;
+          }
           studentMap[studentId]!['total'] =
               (studentMap[studentId]!['total'] as int) + 1;
         }
@@ -1242,23 +1247,29 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         size: 18.sp, color: primary),
                   ),
                   SizedBox(width: 10.w),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Attendance Analytics',
-                        style: GoogleFonts.outfit(
-                          fontSize: 15.sp,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Attendance Analytics',
+                          style: GoogleFonts.outfit(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Text(
-                        'Date-wise breakdown, trends, and student matrix',
-                        style: AppTypography.caption
-                            .copyWith(color: const Color(0xFF94A3B8)),
-                      ),
-                    ],
+                        Text(
+                          'Date-wise breakdown, trends, and student matrix',
+                          style: AppTypography.caption
+                              .copyWith(color: const Color(0xFF94A3B8)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1306,113 +1317,233 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               ),
               SizedBox(height: 12.h),
 
-              // Row 2: From Date + To Date + Load button
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // Row 2: From Date + To Date + Load button (Responsive layout)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth > 550) {
+                    return Row(
                       children: [
-                        Text('From Date',
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF374151))),
-                        SizedBox(height: 6.h),
-                        _buildAnalyticsDateField(
-                          date: _analyticsFromDate,
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _analyticsFromDate,
-                              firstDate: DateTime(2024),
-                              lastDate: DateTime(2027),
-                              builder: (ctx, child) => Theme(
-                                data: Theme.of(ctx).copyWith(
-                                    colorScheme: const ColorScheme.light(
-                                  primary: AppColors.teacherPrimary,
-                                  onPrimary: Colors.white,
-                                  surface: Colors.white,
-                                  onSurface: Color(0xFF0F172A),
-                                )),
-                                child: child!,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('From Date',
+                                  style: AppTypography.caption
+                                      .copyWith(color: const Color(0xFF374151))),
+                              SizedBox(height: 6.h),
+                              _buildAnalyticsDateField(
+                                date: _analyticsFromDate,
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _analyticsFromDate,
+                                    firstDate: DateTime(2024),
+                                    lastDate: DateTime(2027),
+                                    builder: (ctx, child) => Theme(
+                                      data: Theme.of(ctx).copyWith(
+                                          colorScheme: const ColorScheme.light(
+                                        primary: AppColors.teacherPrimary,
+                                        onPrimary: Colors.white,
+                                        surface: Colors.white,
+                                        onSurface: Color(0xFF0F172A),
+                                      )),
+                                      child: child!,
+                                    ),
+                                  );
+                                  if (picked != null) {
+                                    setState(() => _analyticsFromDate = picked);
+                                  }
+                                },
                               ),
-                            );
-                            if (picked != null)
-                              setState(() => _analyticsFromDate = picked);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('To Date',
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF374151))),
-                        SizedBox(height: 6.h),
-                        _buildAnalyticsDateField(
-                          date: _analyticsToDate,
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _analyticsToDate,
-                              firstDate: DateTime(2024),
-                              lastDate: DateTime(2027),
-                              builder: (ctx, child) => Theme(
-                                data: Theme.of(ctx).copyWith(
-                                    colorScheme: const ColorScheme.light(
-                                  primary: AppColors.teacherPrimary,
-                                  onPrimary: Colors.white,
-                                  surface: Colors.white,
-                                  onSurface: Color(0xFF0F172A),
-                                )),
-                                child: child!,
-                              ),
-                            );
-                            if (picked != null)
-                              setState(() => _analyticsToDate = picked);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  Padding(
-                    padding: EdgeInsets.only(top: 17.h),
-                    child: SizedBox(
-                      height: 44.h,
-                      child: ElevatedButton.icon(
-                        onPressed: _isAnalyticsLoading ? null : _loadAnalytics,
-                        icon: _isAnalyticsLoading
-                            ? SizedBox(
-                                width: 14.w,
-                                height: 14.h,
-                                child: const CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(Icons.trending_up_rounded,
-                                size: 16.sp, color: Colors.white),
-                        label: Text(
-                          'Load Analytics',
-                          style: AppTypography.caption
-                              .copyWith(color: Colors.white),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.r),
+                            ],
                           ),
-                          elevation: 0,
-                          padding: EdgeInsets.symmetric(horizontal: 14.w),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
+                        SizedBox(width: 8.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('To Date',
+                                  style: AppTypography.caption
+                                      .copyWith(color: const Color(0xFF374151))),
+                              SizedBox(height: 6.h),
+                              _buildAnalyticsDateField(
+                                date: _analyticsToDate,
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _analyticsToDate,
+                                    firstDate: DateTime(2024),
+                                    lastDate: DateTime(2027),
+                                    builder: (ctx, child) => Theme(
+                                      data: Theme.of(ctx).copyWith(
+                                          colorScheme: const ColorScheme.light(
+                                        primary: AppColors.teacherPrimary,
+                                        onPrimary: Colors.white,
+                                        surface: Colors.white,
+                                        onSurface: Color(0xFF0F172A),
+                                      )),
+                                      child: child!,
+                                    ),
+                                  );
+                                  if (picked != null) {
+                                    setState(() => _analyticsToDate = picked);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Padding(
+                          padding: EdgeInsets.only(top: 17.h),
+                          child: SizedBox(
+                            height: 44.h,
+                            child: ElevatedButton.icon(
+                              onPressed: _isAnalyticsLoading ? null : _loadAnalytics,
+                              icon: _isAnalyticsLoading
+                                  ? SizedBox(
+                                      width: 14.w,
+                                      height: 14.h,
+                                      child: const CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(Icons.trending_up_rounded,
+                                      size: 16.sp, color: Colors.white),
+                              label: Text(
+                                'Load Analytics',
+                                style: AppTypography.caption
+                                    .copyWith(color: Colors.white),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10.r),
+                                ),
+                                elevation: 0,
+                                padding: EdgeInsets.symmetric(horizontal: 14.w),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('From Date',
+                                      style: AppTypography.caption
+                                          .copyWith(color: const Color(0xFF374151))),
+                                  SizedBox(height: 6.h),
+                                  _buildAnalyticsDateField(
+                                    date: _analyticsFromDate,
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _analyticsFromDate,
+                                        firstDate: DateTime(2024),
+                                        lastDate: DateTime(2027),
+                                        builder: (ctx, child) => Theme(
+                                          data: Theme.of(ctx).copyWith(
+                                              colorScheme: const ColorScheme.light(
+                                            primary: AppColors.teacherPrimary,
+                                            onPrimary: Colors.white,
+                                            surface: Colors.white,
+                                            onSurface: Color(0xFF0F172A),
+                                          )),
+                                          child: child!,
+                                        ),
+                                      );
+                                      if (picked != null) {
+                                        setState(() => _analyticsFromDate = picked);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('To Date',
+                                      style: AppTypography.caption
+                                          .copyWith(color: const Color(0xFF374151))),
+                                  SizedBox(height: 6.h),
+                                  _buildAnalyticsDateField(
+                                    date: _analyticsToDate,
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _analyticsToDate,
+                                        firstDate: DateTime(2024),
+                                        lastDate: DateTime(2027),
+                                        builder: (ctx, child) => Theme(
+                                          data: Theme.of(ctx).copyWith(
+                                              colorScheme: const ColorScheme.light(
+                                            primary: AppColors.teacherPrimary,
+                                            onPrimary: Colors.white,
+                                            surface: Colors.white,
+                                            onSurface: Color(0xFF0F172A),
+                                          )),
+                                          child: child!,
+                                        ),
+                                      );
+                                      if (picked != null) {
+                                        setState(() => _analyticsToDate = picked);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12.h),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 44.h,
+                          child: ElevatedButton.icon(
+                            onPressed: _isAnalyticsLoading ? null : _loadAnalytics,
+                            icon: _isAnalyticsLoading
+                                ? SizedBox(
+                                    width: 14.w,
+                                    height: 14.h,
+                                    child: const CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(Icons.trending_up_rounded,
+                                    size: 16.sp, color: Colors.white),
+                            label: Text(
+                              'Load Analytics',
+                              style: AppTypography.caption
+                                  .copyWith(color: Colors.white),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10.r),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                },
               ),
             ],
           ),
@@ -1715,11 +1846,15 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                 fontWeight: FontWeight.w900,
                 color: color,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
               label,
               style: AppTypography.caption
                   .copyWith(color: color.withValues(alpha: 0.8)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -1890,11 +2025,15 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                 fontWeight: FontWeight.w900,
                 color: color,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
               label,
               style: AppTypography.caption
                   .copyWith(color: color.withValues(alpha: 0.75)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -2245,6 +2384,12 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       }
 
       if (mounted) {
+        try {
+          SocketService().emit('ATTENDANCE_UPDATED', {'source': 'teacher_bulk_attendance'});
+        } catch (e) {
+          debugPrint('Socket emit error: $e');
+        }
+
         setState(() {
           _isAlreadySubmitted = true;
           _isSubmitting = false;
@@ -2262,8 +2407,10 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                 const Icon(Icons.check_circle_rounded,
                     color: Colors.white, size: 20),
                 const SizedBox(width: 8),
-                Text('Attendance submitted successfully!',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: Text('Attendance submitted successfully!',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                ),
               ],
             ),
             backgroundColor: const Color(0xFF10B981),
@@ -2373,10 +2520,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                '${widget.className.replaceAll('Class', 'Grade')} - ${widget.section}',
-                                style: AppTypography.small
-                                    .copyWith(color: const Color(0xFF0F172A)),
+                              Flexible(
+                                child: Text(
+                                  '${widget.className.replaceAll('Class', 'Grade')} - ${widget.section}',
+                                  style: AppTypography.small
+                                      .copyWith(color: const Color(0xFF0F172A)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               SizedBox(width: 8.w),
                               Container(
@@ -2676,10 +2826,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             children: [
               Icon(icon, size: 14.sp, color: const Color(0xFF475569)),
               SizedBox(width: 6.w),
-              Text(
-                label,
-                style: AppTypography.caption
-                    .copyWith(color: const Color(0xFF475569)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF475569)),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -2717,10 +2870,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                 color: isSelected ? Colors.white : const Color(0xFF475569),
               ),
               SizedBox(width: 6.w),
-              Text(
-                label,
-                style: AppTypography.caption.copyWith(
-                    color: isSelected ? Colors.white : const Color(0xFF475569)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTypography.caption.copyWith(
+                      color: isSelected ? Colors.white : const Color(0xFF475569)),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
