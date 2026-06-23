@@ -548,6 +548,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final res = await client
             .from('Student')
             .select('*, User(*), Class(*, AcademicYear(*)), Section(*), StudentDocument(*), StudentParent(*, Parent(*)), AcademicYear(*)')
+
             .eq('id', widget.studentId!)
             .maybeSingle();
         if (res != null) {
@@ -559,6 +560,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final res = await client
               .from('Student')
               .select('*, User(*), Class(*, AcademicYear(*)), Section(*), StudentDocument(*), StudentParent(*, Parent(*)), AcademicYear(*)')
+
               .eq('userId', currentUser.id)
               .maybeSingle();
           if (res != null) {
@@ -606,6 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           _rollNo = studentData['rollNumber']?.toString() ?? '—';
           final academicYear = studentData['AcademicYear'] as Map<String, dynamic>? ?? classMap['AcademicYear'] as Map<String, dynamic>?;
+
           _batch = academicYear?['name'] as String? ?? '—';
           _medium = studentData['medium'] as String? ?? '—';
 
@@ -761,6 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _inAppNotifications = localInApp;
           });
         }
+
         final String? sectionId = studentData['sectionId'] as String?;
         _loadAllTabDetails(studentId, sectionId);
         _connectRealTimeSync();
@@ -1551,6 +1555,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             hintText: 'Enter emergency phone number',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
           ),
+
         ),
         actions: [
           TextButton(
@@ -2230,6 +2235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF0F2547),
                       ),
+
                     ),
                   ],
                 ),

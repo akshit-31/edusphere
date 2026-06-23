@@ -419,6 +419,11 @@ class _StudentDashboardState extends State<StudentDashboard>
         // ── 2. Attendance % (all records, matching attendance screen logic) ──
         try {
           bool supabaseAttendanceSuccess = false;
+          final now = DateTime.now();
+          final monthStart =
+              '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+
+          bool apiLoaded = false;
           try {
             // Load ALL attendance records for this student (no date filter)
             // to match exactly what the AttendanceScreen shows
@@ -464,7 +469,7 @@ class _StudentDashboardState extends State<StudentDashboard>
             final attRes = await ApiService.instance.get(
               'students/$studentId/attendance',
             );
-            
+
             if (attRes['success'] == true) {
               final List<dynamic> list = attRes['attendance'] ?? [];
               int presentCount = 0;
@@ -488,6 +493,40 @@ class _StudentDashboardState extends State<StudentDashboard>
                   _attendanceLoaded = true;
                 });
               }
+              apiLoaded = true;
+            }
+          } catch (e) {
+            dev.log('Error loading attendance from API: $e');
+          }
+
+          if (!apiLoaded) {
+            // Fallback to Supabase
+            List<dynamic> records = [];
+            try {
+              records = await Supabase.instance.client
+                  .from('AttendanceRecord')
+                  .select()
+                  .eq('studentId', studentId)
+                  .gte('date', monthStart)
+                  .order('date', ascending: false);
+            } catch (e) {
+              dev.log('Fallback attendance fetch failed: $e');
+            }
+
+            double pct = 0.0;
+            if (records.isNotEmpty) {
+              final presentOrLate = records.where((r) {
+                final status = r['status']?.toString().toUpperCase();
+                return status == 'PRESENT' || status == 'LATE';
+              }).length;
+              pct = (presentOrLate / records.length) * 100.0;
+            }
+
+            if (mounted) {
+              setState(() {
+                attendanceRate = pct;
+                _attendanceLoaded = true;
+              });
             }
           }
         } catch (e) {

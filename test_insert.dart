@@ -24,5 +24,6 @@ void main() async {
     print('Error: $e');
   } finally {
     supabase.dispose();
+
   }
 }
