@@ -324,51 +324,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // 3. Fetch Transport Allocation
     try {
-      if (widget.studentId == null) {
-        // Logged-in student checking their own allocation
-        final transRes =
-            await ApiService.instance.get('transport/allocations/my');
-        if (transRes != null &&
-            transRes['success'] == true &&
-            transRes['allocation'] != null &&
-            mounted) {
-          final allocation = transRes['allocation'] as Map<String, dynamic>;
-          setState(() {
-            _transportAllocation = {
-              'status': allocation['status'],
-              'stop': allocation['stop'],
-              'route': allocation['route'],
-            };
-          });
-        }
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('TransportAllocation')
+          .select('*, TransportRoute(*), RouteStop(*)')
+          .eq('studentId', studentId)
+          .eq('status', 'ACTIVE')
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        setState(() {
+          _transportAllocation = {
+            'status': response['status'],
+            'stop': response['RouteStop'],
+            'route': response['TransportRoute'],
+          };
+        });
       } else {
-        // Teacher viewing student profile. Query specific studentId.
-        final transRes = await ApiService.instance
-            .get('transport/allocations?studentId=$studentId');
-        if (transRes != null &&
-            transRes['success'] == true &&
-            transRes['allocation'] != null &&
-            mounted) {
-          final allocation = transRes['allocation'] as Map<String, dynamic>;
+        if (mounted) {
           setState(() {
-            _transportAllocation = {
-              'status': allocation['status'],
-              'stop': allocation['stop'],
-              'route': allocation['route'],
-            };
-          });
-        } else {
-          // Gracefully fallback to simulated/realistic transport data for this student profile
-          setState(() {
-            _transportAllocation = {
-              'status': 'ACTIVE',
-              'stop': {'name': 'Rohini Sector 15 Crossing'},
-              'route': {
-                'name': 'Route 102 - North Delhi Bypass',
-                'startLocation': 'School Campus',
-                'endLocation': 'Rohini Bus Depot'
-              },
-            };
+            _transportAllocation = null;
           });
         }
       }
@@ -1202,6 +1177,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         } catch (e) {
           debugPrint('Error handling Socket.IO update: $e');
+        }
+      });
+
+      SocketService().on('FEE_UPDATED', (data) {
+        if (!mounted) return;
+        try {
+          final String? updatedStudentId =
+              data?['id']?.toString() ?? data?['studentId']?.toString();
+          if (widget.role == 'student') {
+            _loadStudentDataFromSupabase();
+          } else if (widget.studentId != null &&
+              updatedStudentId == widget.studentId) {
+            _loadStudentDataFromSupabase();
+          }
+        } catch (e) {
+          debugPrint('Error handling Socket.IO FEE_UPDATED: $e');
         }
       });
     } catch (e) {
@@ -2057,23 +2048,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _admissionNo = _employeeId;
         }
       } else {
-        _userName = prefs.getString('student_name') ?? 'Alex Rivera';
-        _email = prefs.getString('student_email') ?? 'alex.rivera@edusmart.edu';
+        _userName = prefs.getString('student_name') ?? '—';
+        _email = prefs.getString('student_email') ?? '—';
         _phone = prefs.getString('student_phone') ?? 'N/A';
         _gender = prefs.getString('student_gender') ?? 'Not Specified';
         _dob = prefs.getString('student_dob') ?? 'Not set';
         _bloodGroup = prefs.getString('student_blood') ?? 'Not assigned';
-        _address =
-            prefs.getString('student_address') ?? 'No location registered';
-        _rollNumber = prefs.getString('student_roll') ?? '24';
-        _className = prefs.getString('student_class') ?? 'Grade 12-A';
-        _admissionId =
-            prefs.getString('student_admission_id') ?? 'ADM-2026-024';
+        _address = prefs.getString('student_address') ?? 'No location registered';
+        _rollNumber = prefs.getString('student_roll') ?? '—';
+        _className = prefs.getString('student_class') ?? '—';
+        _admissionId = prefs.getString('student_admission_id') ?? '—';
         _activityStatus = prefs.getString('student_activity') ?? 'Offline';
         _pushEnabled = prefs.getBool('notifications_enabled') ?? true;
         _inAppEnabled = prefs.getBool('in_app_notifications') ?? true;
-        _lastPasswordChange =
-            prefs.getString('student_last_pwd') ?? 'Action Required';
+        _lastPasswordChange = prefs.getString('student_last_pwd') ?? 'Action Required';
       }
     });
   }
@@ -3475,25 +3463,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_selectedTab == 'Fees') {
       final double payable = _feeLedger != null
           ? double.tryParse(
-                  _feeLedger!['totalPayable']?.toString() ?? '45000') ??
-              45000.0
-          : 45000.0;
+                  _feeLedger!['totalPayable']?.toString() ?? '0') ??
+              0.0
+          : 0.0;
       final double paid = _feeLedger != null
-          ? double.tryParse(_feeLedger!['totalPaid']?.toString() ?? '30000') ??
-              30000.0
-          : 30000.0;
+          ? double.tryParse(_feeLedger!['totalPaid']?.toString() ?? '0') ??
+              0.0
+          : 0.0;
       final double pending = _feeLedger != null
-          ? double.tryParse(
-                  _feeLedger!['totalPending']?.toString() ?? '15000') ??
-              15000.0
-          : 15000.0;
+          ? (double.tryParse(_feeLedger!['totalPending']?.toString() ?? '') ??
+              (payable - paid))
+          : 0.0;
       final String status = _feeLedger != null
-          ? _feeLedger!['status']?.toString() ?? 'PARTIALLY_PAID'
-          : 'PARTIALLY_PAID';
+          ? _feeLedger!['status']?.toString() ?? 'PENDING'
+          : 'PENDING';
       final String structureName =
           _feeLedger != null && _feeLedger!['feeStructure'] != null
               ? _feeLedger!['feeStructure']['name'].toString()
-              : 'Grade 11 Annual Fee';
+              : (_feeLedger != null ? 'Fee Structure' : 'No Active Fee Structure');
 
       Color statusColor = const Color(0xFFF59E0B);
       Color statusBg = const Color(0xFFFFFBEB);
@@ -3573,7 +3560,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         .copyWith(color: const Color(0xFF0F2547))),
                 SizedBox(height: 16.h),
                 if (_feePayments.isEmpty)
-                  _buildMockFeePayments()
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20.h),
+                    child: Center(
+                      child: Text(
+                        'No payment transactions found.',
+                        style: AppTypography.caption.copyWith(color: AppColors.textLight),
+                      ),
+                    ),
+                  )
                 else
                   ListView.builder(
                     shrinkWrap: true,

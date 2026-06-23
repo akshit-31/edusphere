@@ -55,8 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Load profile info from role-based SharedPreferences keys
       if (isStudent) {
-        _name = prefs.getString('student_name') ?? 'Alex Rivera';
-        _email = prefs.getString('student_email') ?? 'alex.rivera@edusmart.edu';
+        _name = prefs.getString('student_name') ?? '';
+        _email = prefs.getString('student_email') ?? '';
         _phone = prefs.getString('student_phone') ?? '';
         _address = prefs.getString('student_address') ?? '';
       } else if (isTeacher) {

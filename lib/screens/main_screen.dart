@@ -65,7 +65,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  String _userName = 'Alex Rivera';
+  String _userName = '';
   String? _profilePhotoUrl;
   int _idx = 0;
   DateTime? _lastSeenAnnouncementTime;
@@ -143,7 +143,7 @@ class _MainScreenState extends State<MainScreen> {
         case 2:
           return 'Assignments';
         case 3:
-          return 'Academic';
+          return 'scm-history-item:c%3A%5CUsers%5Chp%5COneDrive%5CDesktop%5Cfinal%20edusphere%5Cedusphere?%7B%22repositoryId%22%3A%22scm0%22%2C%22historyItemId%22%3A%22598be8cad62891438122368ea27d5ed01b94c219%22%2C%22historyItemParentId%22%3A%22cdf6c2f25e4d874f77162dd5376efcfb4758b165%22%2C%22historyItemDisplayId%22%3A%22598be8c%22%7DAcademic';
         case 4:
           return 'Fees';
         case 5:
@@ -271,7 +271,6 @@ class _MainScreenState extends State<MainScreen> {
       _userName = prefs.getString('${widget.role}_name') ??
           (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
           (widget.role == 'student' ? prefs.getString('student_name') : null) ??
-          kCredentials[widget.role]?['name'] ??
           'EduSphere User';
       _profilePhotoUrl = prefs.getString('${widget.role}_photo_url');
     });

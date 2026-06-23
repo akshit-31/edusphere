@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../services/socket_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import 'fee_payment_screen.dart';
@@ -45,7 +48,6 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
   String _ledgerId = '';
   String _academicYearId = '';
 
-  RealtimeChannel? _feeChannel;
   Timer? _feePollTimer;
 
   @override
@@ -58,54 +60,26 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
   @override
   void dispose() {
     _feePollTimer?.cancel();
-    if (_feeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_feeChannel!);
-      } catch (_) {}
+    try {
+      SocketService().off('FEE_UPDATED');
+    } catch (e) {
+      dev.log('Error unregistering Socket.IO events: $e', name: 'FeeLedgerScreen');
     }
     super.dispose();
   }
 
   void _connectRealTime() {
     try {
-      final client = Supabase.instance.client;
-      if (_feeChannel != null) {
-        client.removeChannel(_feeChannel!);
-      }
+      dev.log('📡 Subscribing to Socket.IO changes for Fees Screen...', name: 'FeeLedgerScreen');
       
-      dev.log('📡 Subscribing to Supabase Realtime changes for Fees Screen...', name: 'FeeLedgerScreen');
-      _feeChannel = client.channel('public:fee_ledger_screen_sync')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'StudentFeeLedger',
-          callback: (payload) {
-            dev.log('🔥 Real-time ledger event payload: $payload', name: 'FeeLedgerScreen');
-            if (mounted) {
-              _loadLedgerData(showLoading: false);
-            }
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'FeePayment',
-          callback: (payload) {
-            dev.log('🔥 Real-time fee payment event payload: $payload', name: 'FeeLedgerScreen');
-            if (mounted) {
-              _loadLedgerData(showLoading: false);
-            }
-          },
-        );
-      
-      _feeChannel!.subscribe((status, [error]) {
-        dev.log('📡 Supabase Realtime Fees channel status: $status', name: 'FeeLedgerScreen');
-        if (error != null) {
-          dev.log('❌ Supabase Realtime Fees subscription error: $error', name: 'FeeLedgerScreen');
+      SocketService().on('FEE_UPDATED', (payload) {
+        dev.log('🔥 Real-time fee event received | Data: $payload', name: 'FeeLedgerScreen');
+        if (mounted) {
+          _loadLedgerData(showLoading: false);
         }
       });
     } catch (e) {
-      dev.log('⚠️ Error connecting Supabase Realtime Fees channel: $e', name: 'FeeLedgerScreen');
+      dev.log('⚠️ Error connecting Socket.IO for Fees: $e', name: 'FeeLedgerScreen');
     }
     
     // Polling fallback
@@ -131,79 +105,76 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
       _studentName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Student';
       _studentEmail = prefs.getString('student_email') ?? prefs.getString('user_email') ?? '';
 
-      // Call the backend endpoint to get student fee status
-      final feeRes = await ApiService.instance.get('fees/students/me/status');
+      final client = Supabase.instance.client;
+      
+      // 1. Fetch ledgers with fee structure
+      final ledgersRes = await client
+          .from('StudentFeeLedger')
+          .select('*, feeStructure:FeeStructure(id, name, totalAmount)')
+          .eq('studentId', _studentId);
+          
+      // 2. Fetch payments
+      final paymentsRes = await client
+          .from('FeePayment')
+          .select('*')
+          .eq('studentId', _studentId)
+          .order('createdAt', ascending: false)
+          .limit(3);
 
-      if (feeRes != null && feeRes['success'] == true) {
-        // Resolve student basic details
-        if (feeRes['student'] != null) {
-          final sObj = feeRes['student'];
-          _studentId = sObj['id'] as String? ?? _studentId;
-          if (sObj['user'] != null) {
-            final uObj = sObj['user'];
-            _studentName = '${uObj['firstName'] ?? ''} ${uObj['lastName'] ?? ''}'.trim();
-            _studentEmail = uObj['email'] as String? ?? _studentEmail;
-          }
+      final List<dynamic> ledgers = ledgersRes as List<dynamic>;
+      final List<Map<String, dynamic>> heads = [];
+      double totalFee = 0;
+      double totalPaid = 0;
+
+      for (var entry in ledgers) {
+        final structure = entry['feeStructure'] as Map<String, dynamic>? ?? {};
+        _feeStructureId = structure['id']?.toString() ?? '';
+        _ledgerId = entry['id']?.toString() ?? '';
+        if (entry['academicYearId'] != null) {
+          _academicYearId = entry['academicYearId']?.toString() ?? '';
         }
+        
+        final headName = structure['name']?.toString() ?? 'Fee';
+        final amount = (entry['totalPayable'] ?? structure['totalAmount'] ?? 0).toDouble();
+        final paid = (entry['totalPaid'] ?? 0).toDouble();
+        final status = entry['status']?.toString() ?? 'PENDING';
+        
+        totalFee += amount;
+        totalPaid += paid;
 
-        // Process summary
-        if (feeRes['summary'] != null) {
-          final summary = feeRes['summary'];
-          _totalFee = (summary['totalFees'] ?? 0).toDouble();
-          _totalPaid = (summary['totalPaid'] ?? 0).toDouble();
-        }
-
-        // Process ledgers
-        final List<dynamic> ledgers = feeRes['ledgers'] ?? [];
-        final List<Map<String, dynamic>> heads = [];
-
-        for (var entry in ledgers) {
-          final structure = entry['feeStructure'] as Map<String, dynamic>? ?? {};
-          _feeStructureId = structure['id'] as String? ?? '';
-          _ledgerId = entry['id'] as String? ?? '';
-          if (entry['academicYearId'] != null) {
-            _academicYearId = entry['academicYearId'] as String;
-          }
-          final headName = structure['name'] as String? ?? 'Fee';
-          final amount = (entry['totalPayable'] ?? structure['totalAmount'] ?? 0).toDouble();
-          final paid = (entry['totalPaid'] ?? 0).toDouble();
-          final status = entry['status']?.toString() ?? 'PENDING';
-
-          heads.add({
-            'id': entry['id'],
-            'name': headName,
-            'amount': amount,
-            'paid': paid,
-            'status': status == 'PAID' ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'PENDING'),
-            'feeStructureId': _feeStructureId,
-            'academicYearId': _academicYearId,
-          });
-        }
-        _feeHeads = heads;
-
-        // Process recent payments
-        final List<dynamic> payments = feeRes['recentPayments'] ?? [];
-        _paymentHistory = payments.map((p) {
-          return {
-            'date': p['paymentDate'] as String? ?? '',
-            'amount': (p['amount'] as num? ?? 0).toDouble(),
-            'method': p['paymentMode']?.toString() ?? 'UPI',
-            'receipt': p['receiptNumber'] as String? ?? 'RCT-00000000',
-            'status': p['status']?.toString() ?? 'SUCCESS',
-          };
-        }).toList();
-      } else {
-        _feeHeads = [];
-        _totalFee = 0;
-        _totalPaid = 0;
-        _paymentHistory = [];
+        heads.add({
+          'id': entry['id'],
+          'name': headName,
+          'amount': amount,
+          'paid': paid,
+          'status': status == 'PAID' ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'PENDING'),
+          'feeStructureId': _feeStructureId,
+          'academicYearId': _academicYearId,
+        });
       }
+      
+      _feeHeads = heads;
+      _totalFee = totalFee;
+      _totalPaid = totalPaid;
+
+      // Process recent payments
+      final List<dynamic> payments = paymentsRes as List<dynamic>;
+      _paymentHistory = payments.map((p) {
+        return {
+          'date': p['paymentDate']?.toString() ?? p['createdAt']?.toString() ?? '',
+          'amount': (p['amount'] as num? ?? 0).toDouble(),
+          'method': p['paymentMode']?.toString() ?? 'UPI',
+          'receipt': p['receiptNumber']?.toString() ?? 'RCT-00000000',
+          'status': p['status']?.toString() ?? 'SUCCESS',
+        };
+      }).toList();
+
     } catch (e) {
       _feeHeads = [];
       _totalFee = 0;
       _totalPaid = 0;
       _paymentHistory = [];
-      debugPrint('Error loading fee ledger: $e');
+      debugPrint('Error loading fee ledger via Supabase: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -497,50 +468,25 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      // Ask for permissions
-      var status = await Permission.storage.request();
-      if (!status.isGranted && Platform.isAndroid) {
-        // Try requesting manageExternalStorage for Android 11+
-        final manageStatus = await Permission.manageExternalStorage.request();
-        if (manageStatus.isGranted) {
-          status = PermissionStatus.granted;
-        } else {
-          // Also try photos as a fallback to trigger a dialog if requested
-          await Permission.photos.request();
-        }
-      }
+      // Use file_saver for all platforms (Web, Android, iOS, Desktop)
+      final savedPath = await FileSaver.instance.saveFile(
+        name: fileName.replaceAll('.pdf', ''),
+        bytes: pdfBytes,
+        fileExtension: 'pdf',
+        mimeType: MimeType.pdf,
+      );
 
-      // Try to save directly to Downloads on Android or Documents on iOS
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else {
-        directory = await getApplicationDocumentsDirectory();
-      }
+      dev.log('✅ File saved to: $savedPath', name: 'FeeLedgerScreen');
 
-      if (directory != null) {
-        final file = File('${directory.path}/$fileName');
-        await file.writeAsBytes(pdfBytes);
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Statement saved to Downloads folder',
-                style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        // Fallback to share dialog if directory is null
-        await Printing.sharePdf(
-          bytes: pdfBytes,
-          filename: fileName,
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Statement downloaded successfully',
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
 
     } catch (e) {
       dev.log('❌ PDF generation error: $e', name: 'FeeLedgerScreen');
@@ -548,7 +494,7 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to generate PDF: $e',
+          content: Text('Failed to download PDF: $e',
               style: GoogleFonts.inter(fontSize: 12, color: Colors.white)),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
@@ -993,17 +939,18 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFECFDF5),
+                                color: const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(6.r),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
                               ),
                               child: Text(
-                                'PAID',
-                                style: GoogleFonts.inter(fontSize: 9.sp, fontWeight: FontWeight.w800, color: const Color(0xFF10B981)),
+                                payment['method']?.toString().toUpperCase() ?? 'PAID',
+                                style: GoogleFonts.inter(fontSize: 9.sp, fontWeight: FontWeight.w800, color: const Color(0xFF475569)),
                               ),
                             ),
                             SizedBox(height: 4.h),
                             Text(
-                              'REF: $receipt',
+                              receipt.startsWith('#') ? receipt : '#$receipt',
                               style: GoogleFonts.inter(fontSize: 10.sp, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
                             ),
                           ],
@@ -1037,6 +984,9 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isDesktop = screenWidth > 900;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -1113,9 +1063,26 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
                           children: [
                             _buildStatementSummary(),
                             SizedBox(height: 20.h),
-                            _buildDetailedLedger(),
-                            SizedBox(height: 20.h),
-                            _buildRecentHistory(),
+                            if (isDesktop)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 5,
+                                    child: _buildDetailedLedger(),
+                                  ),
+                                  SizedBox(width: 20.w),
+                                  Expanded(
+                                    flex: 3,
+                                    child: _buildRecentHistory(),
+                                  ),
+                                ],
+                              )
+                            else ...[
+                              _buildDetailedLedger(),
+                              SizedBox(height: 20.h),
+                              _buildRecentHistory(),
+                            ],
                             SizedBox(height: 40.h),
                           ],
                         ),

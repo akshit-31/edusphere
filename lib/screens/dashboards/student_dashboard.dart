@@ -259,8 +259,10 @@ class _StudentDashboardState extends State<StudentDashboard>
         try {
           final feeRes = await ApiService.instance.get('fees/students/me/status');
           if (feeRes['success'] == true) {
-            final summary = feeRes['summary'] as Map? ?? feeRes;
-            final outstanding = (summary['totalOutstanding'] ?? summary['totalPending'] ?? 0) as num;
+            final summary = feeRes['summary'] as Map? ?? {};
+            final outstanding = (summary['totalOutstanding'] ??
+                summary['totalPending'] ??
+                ((summary['totalFees'] ?? 0) - (summary['totalPaid'] ?? 0))) as num;
             if (mounted) {
               setState(() {
                 pendingFee = outstanding.toInt().clamp(0, 999999);
