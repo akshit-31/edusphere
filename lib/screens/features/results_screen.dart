@@ -285,44 +285,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         }
       }
 
-      // Fallback: try backend REST API if still empty
-      if (groupedExamsMap.isEmpty) {
-        try {
-          final res =
-              await ApiService.instance.get('students/$_studentId/results');
-          if (res != null && res['success'] == true) {
-            final List<dynamic> rawResults =
-                res['results'] ?? res['data'] ?? [];
-            const String mockExamId = 'mock_exam_1';
-            groupedExamsMap[mockExamId] = GroupedExam(
-              id: mockExamId,
-              name: 'Latest Examination',
-              term: 'MID_TERM',
-              academicYear: '2024-25',
-              status: 'PUBLISHED',
-              subjects: [],
-            );
 
-            for (var r in rawResults) {
-              final subject = r['subject'] as Map? ?? {};
-              final maxMarks = (r['maxMarks'] as num? ?? 100).toInt();
-              final marksObtained =
-                  (r['marksObtained'] ?? r['marks'] ?? 0) as num;
-              groupedExamsMap[mockExamId]!.subjects.add({
-                'name': subject['name'] as String? ??
-                    r['subjectName'] as String? ??
-                    'Subject',
-                'marks': marksObtained.toInt(),
-                'total': maxMarks,
-                'grade':
-                    _computeGrade((marksObtained / maxMarks * 100).round()),
-              });
-            }
-          }
-        } catch (e) {
-          dev.log('⚠️ REST results API failed: $e', name: 'ResultsScreen');
-        }
-      }
 
       // Convert map to list
       if (mounted) {

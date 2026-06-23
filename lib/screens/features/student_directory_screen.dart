@@ -72,12 +72,95 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   String? _errorMessage;
   List<StudentRecord> _allStudents = [];
   RealtimeChannel? _realtimeChannel;
+  
+  // ── Filters ──
+  String? _selectedClass;
+  String _selectedSection = 'All Sections';
+  final List<String> _classes = [];
+  final List<String> _sections = ['All Sections'];
+  List<Map<String, dynamic>> _apiClasses = [];
+  List<Map<String, dynamic>> _allSections = [];
+
+  // Supabase client
+  final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
+    _loadApiClasses();
     _fetchStudents();
     _connectRealtime();
+  }
+
+  Future<void> _loadApiClasses() async {
+    try {
+      final classesRes =
+          await _supabase.from('Class').select('id, name').order('name');
+      final sectionsRes = await _supabase
+          .from('Section')
+          .select('id, name, classId')
+          .order('name');
+
+      if (mounted) {
+        setState(() {
+          _allSections = List<Map<String, dynamic>>.from(sectionsRes);
+          _apiClasses = List<Map<String, dynamic>>.from(classesRes);
+          _classes.clear();
+          _classes.add('All Classes');
+          for (var c in _apiClasses) {
+            final name = c['name']?.toString() ?? '';
+            if (name.isNotEmpty && !_classes.contains(name)) {
+              if (name == 'Class 8' ||
+                  name == 'Class 9' ||
+                  name == 'Class 10') {
+                _classes.add(name);
+              }
+            }
+          }
+          _classes.sort((a, b) {
+            if (a == 'All Classes') return -1;
+            if (b == 'All Classes') return 1;
+            final numA = int.tryParse(a.replaceAll('Class ', '')) ?? 0;
+            final numB = int.tryParse(b.replaceAll('Class ', '')) ?? 0;
+            return numA.compareTo(numB);
+          });
+          if (_classes.isNotEmpty) {
+            _selectedClass = _classes.first;
+            _updateSectionsForSelectedClass();
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading classes from Supabase: $e');
+    }
+  }
+
+  void _updateSectionsForSelectedClass() {
+    if (_selectedClass == null || _selectedClass == 'All Classes') {
+      _sections.clear();
+      _sections.add('All Sections');
+      _selectedSection = 'All Sections';
+      return;
+    }
+    final cls = _apiClasses.firstWhere(
+      (c) => c['name'] == _selectedClass,
+      orElse: () => {},
+    );
+    _sections.clear();
+    _sections.add('All Sections');
+    if (cls.isNotEmpty) {
+      final classId = cls['id']?.toString();
+      final secList = _allSections
+          .where((s) => s['classId']?.toString() == classId)
+          .toList();
+      for (var s in secList) {
+        final sName = s['name']?.toString() ?? '';
+        if (sName.isNotEmpty) {
+          _sections.add('Section $sName');
+        }
+      }
+    }
+    _selectedSection = 'All Sections';
   }
 
   void _connectRealtime() {
@@ -127,24 +210,16 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
       _errorMessage = null;
     });
     try {
-      final response = await ApiService.instance
-          .get('students', queryParams: {'limit': '200'});
-      final List<dynamic> studentsRawList = response is List
-          ? response
-          : (response['students'] ?? response['data'] ?? []);
+      final response = await _supabase.from('Student').select('*, User(*), Class(*), Section(*)');
 
       final List<StudentRecord> loadedStudents = [];
-      for (var item in studentsRawList) {
-        final user = item['user'] as Map? ?? item['User'] as Map? ?? {};
-        final classData =
-            item['currentClass'] as Map? ?? item['Class'] as Map? ?? {};
-        final sectionData =
-            item['section'] as Map? ?? item['Section'] as Map? ?? {};
+      for (var item in response) {
+        final user = item['User'] as Map? ?? {};
+        final classData = item['Class'] as Map? ?? {};
+        final sectionData = item['Section'] as Map? ?? {};
 
-        final firstName =
-            user['firstName'] ?? user['first_name'] ?? item['firstName'] ?? '';
-        final lastName =
-            user['lastName'] ?? user['last_name'] ?? item['lastName'] ?? '';
+        final firstName = user['firstName'] ?? '';
+        final lastName = user['lastName'] ?? '';
         final fullName = '$firstName $lastName'.trim();
 
         final rawClassName = classData['name']?.toString() ?? 'Class 8';
@@ -152,10 +227,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
         final displayClassName =
             '${rawClassName.replaceAll('Class', 'Grade')} - $sectionName';
 
-        final rawAvatar = user['avatar'] ??
-            user['photoUrl'] ??
-            user['profileImage']?.toString() ??
-            '';
+        final rawAvatar = user['avatar'] ?? user['profileImage']?.toString() ?? '';
         String? avatarUrl;
         if (rawAvatar.isNotEmpty) {
           avatarUrl = rawAvatar.startsWith('http')
@@ -165,14 +237,16 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
 
         loadedStudents.add(StudentRecord(
           id: item['id']?.toString() ?? '',
-          admissionNo: item['admissionNumber'] ?? item['admissionNo'] ?? '',
+          admissionNo: item['admissionNumber']?.toString() ?? '',
           name: fullName.isNotEmpty ? fullName : 'Unknown',
           className: displayClassName,
-          email: user['email'] ?? item['email'] ?? '',
-          status: item['status'] ?? 'ACTIVE',
+          email: user['email']?.toString() ?? '',
+          status: item['status']?.toString() ?? 'ACTIVE',
           avatarUrl: avatarUrl,
         ));
       }
+
+      loadedStudents.sort((a, b) => a.name.compareTo(b.name));
 
       if (mounted) {
         setState(() {
@@ -181,7 +255,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching students from API: $e');
+      debugPrint('Error fetching students from Supabase: $e');
       if (mounted) {
         setState(() {
           _errorMessage = 'Could not load students. Pull down to retry.';
@@ -208,8 +282,22 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   }
 
   List<StudentRecord> get _filteredStudents {
-    if (_searchQuery.isEmpty) return _allStudents;
-    return _allStudents.where((s) {
+    List<StudentRecord> filtered = _allStudents;
+
+    // Filter by Class and Section
+    if (_selectedClass != null && _selectedClass != 'All Classes') {
+      final String filterClass = _selectedClass!.replaceAll('Class', 'Grade');
+      if (_selectedSection != 'All Sections') {
+        final String filterSection = _selectedSection.replaceAll('Section ', '');
+        final String exactClassName = '$filterClass - $filterSection';
+        filtered = filtered.where((s) => s.className == exactClassName).toList();
+      } else {
+        filtered = filtered.where((s) => s.className.startsWith(filterClass)).toList();
+      }
+    }
+
+    if (_searchQuery.isEmpty) return filtered;
+    return filtered.where((s) {
       final q = _searchQuery.toLowerCase();
       return s.name.toLowerCase().contains(q) ||
           s.admissionNo.toLowerCase().contains(q) ||
@@ -340,6 +428,95 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                       color: _errorMessage != null
                           ? Colors.orange
                           : const Color(0xFF94A3B8)),
+                ),
+                SizedBox(height: 12.h),
+                // Filter by Class and Section row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Grade',
+                              style: AppTypography.caption
+                                  .copyWith(color: const Color(0xFF374151))),
+                          SizedBox(height: 6.h),
+                          Container(
+                            height: 44.h,
+                            padding: EdgeInsets.symmetric(horizontal: 12.w),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10.r),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedClass,
+                                hint: Text('Select Grade', style: AppTypography.caption),
+                                isExpanded: true,
+                                icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                    size: 18.sp, color: const Color(0xFF94A3B8)),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      _selectedClass = val;
+                                      _updateSectionsForSelectedClass();
+                                      _currentPage = 1;
+                                    });
+                                  }
+                                },
+                                items: _classes
+                                    .map((e) => DropdownMenuItem(value: e, child: Text(e.replaceAll('Class', 'Grade'))))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Section',
+                              style: AppTypography.caption
+                                  .copyWith(color: const Color(0xFF374151))),
+                          SizedBox(height: 6.h),
+                          Container(
+                            height: 44.h,
+                            padding: EdgeInsets.symmetric(horizontal: 12.w),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10.r),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedSection,
+                                isExpanded: true,
+                                icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                    size: 18.sp, color: const Color(0xFF94A3B8)),
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      _selectedSection = val;
+                                      _currentPage = 1;
+                                    });
+                                  }
+                                },
+                                items: _sections
+                                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: 12.h),
                 // Search Bar

@@ -173,46 +173,12 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
       }
     } catch (e) {
       dev.log('Error loading calendar events from API: $e');
-      _loadMockEvents();
+      setState(() {
+        _events.clear();
+      });
     }
   }
 
-  void _loadMockEvents() {
-    final now = DateTime.now();
-    final y = now.year;
-    final m = now.month;
-
-    setState(() {
-      _events.clear();
-      // Pre-loaded institutional events
-      _addEvent(
-          y,
-          m,
-          1,
-          const CalendarEvent(
-              'Start of Academic Year 2025-2026', EventType.event));
-      _addEvent(
-          y,
-          m,
-          15,
-          const CalendarEvent('Science Fair 2026', EventType.event,
-              time: '10:00 AM'));
-      _addEvent(
-          y, m, 20, const CalendarEvent('National Holiday', EventType.holiday));
-      _addEvent(y, m, 25,
-          const CalendarEvent('Mid-Term Examinations', EventType.exam));
-
-      // Next month events
-      _addEvent(
-          y, m + 1, 5, const CalendarEvent('Parents Meeting', EventType.event));
-      _addEvent(y, m + 1, 14,
-          const CalendarEvent('Independence Day', EventType.holiday));
-      _addEvent(y, m + 1, 22,
-          const CalendarEvent('Annual Sports Day', EventType.event));
-      _addEvent(y, m + 1, 28,
-          const CalendarEvent('Chemistry Lab Exam', EventType.exam));
-    });
-  }
 
   void _connectRealTime() {
     try {
