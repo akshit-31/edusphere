@@ -398,7 +398,7 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
       // Save global submission for teacher
       final studentName = prefs.getString('student_name') ??
           prefs.getString('user_name') ??
-          'Alex Rivera';
+          '';
       final studentClass = prefs.getString('student_class') ?? 'Grade 12';
       final studentSection = prefs.getString('student_section') ?? 'A';
 

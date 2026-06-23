@@ -33,7 +33,7 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
   List<Map<String, dynamic>> _reportData = [];
 
   // Student profile details
-  String studentName = 'Alex Rivera';
+  String studentName = 'Student';
   String className = 'Grade 12';
   String section = 'A';
   String rollNo = '24';

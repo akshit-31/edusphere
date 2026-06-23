@@ -1563,8 +1563,8 @@ class _AcademicScreenState extends State<AcademicScreen> {
                           children: List.generate(5, (colIndex) {
                             final isSelected = rowIndex == 2 && colIndex == 3;
                             return Container(
-                              width: 6.w,
-                              height: 6.w,
+                              width: 5.w,
+                              height: 5.w,
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? const Color(0xFF3B82F6)
