@@ -702,23 +702,15 @@ class _AdvancedAssignmentModalState extends State<AdvancedAssignmentModal>
     }
 
     try {
-      if (widget.assignment['id'] == 'mock-chapter-1-assignment-id') {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('mock_sub_chapter_1', true);
-        await prefs.setString('mock_file_chapter_1', selectedFile!.name);
-        await prefs.setString('mock_date_chapter_1',
-            intl.DateFormat('MMM d, yyyy').format(DateTime.now()));
-      } else {
-        await Supabase.instance.client.from('AssignmentSubmission').upsert({
-          'assignmentId': widget.assignment['id'],
-          'studentId': widget.studentIdStr,
-          'filePath': selectedFile!.name,
-          'status': 'SUBMITTED',
-          'grade': 'Pending',
-          'feedback': null,
-          'submittedAt': DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'assignmentId,studentId');
-      }
+      await Supabase.instance.client.from('AssignmentSubmission').upsert({
+        'assignmentId': widget.assignment['id'],
+        'studentId': widget.studentIdStr,
+        'filePath': selectedFile!.name,
+        'status': 'SUBMITTED',
+        'grade': 'Pending',
+        'feedback': null,
+        'submittedAt': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'assignmentId,studentId');
 
       if (mounted) {
         setState(() {

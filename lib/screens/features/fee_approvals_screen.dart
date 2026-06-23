@@ -26,9 +26,6 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
   int _totalPending = 0;
   double _totalWaiverAmount = 0;
 
-  // Mock data
-  final List<Map<String, dynamic>> _mockRequests = [];
-
   RealtimeChannel? _realtimeChannel;
 
   @override
@@ -91,11 +88,13 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
         _reviewedRequests =
             data.where((r) => r['status'] != 'PENDING').toList();
       } else {
-        _loadMockData();
+        _pendingRequests = [];
+        _reviewedRequests = [];
       }
     } catch (e) {
       debugPrint('Error loading fee approvals: $e');
-      _loadMockData();
+      _pendingRequests = [];
+      _reviewedRequests = [];
     }
 
     _totalPending = _pendingRequests.length;
@@ -103,13 +102,6 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
         (sum, r) => sum + ((r['requested_amount'] as num?)?.toDouble() ?? 0));
 
     if (mounted) setState(() => _loading = false);
-  }
-
-  void _loadMockData() {
-    _pendingRequests =
-        _mockRequests.where((r) => r['status'] == 'PENDING').toList();
-    _reviewedRequests =
-        _mockRequests.where((r) => r['status'] != 'PENDING').toList();
   }
 
   String _formatDate(String? dateStr) {

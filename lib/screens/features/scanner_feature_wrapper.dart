@@ -91,11 +91,8 @@ class _ScannerFeatureWrapperState extends State<ScannerFeatureWrapper> {
     } catch (e) {
       debugPrint(
           '[Scanner Startup] Error loading/creating default scanner: $e');
-      // Fallback to offline/mock if database insert fails
+      // Do not assign mock values. Allow UI to handle empty state.
       setState(() {
-        _selectedScannerId = 'main-gate-scanner-id';
-        _selectedScannerName = 'main gate scanner';
-        _selectedLocation = 'Main Gate';
         _isLoading = false;
       });
     }
