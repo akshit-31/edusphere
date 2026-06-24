@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/colors.dart';
-import '../models/user_model.dart';
 import '../services/socket_service.dart';
 import '../widgets/common_widgets.dart';
 import 'dashboards/student_dashboard.dart';
@@ -508,15 +507,13 @@ class _MainScreenState extends State<MainScreen> {
                       color: const Color(0xFF0F172A))),
               actions: [
                 IconButton(
-                  icon: Icon(Icons.notifications_off_outlined,
-                      size: 28.sp),
+                  icon: Icon(Icons.notifications_off_outlined, size: 28.sp),
                   onPressed: () {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: Text('Mute Notifications',
-                            style: GoogleFonts.inter(
-                                fontWeight: FontWeight.bold)),
+                            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
                         content: Text(
                             'Are you sure you want to mute notifications?',
                             style: GoogleFonts.inter()),
@@ -534,8 +531,7 @@ class _MainScreenState extends State<MainScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFEF4444),
                               shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(8.r)),
+                                  borderRadius: BorderRadius.circular(8.r)),
                               elevation: 0,
                             ),
                             onPressed: () {
@@ -558,21 +554,19 @@ class _MainScreenState extends State<MainScreen> {
                       .stream(primaryKey: ['id']),
                   builder: (context, snapshot) {
                     bool hasNew = false;
+                    List<Map<String, dynamic>> latestAnnouncements = [];
                     if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                       final announcements =
-                          List<Map<String, dynamic>>.from(
-                              snapshot.data!);
+                          List<Map<String, dynamic>>.from(snapshot.data!);
                       announcements.sort((a, b) =>
-                          (b['createdAt'] ?? '')
-                              .compareTo(a['createdAt'] ?? ''));
-                      final newestStr =
-                          announcements.first['createdAt'] as String?;
+                          (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+                      latestAnnouncements = announcements.take(3).toList();
+                      final newestStr = announcements.first['createdAt'] as String?;
                       if (newestStr != null) {
                         final newestTime = DateTime.tryParse(newestStr);
                         if (newestTime != null) {
                           if (_lastSeenAnnouncementTime == null ||
-                              newestTime.isAfter(
-                                  _lastSeenAnnouncementTime!)) {
+                              newestTime.isAfter(_lastSeenAnnouncementTime!)) {
                             hasNew = true;
                           }
                         }
@@ -587,14 +581,12 @@ class _MainScreenState extends State<MainScreen> {
                                 size: 28.sp),
                             onPressed: () async {
                               final navigator = Navigator.of(context);
-                              final RenderBox? button = context
-                                  .findRenderObject() as RenderBox?;
+                              final RenderBox? button =
+                                  context.findRenderObject() as RenderBox?;
                               final RenderBox? overlay = navigator
                                   .overlay?.context
                                   .findRenderObject() as RenderBox?;
-
-                              final prefs =
-                                  await SharedPreferences.getInstance();
+                              final prefs = await SharedPreferences.getInstance();
                               final now = DateTime.now();
                               await prefs.setString(
                                   'last_seen_announcement_time',
@@ -603,376 +595,146 @@ class _MainScreenState extends State<MainScreen> {
                               setState(() {
                                 _lastSeenAnnouncementTime = now;
                               });
-
-                              if (button == null || overlay == null) {
-                                return;
-                              }
-                              final RelativeRect position =
-                                  RelativeRect.fromRect(
+                              if (button == null || overlay == null) return;
+                              final RelativeRect position = RelativeRect.fromRect(
                                 Rect.fromPoints(
                                   button.localToGlobal(
                                       Offset(0, button.size.height + 8),
                                       ancestor: overlay),
                                   button.localToGlobal(
-                                      button.size.bottomRight(
-                                          const Offset(0, 8)),
+                                      button.size.bottomRight(const Offset(0, 8)),
                                       ancestor: overlay),
                                 ),
                                 Offset.zero & overlay.size,
                               );
-
                               showMenu(
                                 context: context,
                                 position: position,
                                 shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(12.r)),
+                                    borderRadius: BorderRadius.circular(16.r)),
                                 color: Colors.white,
-                                elevation: 4,
+                                elevation: 6,
                                 items: [
                                   PopupMenuItem(
                                     enabled: false,
                                     padding: EdgeInsets.zero,
-                                    child: SizedBox(
+                                    child: Container(
                                       width: 320.w,
+                                      constraints: BoxConstraints(maxHeight: 450.h),
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Padding(
-                                            padding:
-                                                EdgeInsets.all(16.r),
-                                            child: Text('Notifications',
-                                                style: AppTypography
-                                                    .tableHeader
-                                                    .copyWith(
-                                                        color: const Color(
-                                                            0xFF0F172A))),
+                                          Container(
+                                            padding: EdgeInsets.all(16.r),
+                                            decoration: const BoxDecoration(
+                                              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                                            ),
+                                            child: Row(children: [
+                                              Text('Notifications',
+                                                  style: AppTypography.tableHeader.copyWith(
+                                                      color: const Color(0xFF0F172A))),
+                                            ]),
                                           ),
-                                          const Divider(
-                                              height: 1,
-                                              color: Color(0xFFE2E8F0)),
-                                          Padding(
-                                            padding:
-                                                EdgeInsets.symmetric(
-                                                    vertical: 40.h,
-                                                    horizontal: 16.w),
-                                            child: Center(
-      appBar: (!isDesktop
-          ? (widget.role == 'teacher'
-              ? const TeacherAppBar(title: 'EduSphere')
-              : (widget.role == 'student' && _idx != 7)
-                  ? AppBar(
-                      backgroundColor: Colors.white,
-                      elevation: 0,
-                      iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-                      leading: IconButton(
-                          icon: Icon(Icons.menu, size: 28.sp),
-                          onPressed: () =>
-                              _scaffoldKey.currentState?.openDrawer()),
-                      title: Text('EduSphere',
-                          style: GoogleFonts.outfit(
-                              fontSize: 22.sp,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0F172A))),
-                      actions: [
-                        IconButton(
-                          icon: Icon(Icons.notifications_off_outlined,
-                              size: 28.sp),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: Text('Mute Notifications',
-                                    style: GoogleFonts.inter(
-                                        fontWeight: FontWeight.bold)),
-                                content: Text(
-                                    'Are you sure you want to mute notifications?',
-                                    style: GoogleFonts.inter()),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16.r)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: Text('Cancel',
-                                        style: GoogleFonts.inter(
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEF4444),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8.r)),
-                                      elevation: 0,
-                                    ),
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      showToast(context, 'Notifications muted');
-                                    },
-                                    child: Text('Mute',
-                                        style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: Supabase.instance.client
-                              .from('Announcement')
-                              .stream(primaryKey: ['id']),
-                          builder: (context, snapshot) {
-                            bool hasNew = false;
-                            List<Map<String, dynamic>> latestAnnouncements = [];
-                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                              final announcements =
-                                  List<Map<String, dynamic>>.from(
-                                      snapshot.data!);
-                              announcements.sort((a, b) =>
-                                  (b['createdAt'] ?? '')
-                                      .compareTo(a['createdAt'] ?? ''));
-                              latestAnnouncements = announcements.take(3).toList();
-                              final newestStr =
-                                  announcements.first['createdAt'] as String?;
-                              if (newestStr != null) {
-                                final newestTime = DateTime.tryParse(newestStr);
-                                if (newestTime != null) {
-                                  if (_lastSeenAnnouncementTime == null ||
-                                      newestTime.isAfter(
-                                          _lastSeenAnnouncementTime!)) {
-                                    hasNew = true;
-                                  }
-                                }
-                              }
-                            }
-                            return Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Builder(builder: (context) {
-                                  return IconButton(
-                                    icon: Icon(Icons.notifications_none_rounded,
-                                        size: 28.sp),
-                                    onPressed: () async {
-                                      final navigator = Navigator.of(context);
-                                      final RenderBox? button = context
-                                          .findRenderObject() as RenderBox?;
-                                      final RenderBox? overlay = navigator
-                                          .overlay?.context
-                                          .findRenderObject() as RenderBox?;
-
-                                      final prefs =
-                                          await SharedPreferences.getInstance();
-                                      final now = DateTime.now();
-                                      await prefs.setString(
-                                          'last_seen_announcement_time',
-                                          now.toIso8601String());
-                                      if (!context.mounted) return;
-                                      setState(() {
-                                        _lastSeenAnnouncementTime = now;
-                                      });
-
-                                      if (button == null || overlay == null) {
-                                        return;
-                                      }
-                                      final RelativeRect position =
-                                          RelativeRect.fromRect(
-                                        Rect.fromPoints(
-                                          button.localToGlobal(
-                                              Offset(0, button.size.height + 8),
-                                              ancestor: overlay),
-                                          button.localToGlobal(
-                                              button.size.bottomRight(
-                                                  const Offset(0, 8)),
-                                              ancestor: overlay),
-                                        ),
-                                        Offset.zero & overlay.size,
-                                      );
-
-                                      showMenu(
-                                        context: context,
-                                        position: position,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(16.r)),
-                                        color: Colors.white,
-                                        elevation: 6,
-                                        items: [
-                                          PopupMenuItem(
-                                            enabled: false,
-                                            padding: EdgeInsets.zero,
-                                            child: Container(
-                                              width: 320.w,
-                                              constraints: BoxConstraints(maxHeight: 450.h),
+                                          if (latestAnnouncements.isEmpty)
+                                            Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 40.h, horizontal: 16.w),
                                               child: Column(
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Container(
-                                                    padding:
-                                                        EdgeInsets.all(
-                                                            16.r),
-                                                    decoration:
-                                                        const BoxDecoration(
-                                                      color: Color(
-                                                          0xFFF1F5F9),
-                                                      shape: BoxShape
-                                                          .circle,
-                                                        EdgeInsets.all(16.r),
-                                                    child: Text('Notifications',
-                                                        style: AppTypography
-                                                            .tableHeader
-                                                            .copyWith(
-                                                                color: const Color(
-                                                                    0xFF0F172A))),
-                                                  ),
-                                                  const Divider(
-                                                      height: 1,
-                                                      color: Color(0xFFE2E8F0)),
-                                                  if (latestAnnouncements.isEmpty)
-                                                    Padding(
-                                                      padding: EdgeInsets.symmetric(
-                                                          vertical: 40.h, horizontal: 16.w),
-                                                      child: Center(
-                                                        child: Column(
-                                                          children: [
-                                                            Container(
-                                                              padding: EdgeInsets.all(16.r),
-                                                              decoration: const BoxDecoration(
-                                                                color: Color(0xFFF1F5F9),
-                                                                shape: BoxShape.circle,
-                                                              ),
-                                                              child: Icon(
-                                                                  Icons.notifications_off_outlined,
-                                                                  color: const Color(0xFF94A3B8),
-                                                                  size: 32.sp),
-                                                            ),
-                                                            SizedBox(height: 16.h),
-                                                            Text('All caught up!',
-                                                                style: AppTypography.small.copyWith(
-                                                                    color: const Color(0xFF334155))),
-                                                            SizedBox(height: 8.h),
-                                                            Text('No new notifications to show.',
-                                                                style: AppTypography.caption.copyWith(
-                                                                    color: const Color(0xFF94A3B8))),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    )
-                                                  else
-                                                    Flexible(
-                                                      child: ListView.separated(
-                                                        shrinkWrap: true,
-                                                        physics: const NeverScrollableScrollPhysics(),
-                                                        itemCount: latestAnnouncements.length,
-                                                        separatorBuilder: (_, __) =>
-                                                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                                                        itemBuilder: (context, index) {
-                                                          final ann = latestAnnouncements[index];
-                                                          final title = ann['title'] as String? ?? 'Notification';
-                                                          final content = ann['content'] as String? ?? '';
-                                                          final priority = ann['priority'] as String? ?? 'NORMAL';
-                                                          final relativeTime = _getRelativeTime(ann['createdAt'] as String?);
-
-                                                          return InkWell(
-                                                            onTap: () {
-                                                              Navigator.pop(context); // Close popup menu
-                                                              _navigateTo(6); // Navigate to Announcements Screen (index 6 for Student)
-                                                            },
-                                                            child: Padding(
-                                                              padding: EdgeInsets.all(12.r),
-                                                              child: Column(
-                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                children: [
-                                                                  Row(
-                                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                    children: [
-                                                                      Container(
-                                                                        padding: EdgeInsets.symmetric(
-                                                                            horizontal: 8.w, vertical: 2.h),
-                                                                        decoration: BoxDecoration(
-                                                                          color: _getPriorityColor(priority).withValues(alpha: 0.1),
-                                                                          borderRadius: BorderRadius.circular(6.r),
-                                                                        ),
-                                                                        child: Text(
-                                                                          priority.toUpperCase(),
-                                                                          style: AppTypography.caption.copyWith(
-                                                                              color: _getPriorityColor(priority)),
-                                                                        ),
-                                                                      ),
-                                                                      Text(
-                                                                        relativeTime,
-                                                                        style: AppTypography.caption.copyWith(
-                                                                            color: const Color(0xFF64748B)),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                  SizedBox(height: 6.h),
-                                                                  Text(
-                                                                    title,
-                                                                    maxLines: 1,
-                                                                    overflow: TextOverflow.ellipsis,
-                                                                    style: AppTypography.caption.copyWith(
-                                                                        color: const Color(0xFF1E293B)),
-                                                                  ),
-                                                                  SizedBox(height: 4.h),
-                                                                  Text(
-                                                                    content,
-                                                                    maxLines: 2,
-                                                                    overflow: TextOverflow.ellipsis,
-                                                                    style: AppTypography.caption.copyWith(
-                                                                        color: const Color(0xFF64748B)),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
+                                                    padding: EdgeInsets.all(16.r),
+                                                    decoration: const BoxDecoration(
+                                                      color: Color(0xFFF1F5F9),
+                                                      shape: BoxShape.circle,
                                                     ),
-                                                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                                                  InkWell(
-                                                    onTap: () {
-                                                      Navigator.pop(context); // Close popup menu
-                                                      _navigateTo(6); // Navigate to Announcements tab
-                                                    },
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      padding: EdgeInsets.symmetric(vertical: 12.h),
-                                                      alignment: Alignment.center,
-                                                      child: Text(
-                                                        'View All Announcements',
-                                                        style: AppTypography.caption.copyWith(
-                                                            color: const Color(0xFF0D7DDC)),
-                                                      ),
-                                                    ),
-                                                    child: Icon(
-                                                        Icons
-                                                            .notifications_off_outlined,
-                                                        color: const Color(
-                                                            0xFF94A3B8),
-                                                        size: 32.sp),
+                                                    child: Icon(Icons.notifications_off_outlined,
+                                                        color: const Color(0xFF94A3B8), size: 32.sp),
                                                   ),
-                                                  SizedBox(
-                                                      height: 16.h),
+                                                  SizedBox(height: 16.h),
                                                   Text('All caught up!',
-                                                      style: AppTypography
-                                                          .small
-                                                          .copyWith(
-                                                              color: const Color(
-                                                                  0xFF334155))),
+                                                      style: AppTypography.small.copyWith(
+                                                          color: const Color(0xFF334155))),
                                                   SizedBox(height: 8.h),
-                                                  Text(
-                                                      'No new notifications to show.',
-                                                      style: AppTypography
-                                                          .caption
-                                                          .copyWith(
-                                                              color: const Color(
-                                                                  0xFF94A3B8))),
+                                                  Text('No new notifications to show.',
+                                                      style: AppTypography.caption.copyWith(
+                                                          color: const Color(0xFF94A3B8))),
                                                 ],
                                               ),
+                                            )
+                                          else
+                                            Flexible(
+                                              child: ListView.separated(
+                                                shrinkWrap: true,
+                                                physics: const NeverScrollableScrollPhysics(),
+                                                itemCount: latestAnnouncements.length,
+                                                separatorBuilder: (_, __) =>
+                                                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                                itemBuilder: (context, index) {
+                                                  final ann = latestAnnouncements[index];
+                                                  final title = ann['title'] as String? ?? 'Notification';
+                                                  final content = ann['content'] as String? ?? '';
+                                                  final priority = ann['priority'] as String? ?? 'NORMAL';
+                                                  final relativeTime = _getRelativeTime(ann['createdAt'] as String?);
+                                                  return InkWell(
+                                                    onTap: () {
+                                                      Navigator.pop(context);
+                                                      _navigateTo(widget.role == 'teacher' ? 10 : 6);
+                                                    },
+                                                    child: Padding(
+                                                      padding: EdgeInsets.all(12.r),
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Row(
+                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                            children: [
+                                                              Container(
+                                                                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                                                                decoration: BoxDecoration(
+                                                                  color: _getPriorityColor(priority).withValues(alpha: 0.1),
+                                                                  borderRadius: BorderRadius.circular(6.r),
+                                                                ),
+                                                                child: Text(priority.toUpperCase(),
+                                                                    style: AppTypography.caption.copyWith(
+                                                                        color: _getPriorityColor(priority))),
+                                                              ),
+                                                              Text(relativeTime,
+                                                                  style: AppTypography.caption.copyWith(
+                                                                      color: const Color(0xFF64748B))),
+                                                            ],
+                                                          ),
+                                                          SizedBox(height: 6.h),
+                                                          Text(title,
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: AppTypography.caption.copyWith(
+                                                                  color: const Color(0xFF1E293B))),
+                                                          SizedBox(height: 4.h),
+                                                          Text(content,
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: AppTypography.caption.copyWith(
+                                                                  color: const Color(0xFF64748B))),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                          InkWell(
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _navigateTo(widget.role == 'teacher' ? 10 : 6);
+                                            },
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding: EdgeInsets.symmetric(vertical: 12.h),
+                                              alignment: Alignment.center,
+                                              child: Text('View All Announcements',
+                                                  style: AppTypography.caption.copyWith(
+                                                      color: const Color(0xFF0D7DDC))),
                                             ),
                                           ),
                                         ],
@@ -1004,8 +766,7 @@ class _MainScreenState extends State<MainScreen> {
                 SizedBox(width: 8.w),
               ],
             ) as PreferredSizeWidget?
-          : null,
-      body: Row(
+          : null,      body: Row(
         children: [
           if (isDesktop) _buildSidebar(),
           Expanded(

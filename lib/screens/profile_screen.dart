@@ -174,6 +174,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _guardianPhone = '+91 98765 43210';
   final List<RealtimeChannel> _realtimeChannels = [];
 
+  // Tab state variables for _buildTabbedTabContent
+  final List<String> _tabs = const [
+    'Personal Details', 'Academic', 'Attendance', 'Fee Details',
+    'Transport', 'Documents', 'Timetable',
+  ];
+  String _selectedTab = 'Personal Details';
+  bool _isLoadingTabDetails = false;
+  List<Map<String, dynamic>> _attendanceRecords = [];
+  Map<String, dynamic>? _feeLedger;
+  List<Map<String, dynamic>> _feePayments = [];
+  Map<String, dynamic>? _transportAllocation;
+  Map<int, List<Map<String, dynamic>>> _timetableSlots = {};
+
   @override
   void initState() {
     super.initState();
@@ -226,7 +239,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-    void _resetProfileFields() {
   Future<void> _loadAllTabDetails(String studentId, String? sectionId) async {
     if (!mounted) return;
     setState(() {
@@ -2850,114 +2862,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ],
-    );
-  }
-
-
-
-
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.role == 'teacher') {
-      return _buildTeacherProfile();
-    }
-
-    final double width = MediaQuery.of(context).size.width;
-    final bool isDesktop = width > 800;
-
-    return _buildTabbedStudentProfile(isDesktop);
-  }
-
-  Widget _buildDigitalIdentityCard(bool isDesktop, {String? customTitle}) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24.r),
-        border: Border.all(color: const Color(0xFFE2EAF4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.qr_code_2_rounded,
-                  size: 18.sp, color: const Color(0xFF1A6FDB)),
-              SizedBox(width: 8.w),
-              Text(
-                customTitle ?? 'Digital Identity & QR Attendance',
-                style: GoogleFonts.outfit(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F2547),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 16.h),
-          if (isDesktop)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 4, child: _buildQRCodeContainer()),
-                SizedBox(width: 20.w),
-                Expanded(flex: 6, child: _buildQRInfoContainer()),
-              ],
-            )
-          else
-            Column(
-              children: [
-                _buildQRCodeContainer(),
-                SizedBox(height: 20.h),
-                _buildQRInfoContainer(),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQRCodeContainer() {
-    return Container(
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF0F6),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: _tabs.map((tab) {
-            final bool isActive = _selectedTab == tab;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedTab = tab),
-              child: Container(
-                margin: EdgeInsets.only(right: 6.w),
-                padding: EdgeInsets.symmetric(
-                    horizontal: isDesktop ? 20.w : 14.w, vertical: 8.h),
-                decoration: BoxDecoration(
-                  color:
-                      isActive ? const Color(0xFFDFEEFA) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8.r),
-                ),
-                child: Text(
-                  tab,
-                  style: GoogleFonts.inter(
-                    fontSize: isDesktop ? 13.sp : 12.sp,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                    color: isActive
-                        ? const Color(0xFF0F2547)
-                        : const Color(0xFF475569),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 
