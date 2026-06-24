@@ -1027,28 +1027,8 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                           }
                         },
                       ),
-                    ),
-                    if (_isProcessingQR)
-                      Container(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(color: Colors.white),
-                              SizedBox(height: 12.h),
-                              Text(
-                                'Processing...',
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (!_isDesktopPlatform)
                   Positioned(
