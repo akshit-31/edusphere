@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -50,10 +51,32 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   // Manual scanner entry for desktop/fallback
   final TextEditingController _manualScanCtrl = TextEditingController();
 
+  bool _useManualMode = false;
+
+  bool get _isDesktopPlatform {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  bool get _isDesktopOrWeb {
+    if (kIsWeb) return false; // Enable camera access on Web browser
+    try {
+      const platform =
+          String.fromEnvironment('FLUTTER_PLATFORM', defaultValue: '');
+      if (platform.isNotEmpty) return false;
+    } catch (_) {}
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
 
   @override
   void initState() {
     super.initState();
+    _useManualMode = _isDesktopPlatform;
     _requestCameraPermission();
     _loadLiveDashboard();
     _loadTeacherName();
@@ -404,6 +427,9 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
             setState(() => _isProcessingQR = false);
+            if (!_useManualMode && !_isDesktopOrWeb) {
+              _qrController.start();
+            }
           }
         });
       }
@@ -954,40 +980,52 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Camera Preview Box
-          SizedBox(
-            height: 260.h,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.w),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12.r),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    MobileScanner(
-                      controller: _qrController,
-                      onDetect: (capture) async {
-                        if (_isProcessingQR) return;
-                        final barcodes = capture.barcodes;
-                        if (barcodes.isNotEmpty) {
-                          final code = barcodes.first.rawValue?.trim() ?? '';
-                          if (code.isEmpty) return;
-                          await _processQRData(code);
-                        }
-                      },
-                    ),
-                    Center(
-                      child: Container(
-                        width: 160.w,
-                        height: 160.w,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                              color: widget.theme.primary, width: 4),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+      child: _useManualMode
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!_isDesktopPlatform) ...[
+                  _buildToggleHeader(),
+                  const Spacer(),
+                ],
+                Icon(
+                  Icons.desktop_windows_rounded,
+                  size: 48.sp,
+                  color: const Color(0xFF94A3B8),
+                ),
+                SizedBox(height: 12.h),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  child: Text(
+                    'Please type student QR payload below to verify & scan.',
+                    style: AppTypography.caption
+                        .copyWith(color: const Color(0xFF64748B)),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(height: 20.h),
+                _buildManualEntryField(),
+                if (!_isDesktopPlatform) const Spacer(),
+              ],
+            )
+          : Stack(
+              alignment: Alignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16.r),
+                  child: Stack(
+                    children: [
+                      MobileScanner(
+                        controller: _qrController,
+                        onDetect: (capture) async {
+                          if (_isProcessingQR) return;
+                          final barcodes = capture.barcodes;
+                          if (barcodes.isNotEmpty) {
+                            final code = barcodes.first.rawValue?.trim() ?? '';
+                            if (code.isEmpty) return;
+                            await _processQRData(code);
+                          }
+                        },
                       ),
                     ),
                     if (_isProcessingQR)
@@ -1012,13 +1050,114 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                       ),
                   ],
                 ),
-              ),
+                if (!_isDesktopPlatform)
+                  Positioned(
+                    top: 12.h,
+                    child: _buildToggleHeader(),
+                  ),
+                if (_isProcessingQR)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(16.r),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Colors.white),
+                          SizedBox(height: 12.h),
+                          Text(
+                            'Processing...',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
+    );
+  }
+
+  Widget _buildToggleHeader() {
+    return Container(
+      padding: EdgeInsets.all(4.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleTab(
+            title: 'Camera Scanner',
+            isSelected: !_useManualMode,
+            onTap: () {
+              setState(() {
+                _useManualMode = false;
+              });
+              try {
+                _qrController.start();
+              } catch (e) {
+                debugPrint('Error starting camera: $e');
+              }
+            },
           ),
-          SizedBox(height: 16.h),
-          // Manual Fallback Entry
-          _buildManualEntryField(),
+          _buildToggleTab(
+            title: 'Manual Entry',
+            isSelected: _useManualMode,
+            onTap: () {
+              setState(() {
+                _useManualMode = true;
+              });
+              try {
+                _qrController.stop();
+              } catch (e) {
+                debugPrint('Error stopping camera: $e');
+              }
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildToggleTab({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(8.r),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4.r,
+                    offset: Offset(0, 2.h),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          title,
+          style: GoogleFonts.outfit(
+            fontSize: 13.sp,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? widget.theme.primary : const Color(0xFF64748B),
+          ),
+        ),
       ),
     );
   }

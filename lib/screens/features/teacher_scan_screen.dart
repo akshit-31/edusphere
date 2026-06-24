@@ -57,7 +57,7 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
 
   // Detect desktop/web to use manual fallback instead of camera
   bool get _isDesktopOrWeb {
-    if (kIsWeb) return true;
+    if (kIsWeb) return false; // Enable camera access on Web browser
     try {
       // ignore: do_not_use_environment
       const platform =
