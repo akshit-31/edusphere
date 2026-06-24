@@ -8,7 +8,7 @@ void main() async {
       final sections = await supabase.from('Section').select().eq('classId', classId).eq('name', 'A');
       if (sections.isNotEmpty) {
         final sectionId = sections[0]['id'];
-        final students = await supabase.from('Student').select('id, status, admissionNumber, User(isActive, firstName, lastName)').eq('currentClassId', classId).eq('sectionId', sectionId);
+        final students = await supabase.from('Student').select('id, status, admissionNumber, User(isActive, firstName, lastName, qrCode)').eq('currentClassId', classId).eq('sectionId', sectionId);
         print('Students in Class 8 Sec A: ${students.length}');
         for (var s in students) {
           print(s);

@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:developer' as dev;
 import '../../services/api_service.dart';
@@ -457,10 +456,36 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar:
-          widget.showAppBar ? const TeacherAppBar(title: 'EduSphere') : null,
-      bottomNavigationBar:
-          widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 3) : null,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: Navigator.canPop(context)
+                  ? const BackButton(color: Color(0xFF0F172A))
+                  : IconButton(
+                      icon: Icon(Icons.menu, size: 28.sp),
+                      onPressed: () {
+                        widget.onOpenDrawer?.call();
+                      },
+                    ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -2482,7 +2507,35 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
           ? null
           : const EduSphereDrawer(role: 'teacher', activeLabel: 'Attendance'),
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const TeacherAppBar(title: 'Mark Attendance'),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+        leading: canGoBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
+                onPressed: () => Navigator.pop(context),
+              )
+            : IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+        title: Text(
+          'Mark Attendance',
+          style: GoogleFonts.outfit(
+            fontSize: 18.sp,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+            onPressed: () {},
+          ),
+          SizedBox(width: 8.w),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(16.r),
@@ -2765,8 +2818,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       ),
       floatingActionButton: _buildSubmitButton(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      // Only show bottom nav when NOT stacked on top of another route
-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 3),
     );
   }
 

@@ -4,11 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'old_student_profile_screen.dart';
 import '../../theme/colors.dart';
-import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import '../../config/api_config.dart';
-import '../../widgets/teacher_app_bar.dart';
-import '../main_screen.dart';
 import 'package:edusphere/theme/typography.dart';
 
 // ── Student Model ────────────────────────────────────────────────────────────
@@ -323,10 +320,34 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar:
-          widget.showAppBar ? const TeacherAppBar(title: 'EduSphere') : null,
-      bottomNavigationBar:
-          widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 2) : null,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () {
+                  widget.onOpenDrawer?.call();
+                },
+              ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _fetchStudents,
         color: const Color(0xFF0066CC),

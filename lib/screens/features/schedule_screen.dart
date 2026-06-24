@@ -8,7 +8,6 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../../services/api_service.dart';
 import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
 
 class ScheduleScreen extends StatefulWidget {
@@ -521,38 +520,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       drawer: (isPushed && isTeacher)
           ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Schedule')
           : null,
-      bottomNavigationBar: (isPushed && isTeacher)
-          ? const TeacherBottomNavBar(activeIndex: 10)
-          : null,
       backgroundColor: AppColors.background,
-      appBar: (widget.showAppBar && isTeacher)
-          ? const TeacherAppBar(title: 'EduSphere')
-          : (widget.showAppBar
-              ? AppBar(
-                  backgroundColor: Colors.white,
-                  elevation: 0,
-                  iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-                  leading: IconButton(
-                    icon: Icon(Icons.menu, size: 28.sp),
-                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  ),
-                  title: Text(
-                    'EduSphere',
-                    style: GoogleFonts.outfit(
-                      fontSize: 22.sp,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
-                      onPressed: () {},
-                    ),
-                    SizedBox(width: 8.w),
-                  ],
-                ) as PreferredSizeWidget
-              : null),
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp),
+                onPressed: () {
+                  _scaffoldKey.currentState?.openDrawer();
+                  widget.onOpenDrawer?.call();
+                },
+              ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: Column(
         children: [
           PageHeader(
