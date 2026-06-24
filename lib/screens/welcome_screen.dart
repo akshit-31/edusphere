@@ -157,7 +157,40 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             '${role}_name', fullName.isNotEmpty ? fullName : 'Emma Johnson');
         await prefs.setString('${role}_email', email);
       } else if (role == 'student') {
-        final studentMap = userObj['student'] as Map? ?? {};
+        Map<String, dynamic> studentMap = Map<String, dynamic>.from(userObj['student'] as Map? ?? {});
+        String resolvedStudentId = studentMap['id'] as String? ?? '';
+
+        // Fallback: If student ID is missing from login response, try to fetch it from the API
+        if (resolvedStudentId.isEmpty) {
+          try {
+            final studentsData = await ApiService.instance.get('students');
+            if (studentsData != null && studentsData['success'] == true) {
+              final studentsList = studentsData['data'] as List? ?? studentsData['students'] as List? ?? [];
+              final matchingStudent = studentsList.firstWhere(
+                (s) => s['userId'] == userObj['id'],
+                orElse: () => null,
+              );
+              if (matchingStudent != null) {
+                studentMap = Map<String, dynamic>.from(matchingStudent as Map);
+                resolvedStudentId = studentMap['id'] as String? ?? '';
+                dev.log('Successfully recovered student profile: $resolvedStudentId', name: 'WelcomeScreen');
+              }
+            }
+          } catch (e) {
+            dev.log('Error looking up student profile: $e', name: 'WelcomeScreen');
+          }
+        }
+
+        if (resolvedStudentId.isEmpty) {
+          // Student ID missing — prevent login with wrong identity
+          dev.log('ERROR: Student profile missing. userId=${userObj["id"]}', name: 'WelcomeScreen');
+          setState(() {
+            _error = 'Could not load your student profile. Please contact your administrator.';
+            _loading = false;
+          });
+          return;
+        }
+
         final classMap = studentMap['currentClass'] as Map? ?? {};
         final sectionMap = studentMap['section'] as Map? ?? {};
         final classVal = classMap['name'] ?? 'Class 1';
@@ -165,16 +198,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final rollVal = studentMap['rollNumber'] ?? '24';
         final admVal = studentMap['admissionNumber'] ?? '';
 
-        final resolvedStudentId = studentMap['id'] as String?;
-        if (resolvedStudentId == null || resolvedStudentId.isEmpty) {
-          // Student ID missing — prevent login with wrong identity
-          dev.log('ERROR: Student ID missing from login response. studentMap: $studentMap', name: 'WelcomeScreen');
-          setState(() {
-            _error = 'Could not load your student profile. Please contact your administrator.';
-            _loading = false;
-          });
-          return;
-        }
         await prefs.setString('student_id', resolvedStudentId);
         await prefs.setString(
             'student_name', fullName.isNotEmpty ? fullName : '');

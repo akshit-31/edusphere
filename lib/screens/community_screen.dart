@@ -200,8 +200,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  int get _topPostsCount {
-    return _posts.where((p) => (p['likesCount'] as int) >= 5).length;
+  int get _totalPostsCount {
+    return _posts.length;
   }
 
   int get _recentBlogsCount {
@@ -381,9 +381,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildStatCard(
-                        'Top Posts',
-                        _topPostsCount,
-                        Icons.trending_up_rounded,
+                        'Total Posts',
+                        _totalPostsCount,
+                        Icons.article_outlined,
                         const Color(0xFF3B82F6),
                       ),
                       _buildStatCard(

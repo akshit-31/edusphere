@@ -420,25 +420,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await ApiService.instance.get('students/$studentId/documents');
       if (docRes != null && docRes['success'] == true && mounted) {
         final docsList = docRes['documents'] as List<dynamic>? ?? [];
-        setState(() {
-          _uploadedDocuments = docsList.map((d) {
-            final dMap = d as Map<String, dynamic>;
-            final String docName =
-                dMap['documentName'] as String? ?? 'Document.pdf';
-            final String? uploadDateStr = dMap['uploadedAt'] as String?;
-            String dateStr = '—';
-            if (uploadDateStr != null) {
-              try {
-                final parsed = DateTime.parse(uploadDateStr);
-                dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
-              } catch (_) {}
+        List<Map<String, String>> parsedDocs = docsList.map((d) {
+          final dMap = d as Map<String, dynamic>;
+          final String docName =
+              dMap['documentName'] as String? ?? 'Document.pdf';
+          final String? uploadDateStr = dMap['uploadedAt'] as String?;
+          String dateStr = '—';
+          if (uploadDateStr != null) {
+            try {
+              final parsed = DateTime.parse(uploadDateStr);
+              dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
+            } catch (_) {}
+          }
+          return {
+            'name': docName,
+            'date': dateStr,
+            'id': dMap['id']?.toString() ?? '',
+            'url': dMap['fileUrl']?.toString() ?? '',
+            'uploadedAtRaw': dMap['uploadedAt']?.toString() ?? '',
+          };
+        }).toList();
+
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final localDocsJson = prefs.getString('student_uploaded_documents');
+          if (localDocsJson != null) {
+            final List<dynamic> localDocsList = json.decode(localDocsJson);
+            final currentIds = parsedDocs.map((e) => e['id']).toSet();
+            
+            for (var ld in localDocsList.reversed) {
+              final Map<String, String> localDocMap = Map<String, String>.from(ld);
+              if (localDocMap['id'] != null && !currentIds.contains(localDocMap['id'])) {
+                parsedDocs.insert(0, localDocMap); // Insert at start to show latest uploads
+              }
             }
-            return {
-              'name': docName,
-              'date': dateStr,
-              'id': dMap['id']?.toString() ?? '',
-            };
-          }).toList();
+          }
+        } catch (e) {
+          debugPrint('Error merging local docs: $e');
+        }
+
+        setState(() {
+          _uploadedDocuments = parsedDocs;
         });
       }
     } catch (e) {
@@ -583,6 +605,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'date': dateStr,
               'url': dMap['fileUrl']?.toString() ?? '',
               'id': dMap['id']?.toString() ?? '',
+              'uploadedAtRaw': dMap['uploadedAt']?.toString() ?? '',
             };
           }).toList();
         }
@@ -1005,6 +1028,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'name': docName,
               'date': dateStr,
               'id': dMap['id']?.toString() ?? '',
+              'url': dMap['fileUrl']?.toString() ?? '',
+              'uploadedAtRaw': dMap['uploadedAt']?.toString() ?? '',
             };
           }).toList();
         });
@@ -1558,6 +1583,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'date': dateStr,
               'url': fileUrl,
               'id': response?['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'uploadedAtRaw': DateTime.now().toIso8601String(),
             });
           });
           
@@ -2897,57 +2923,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_uploadedDocuments.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24.h),
-                    child: Column(
-                      children: [
-                        Icon(Icons.insert_drive_file_outlined, size: 48.sp, color: AppColors.textLight),
-                        SizedBox(height: 12.h),
-                        Text('No documents uploaded yet', style: GoogleFonts.inter(fontSize: 13.sp, color: AppColors.textLight)),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _uploadedDocuments.length,
-                  separatorBuilder: (context, idx) => SizedBox(height: 10.h),
-                  itemBuilder: (context, idx) {
-                    final doc = _uploadedDocuments[idx];
-                    final String name = doc['name'] ?? 'Document';
-                    final String date = doc['date'] ?? '—';
-                    final String url = doc['url'] ?? '';
-                    final bool isPdf = name.toLowerCase().endsWith('.pdf');
-                    return GestureDetector(
-                      onTap: () async {
-                        if (url.isNotEmpty) {
-                          try {
-                            final uri = Uri.parse(url);
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          } catch (e) {
+              Builder(
+                builder: (context) {
+                  final recentDocuments = _uploadedDocuments.where((doc) {
+                    final rawDate = doc['uploadedAtRaw'] ?? '';
+                    if (rawDate.isNotEmpty) {
+                      try {
+                        final parsed = DateTime.parse(rawDate);
+                        return DateTime.now().difference(parsed).inDays <= 7;
+                      } catch (_) {}
+                    }
+                    return true;
+                  }).toList();
+
+                  if (recentDocuments.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.h),
+                        child: Column(
+                          children: [
+                            Icon(Icons.insert_drive_file_outlined, size: 48.sp, color: AppColors.textLight),
+                            SizedBox(height: 12.h),
+                            Text('No documents from the last 7 days', style: GoogleFonts.inter(fontSize: 13.sp, color: AppColors.textLight)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: recentDocuments.length,
+                    separatorBuilder: (context, idx) => SizedBox(height: 10.h),
+                    itemBuilder: (context, idx) {
+                      final doc = recentDocuments[idx];
+                      final String name = doc['name'] ?? 'Document';
+                      final String date = doc['date'] ?? '—';
+                      final String url = doc['url'] ?? '';
+                      final bool isPdf = name.toLowerCase().endsWith('.pdf');
+                      return GestureDetector(
+                        onTap: () async {
+                          if (url.isNotEmpty) {
+                            try {
+                              Uri uri = Uri.parse(url);
+                              // Use Google Docs viewer for PDFs to ensure they display instead of downloading
+                              if (isPdf && !url.contains('docs.google.com')) {
+                                uri = Uri.parse('https://docs.google.com/gview?embedded=true&url=${Uri.encodeComponent(url)}');
+                              }
+                              
+                              bool launched = false;
+                              try {
+                                launched = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+                              } catch (_) {
+                                // Exception means inAppBrowserView is unsupported on this platform/device
+                              }
+                              
+                              if (!launched) {
+                                try {
+                                  launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                } catch (_) {}
+                              }
+                              
+                              if (!launched) {
+                                try {
+                                  launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+                                } catch (_) {}
+                              }
+                              
+                              if (!launched && mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Could not open document. No compatible viewer found.')),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Could not open document. Please check your connection.')),
+                                );
+                              }
+                            }
+                          } else {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Could not open document. Please check if a viewer is installed.')),
+                                const SnackBar(content: Text('Document link is unavailable.')),
                               );
                             }
                           }
-                        } else {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Document link is unavailable.')),
-                            );
-                          }
-                        }
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(12.r),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(16.r),
+                        },
+                        child: Container(
+                          padding: EdgeInsets.all(12.r),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16.r),
                           border: Border.all(color: const Color(0xFFE2EAF4)),
                         ),
                       child: Row(
@@ -2989,9 +3057,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                    ));
-                  },
-                ),
+                    ),
+                  );
+                    },
+                  );
+                }),
             ],
           ),
         ),
