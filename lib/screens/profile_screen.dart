@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/colors.dart';
 import '../widgets/common_widgets.dart';
@@ -560,6 +561,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _studentUserId =
             studentData['userId']?.toString() ?? userMap['id']?.toString();
 
+        List<Map<String, String>> docs = [];
+        final studentDocList =
+            studentData['StudentDocument'] as List<dynamic>? ?? [];
+        if (studentDocList.isNotEmpty) {
+          docs = studentDocList.map((d) {
+            final dMap = d as Map<String, dynamic>;
+            final String docName =
+                dMap['documentName'] as String? ?? 'Document.pdf';
+            final String? uploadDateStr = dMap['uploadedAt'] as String?;
+            String dateStr = '—';
+            if (uploadDateStr != null) {
+              try {
+                final parsed = DateTime.parse(uploadDateStr);
+                dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
+              } catch (_) {}
+            }
+            return {
+              'name': docName,
+              'date': dateStr,
+              'url': dMap['fileUrl']?.toString() ?? '',
+              'id': dMap['id']?.toString() ?? '',
+            };
+          }).toList();
+        }
+
+        // Merge local documents that might have failed to sync to the server
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final localDocsJson = prefs.getString('student_uploaded_documents');
+          if (localDocsJson != null) {
+            final List<dynamic> localDocsList = json.decode(localDocsJson);
+            final currentIds = docs.map((e) => e['id']).toSet();
+            
+            for (var ld in localDocsList.reversed) {
+              final Map<String, String> localDocMap = Map<String, String>.from(ld);
+              if (localDocMap['id'] != null && !currentIds.contains(localDocMap['id'])) {
+                docs.insert(0, localDocMap); // Insert at start to show latest uploads
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error merging local docs: $e');
+        }
+
         setState(() {
           _studentName = '$firstName $lastName'.trim();
           if (_studentName.isEmpty) _studentName = widget.studentName ?? '—';
@@ -699,29 +744,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _motherName = mother;
           _guardianPhone = guardianPhoneVal;
 
-          List<Map<String, String>> docs = [];
-          final studentDocList =
-              studentData['StudentDocument'] as List<dynamic>? ?? [];
-          if (studentDocList.isNotEmpty) {
-            docs = studentDocList.map((d) {
-              final dMap = d as Map<String, dynamic>;
-              final String docName =
-                  dMap['documentName'] as String? ?? 'Document.pdf';
-              final String? uploadDateStr = dMap['uploadedAt'] as String?;
-              String dateStr = '—';
-              if (uploadDateStr != null) {
-                try {
-                  final parsed = DateTime.parse(uploadDateStr);
-                  dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
-                } catch (_) {}
-              }
-              return {
-                'name': docName,
-                'date': dateStr,
-                'id': dMap['id']?.toString() ?? '',
-              };
-            }).toList();
-          }
           _uploadedDocuments = docs;
           _currentStudentDbId = studentData['id'] as String?;
           _isProfileLoading = false;
@@ -893,6 +915,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? '$_studentClass - $_section'
             : _studentClass;
         _admissionId = _admissionNo;
+        _currentStudentDbId = studentResMap['id']?.toString();
         _isProfileLoading = false;
       });
 
@@ -987,6 +1010,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
       } catch (e) {
         debugPrint('Error parsing documents: $e');
       }
+
+      // Merge local documents that might have failed to sync to the server
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final localDocsJson = prefs.getString('student_uploaded_documents');
+        if (localDocsJson != null) {
+          final List<dynamic> localDocsList = json.decode(localDocsJson);
+          final currentIds = _uploadedDocuments.map((e) => e['id']).toSet();
+          
+          bool modified = false;
+          for (var ld in localDocsList) {
+            final Map<String, String> localDocMap = Map<String, String>.from(ld);
+            if (localDocMap['id'] != null && !currentIds.contains(localDocMap['id'])) {
+              _uploadedDocuments.add(localDocMap);
+              modified = true;
+            }
+          }
+          if (modified && mounted) {
+            setState(() {});
+          }
+        }
+      } catch (e) {
+        debugPrint('Error merging local docs: $e');
+      }
+
     } catch (e) {
       debugPrint(
           '🚨 Supabase/REST Student Profile queries both failed. Error: $e');
@@ -1445,24 +1493,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
+        withData: true,
       );
 
       if (result != null) {
         final platformFile = result.files.single;
         final String docName = platformFile.name;
         final String ext = platformFile.extension?.toUpperCase() ?? 'PDF';
+        final fileBytes = platformFile.bytes;
 
         final client = Supabase.instance.client;
-        await client.from('StudentDocument').insert({
-          'studentId': studentId,
-          'documentName': docName,
-          'documentType': ext,
-          'fileUrl': 'https://example.com/mock_$docName',
-          'uploadedAt': DateTime.now().toIso8601String(),
-          'fileSize': platformFile.size,
-        });
+        String fileUrl = 'https://example.com/mock_$docName';
+
+        if (fileBytes != null) {
+          try {
+            final storagePath = 'documents/$studentId/${DateTime.now().millisecondsSinceEpoch}_$docName';
+            await client.storage.from('avatars').uploadBinary(
+                  storagePath,
+                  fileBytes,
+                  fileOptions: FileOptions(upsert: true),
+                );
+            fileUrl = client.storage.from('avatars').getPublicUrl(storagePath);
+          } catch (storageErr) {
+            debugPrint('Storage upload failed: $storageErr');
+            // Fallback to base64 if small enough
+            if (fileBytes.length < 2 * 1024 * 1024) {
+               fileUrl = 'data:application/$ext;base64,' + base64Encode(fileBytes);
+            }
+          }
+        }
+
+        // Fix FK constraint by trying to find the true Supabase Student ID for the current user
+        String finalStudentId = studentId;
+        try {
+          final currentUser = client.auth.currentUser;
+          if (currentUser != null) {
+            final checkStudent = await client.from('Student').select('id').eq('userId', currentUser.id).maybeSingle();
+            if (checkStudent != null && checkStudent['id'] != null) {
+               finalStudentId = checkStudent['id'].toString();
+            }
+          }
+        } catch (_) {}
+
+        Map<String, dynamic>? response;
+        try {
+          response = await client.from('StudentDocument').insert({
+            'studentId': finalStudentId,
+            'documentName': docName,
+            'documentType': ext,
+            'fileUrl': fileUrl,
+            'uploadedAt': DateTime.now().toIso8601String(),
+            'fileSize': platformFile.size,
+          }).select().single();
+        } catch (dbErr) {
+          debugPrint('DB Insert failed (might be FK constraint), continuing with local state: $dbErr');
+        }
 
         if (mounted) {
+          setState(() {
+            final dateStr = '${DateTime.now().month}/${DateTime.now().day}/${DateTime.now().year}';
+            _uploadedDocuments.insert(0, {
+              'name': docName,
+              'date': dateStr,
+              'url': fileUrl,
+              'id': response?['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            });
+          });
+          
+          _saveStudentData(); // Persist locally just in case
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFF1A6FDB),
@@ -2820,14 +2919,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final doc = _uploadedDocuments[idx];
                     final String name = doc['name'] ?? 'Document';
                     final String date = doc['date'] ?? '—';
+                    final String url = doc['url'] ?? '';
                     final bool isPdf = name.toLowerCase().endsWith('.pdf');
-                    return Container(
-                      padding: EdgeInsets.all(12.r),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(16.r),
-                        border: Border.all(color: const Color(0xFFE2EAF4)),
-                      ),
+                    return GestureDetector(
+                      onTap: () async {
+                        if (url.isNotEmpty) {
+                          try {
+                            final uri = Uri.parse(url);
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Could not open document. Please check if a viewer is installed.')),
+                              );
+                            }
+                          }
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Document link is unavailable.')),
+                            );
+                          }
+                        }
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(12.r),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16.r),
+                          border: Border.all(color: const Color(0xFFE2EAF4)),
+                        ),
                       child: Row(
                         children: [
                           Container(
@@ -2867,7 +2988,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                    );
+                    ));
                   },
                 ),
             ],
