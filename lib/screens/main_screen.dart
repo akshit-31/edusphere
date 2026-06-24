@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/colors.dart';
@@ -64,7 +65,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  String _userName = 'Alex Rivera';
+  String _userName = '';
   String? _profilePhotoUrl;
   int _idx = 0;
   DateTime? _lastSeenAnnouncementTime;
@@ -142,7 +143,7 @@ class _MainScreenState extends State<MainScreen> {
         case 2:
           return 'Assignments';
         case 3:
-          return 'Academic';
+          return 'scm-history-item:c%3A%5CUsers%5Chp%5COneDrive%5CDesktop%5Cfinal%20edusphere%5Cedusphere?%7B%22repositoryId%22%3A%22scm0%22%2C%22historyItemId%22%3A%22598be8cad62891438122368ea27d5ed01b94c219%22%2C%22historyItemParentId%22%3A%22cdf6c2f25e4d874f77162dd5376efcfb4758b165%22%2C%22historyItemDisplayId%22%3A%22598be8c%22%7DAcademic';
         case 4:
           return 'Fees';
         case 5:
@@ -195,6 +196,40 @@ class _MainScreenState extends State<MainScreen> {
       SocketService().disconnect();
     } catch (_) {}
     super.dispose();
+  }
+
+  String _getRelativeTime(String? createdAtStr) {
+    if (createdAtStr == null) return '';
+    try {
+      final date = DateTime.parse(createdAtStr).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      if (difference.inMinutes < 1) {
+        return 'just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes}m ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return DateFormat('dd MMM').format(date);
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toUpperCase()) {
+      case 'URGENT':
+        return const Color(0xFFEF4444); // Red
+      case 'HIGH':
+        return const Color(0xFFF59E0B); // Amber
+      case 'NORMAL':
+        return const Color(0xFF3B82F6); // Blue
+      default:
+        return const Color(0xFF94A3B8); // Grey
+    }
   }
 
   void _initSocketConnection() {
@@ -270,7 +305,6 @@ class _MainScreenState extends State<MainScreen> {
       _userName = prefs.getString('${widget.role}_name') ??
           (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
           (widget.role == 'student' ? prefs.getString('student_name') : null) ??
-          kCredentials[widget.role]?['name'] ??
           'EduSphere User';
       _profilePhotoUrl = prefs.getString('${widget.role}_photo_url');
     });
@@ -625,6 +659,155 @@ class _MainScreenState extends State<MainScreen> {
                                                     vertical: 40.h,
                                                     horizontal: 16.w),
                                             child: Center(
+      appBar: (!isDesktop
+          ? (widget.role == 'teacher'
+              ? const TeacherAppBar(title: 'EduSphere')
+              : (widget.role == 'student' && _idx != 7)
+                  ? AppBar(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+                      leading: IconButton(
+                          icon: Icon(Icons.menu, size: 28.sp),
+                          onPressed: () =>
+                              _scaffoldKey.currentState?.openDrawer()),
+                      title: Text('EduSphere',
+                          style: GoogleFonts.outfit(
+                              fontSize: 22.sp,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A))),
+                      actions: [
+                        IconButton(
+                          icon: Icon(Icons.notifications_off_outlined,
+                              size: 28.sp),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text('Mute Notifications',
+                                    style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.bold)),
+                                content: Text(
+                                    'Are you sure you want to mute notifications?',
+                                    style: GoogleFonts.inter()),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16.r)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: Text('Cancel',
+                                        style: GoogleFonts.inter(
+                                            color: Colors.grey,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8.r)),
+                                      elevation: 0,
+                                    ),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      showToast(context, 'Notifications muted');
+                                    },
+                                    child: Text('Mute',
+                                        style: GoogleFonts.inter(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: Supabase.instance.client
+                              .from('Announcement')
+                              .stream(primaryKey: ['id']),
+                          builder: (context, snapshot) {
+                            bool hasNew = false;
+                            List<Map<String, dynamic>> latestAnnouncements = [];
+                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                              final announcements =
+                                  List<Map<String, dynamic>>.from(
+                                      snapshot.data!);
+                              announcements.sort((a, b) =>
+                                  (b['createdAt'] ?? '')
+                                      .compareTo(a['createdAt'] ?? ''));
+                              latestAnnouncements = announcements.take(3).toList();
+                              final newestStr =
+                                  announcements.first['createdAt'] as String?;
+                              if (newestStr != null) {
+                                final newestTime = DateTime.tryParse(newestStr);
+                                if (newestTime != null) {
+                                  if (_lastSeenAnnouncementTime == null ||
+                                      newestTime.isAfter(
+                                          _lastSeenAnnouncementTime!)) {
+                                    hasNew = true;
+                                  }
+                                }
+                              }
+                            }
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Builder(builder: (context) {
+                                  return IconButton(
+                                    icon: Icon(Icons.notifications_none_rounded,
+                                        size: 28.sp),
+                                    onPressed: () async {
+                                      final navigator = Navigator.of(context);
+                                      final RenderBox? button = context
+                                          .findRenderObject() as RenderBox?;
+                                      final RenderBox? overlay = navigator
+                                          .overlay?.context
+                                          .findRenderObject() as RenderBox?;
+
+                                      final prefs =
+                                          await SharedPreferences.getInstance();
+                                      final now = DateTime.now();
+                                      await prefs.setString(
+                                          'last_seen_announcement_time',
+                                          now.toIso8601String());
+                                      if (!context.mounted) return;
+                                      setState(() {
+                                        _lastSeenAnnouncementTime = now;
+                                      });
+
+                                      if (button == null || overlay == null) {
+                                        return;
+                                      }
+                                      final RelativeRect position =
+                                          RelativeRect.fromRect(
+                                        Rect.fromPoints(
+                                          button.localToGlobal(
+                                              Offset(0, button.size.height + 8),
+                                              ancestor: overlay),
+                                          button.localToGlobal(
+                                              button.size.bottomRight(
+                                                  const Offset(0, 8)),
+                                              ancestor: overlay),
+                                        ),
+                                        Offset.zero & overlay.size,
+                                      );
+
+                                      showMenu(
+                                        context: context,
+                                        position: position,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16.r)),
+                                        color: Colors.white,
+                                        elevation: 6,
+                                        items: [
+                                          PopupMenuItem(
+                                            enabled: false,
+                                            padding: EdgeInsets.zero,
+                                            child: Container(
+                                              width: 320.w,
+                                              constraints: BoxConstraints(maxHeight: 450.h),
                                               child: Column(
                                                 children: [
                                                   Container(
@@ -637,6 +820,133 @@ class _MainScreenState extends State<MainScreen> {
                                                           0xFFF1F5F9),
                                                       shape: BoxShape
                                                           .circle,
+                                                        EdgeInsets.all(16.r),
+                                                    child: Text('Notifications',
+                                                        style: AppTypography
+                                                            .tableHeader
+                                                            .copyWith(
+                                                                color: const Color(
+                                                                    0xFF0F172A))),
+                                                  ),
+                                                  const Divider(
+                                                      height: 1,
+                                                      color: Color(0xFFE2E8F0)),
+                                                  if (latestAnnouncements.isEmpty)
+                                                    Padding(
+                                                      padding: EdgeInsets.symmetric(
+                                                          vertical: 40.h, horizontal: 16.w),
+                                                      child: Center(
+                                                        child: Column(
+                                                          children: [
+                                                            Container(
+                                                              padding: EdgeInsets.all(16.r),
+                                                              decoration: const BoxDecoration(
+                                                                color: Color(0xFFF1F5F9),
+                                                                shape: BoxShape.circle,
+                                                              ),
+                                                              child: Icon(
+                                                                  Icons.notifications_off_outlined,
+                                                                  color: const Color(0xFF94A3B8),
+                                                                  size: 32.sp),
+                                                            ),
+                                                            SizedBox(height: 16.h),
+                                                            Text('All caught up!',
+                                                                style: AppTypography.small.copyWith(
+                                                                    color: const Color(0xFF334155))),
+                                                            SizedBox(height: 8.h),
+                                                            Text('No new notifications to show.',
+                                                                style: AppTypography.caption.copyWith(
+                                                                    color: const Color(0xFF94A3B8))),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    )
+                                                  else
+                                                    Flexible(
+                                                      child: ListView.separated(
+                                                        shrinkWrap: true,
+                                                        physics: const NeverScrollableScrollPhysics(),
+                                                        itemCount: latestAnnouncements.length,
+                                                        separatorBuilder: (_, __) =>
+                                                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                                        itemBuilder: (context, index) {
+                                                          final ann = latestAnnouncements[index];
+                                                          final title = ann['title'] as String? ?? 'Notification';
+                                                          final content = ann['content'] as String? ?? '';
+                                                          final priority = ann['priority'] as String? ?? 'NORMAL';
+                                                          final relativeTime = _getRelativeTime(ann['createdAt'] as String?);
+
+                                                          return InkWell(
+                                                            onTap: () {
+                                                              Navigator.pop(context); // Close popup menu
+                                                              _navigateTo(6); // Navigate to Announcements Screen (index 6 for Student)
+                                                            },
+                                                            child: Padding(
+                                                              padding: EdgeInsets.all(12.r),
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  Row(
+                                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                    children: [
+                                                                      Container(
+                                                                        padding: EdgeInsets.symmetric(
+                                                                            horizontal: 8.w, vertical: 2.h),
+                                                                        decoration: BoxDecoration(
+                                                                          color: _getPriorityColor(priority).withValues(alpha: 0.1),
+                                                                          borderRadius: BorderRadius.circular(6.r),
+                                                                        ),
+                                                                        child: Text(
+                                                                          priority.toUpperCase(),
+                                                                          style: AppTypography.caption.copyWith(
+                                                                              color: _getPriorityColor(priority)),
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        relativeTime,
+                                                                        style: AppTypography.caption.copyWith(
+                                                                            color: const Color(0xFF64748B)),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                  SizedBox(height: 6.h),
+                                                                  Text(
+                                                                    title,
+                                                                    maxLines: 1,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                    style: AppTypography.caption.copyWith(
+                                                                        color: const Color(0xFF1E293B)),
+                                                                  ),
+                                                                  SizedBox(height: 4.h),
+                                                                  Text(
+                                                                    content,
+                                                                    maxLines: 2,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                    style: AppTypography.caption.copyWith(
+                                                                        color: const Color(0xFF64748B)),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      Navigator.pop(context); // Close popup menu
+                                                      _navigateTo(6); // Navigate to Announcements tab
+                                                    },
+                                                    child: Container(
+                                                      width: double.infinity,
+                                                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                                                      alignment: Alignment.center,
+                                                      child: Text(
+                                                        'View All Announcements',
+                                                        style: AppTypography.caption.copyWith(
+                                                            color: const Color(0xFF0D7DDC)),
+                                                      ),
                                                     ),
                                                     child: Icon(
                                                         Icons

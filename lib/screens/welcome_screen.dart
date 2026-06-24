@@ -152,7 +152,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             studentMap['id'] as String? ??
                 'b2f4c6d8-2345-6789-bcde-f23456789012');
         await prefs.setString(
-            'student_name', fullName.isNotEmpty ? fullName : 'Alex Rivera');
+            'student_name', fullName.isNotEmpty ? fullName : '');
         await prefs.setString('student_email', email);
         await prefs.setString('student_class', classVal);
         await prefs.setString('student_section', sectionVal);
@@ -242,7 +242,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         }
 
         await prefs.setString(
-            '${role}_name', fullName.isNotEmpty ? fullName : 'Alex Rivera');
+            '${role}_name', fullName.isNotEmpty ? fullName : '');
         await prefs.setString('${role}_email', email);
       }
 

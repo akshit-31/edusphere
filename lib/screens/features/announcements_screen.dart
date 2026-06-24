@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/supabase_config.dart';
 import 'announcement_details_screen.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import '../../services/socket_service.dart';
 
 class AnnouncementModel {
   final String id;
@@ -137,21 +139,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   Future<void> _updateAnnouncement(AnnouncementModel announcement) async {
     try {
-      final client = Supabase.instance.client;
       final List<String> audienceList = announcement.audience
           .split(',')
           .map((e) => e.trim().toUpperCase())
           .where((e) => e.isNotEmpty)
           .toList();
 
-      await client.from('Announcement').update({
+      await ApiService.instance.put('announcements/${announcement.id}', body: {
         'title': announcement.title,
         'content': announcement.content,
         'priority': announcement.priority,
         'targetAudience': audienceList,
         'expiresAt': announcement.expiresAt,
-        'updatedAt': DateTime.now().toIso8601String(),
-      }).eq('id', announcement.id);
+      });
 
       _loadAnnouncements(showLoading: false);
     } catch (e) {
@@ -180,75 +180,51 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   @override
   void dispose() {
-    if (_announcementsChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_announcementsChannel!);
-      } catch (_) {}
+    try {
+      SocketService().off('ANNOUNCEMENT_CREATED');
+      SocketService().off('ANNOUNCEMENT_UPDATED');
+      SocketService().off('ANNOUNCEMENT_DELETED');
+    } catch (e) {
+      dev.log('Error unregistering Socket.IO events: $e', name: 'AnnouncementsScreen');
     }
     super.dispose();
   }
 
   void _connectRealTime() {
     try {
-      final client = Supabase.instance.client;
-      if (_announcementsChannel != null) {
-        client.removeChannel(_announcementsChannel!);
-      }
-
-      dev.log(
-          '📡 [ANNOUNCEMENTS SUBSCRIBE] Connecting to Supabase Realtime channel for Table: Announcement on URL: ${SupabaseConfig.supabaseUrl}',
-          name: 'AnnouncementsScreen');
-      _announcementsChannel =
-          client.channel('public:announcements_screen_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'Announcement',
-                callback: (payload) {
-                  dev.log(
-                      '🔥 [ANNOUNCEMENTS EVENT] Real-time event type: ${payload.eventType} | Payload: $payload',
-                      name: 'AnnouncementsScreen');
-                  if (mounted) {
-                    if (payload.eventType == PostgresChangeEvent.insert) {
-                      final newRecord = payload.newRecord;
-                      final title = newRecord['title'] ?? 'New Announcement';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            children: [
-                              const Icon(Icons.notifications_active_rounded,
-                                  color: Colors.white),
-                              SizedBox(width: 8.w),
-                              Expanded(
-                                  child: Text('New: $title',
-                                      style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w700))),
-                            ],
-                          ),
-                          backgroundColor: const Color(0xFF2563EB),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.r)),
-                          duration: const Duration(seconds: 4),
-                        ),
-                      );
-                    }
-                    _loadAnnouncements(showLoading: false);
-                  }
-                },
+      dev.log('📡 Subscribing to Socket.IO changes for Announcements...', name: 'AnnouncementsScreen');
+      
+      final events = ['ANNOUNCEMENT_CREATED', 'ANNOUNCEMENT_UPDATED', 'ANNOUNCEMENT_DELETED'];
+      for (var event in events) {
+        SocketService().on(event, (payload) {
+          dev.log('🔥 Real-time event received: $event | Data: $payload', name: 'AnnouncementsScreen');
+          if (mounted) {
+            if (event == 'ANNOUNCEMENT_CREATED') {
+              final title = payload?['title'] ?? 'New Announcement';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.notifications_active_rounded, color: Colors.white),
+                      SizedBox(width: 8.w),
+                      Expanded(
+                          child: Text('New: $title',
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
+                    ],
+                  ),
+                  backgroundColor: const Color(0xFF2563EB),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                  duration: const Duration(seconds: 4),
+                ),
               );
-
-      _announcementsChannel!.subscribe((status, [error]) {
-        dev.log(
-            '📡 [ANNOUNCEMENTS STATUS] Subscription status: $status | TeacherID: $_teacherId | StudentID: $_studentId | ClassID: $_classId',
-            name: 'AnnouncementsScreen');
-        if (error != null) {
-          dev.log('❌ [ANNOUNCEMENTS SUBSCRIPTION ERROR] Error: $error',
-              name: 'AnnouncementsScreen');
-        }
-      });
+            }
+            _loadAnnouncements(showLoading: false);
+          }
+        });
+      }
     } catch (e) {
-      dev.log('⚠️ [ANNOUNCEMENTS ERROR] Error connecting Realtime channel: $e',
-          name: 'AnnouncementsScreen');
+      dev.log('⚠️ Error connecting Socket.IO for Announcements: $e', name: 'AnnouncementsScreen');
     }
   }
 
@@ -285,7 +261,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return const Color(0xFF2563EB); // Default Blue
   }
 
-  // --- Load Announcements ---
   Future<void> _loadAnnouncements({bool showLoading = true}) async {
     if (showLoading) {
       setState(() {
@@ -294,27 +269,24 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       });
     }
     try {
-      final client = Supabase.instance.client;
-      dev.log(
-          '📡 [ANNOUNCEMENTS FETCH] Querying Announcement table on Supabase URL: ${SupabaseConfig.supabaseUrl}',
-          name: 'AnnouncementsScreen');
-      var res = await client
-          .from('Announcement')
-          .select()
-          .order('createdAt', ascending: false);
-      var data = List<Map<String, dynamic>>.from(res);
+      dev.log('📡 [ANNOUNCEMENTS FETCH] Querying Announcements from API', name: 'AnnouncementsScreen');
+      final res = await ApiService.instance.get('announcements');
+      final List<dynamic> data = res['announcements'] ?? res['data'] ?? [];
 
       final prefs = await SharedPreferences.getInstance();
-      final readIds =
-          prefs.getStringList('read_announcements_$_studentId') ?? [];
+      final readIds = prefs.getStringList('read_announcements_$_studentId') ?? [];
 
       if (mounted) {
         setState(() {
           List<AnnouncementModel> fetched = [];
           for (var e in data) {
-            final List<dynamic> audRaw = e['targetAudience'] ?? [];
-            final List<String> aud =
-                audRaw.map((x) => x.toString().toUpperCase()).toList();
+            final targetAudience = e['targetAudience'] ?? e['audience'];
+            List<String> aud = [];
+            if (targetAudience is List) {
+              aud = targetAudience.map((x) => x.toString().toUpperCase()).toList();
+            } else if (targetAudience is String) {
+              aud = targetAudience.split(',').map((x) => x.trim().toUpperCase()).where((x) => x.isNotEmpty).toList();
+            }
             final String priorityStr = e['priority'] ?? 'NORMAL';
 
             // Smart Filtering
@@ -323,27 +295,24 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   !aud.contains('STUDENTS') &&
                   !aud.contains('STUDENT') &&
                   !aud.contains(_classId.toUpperCase())) {
-                continue; // Skip if not targeted to student or their specific class
+                continue;
               }
             } else if (widget.role == 'teacher') {
               if (!aud.contains('ALL') &&
                   !aud.contains('TEACHERS') &&
                   !aud.contains('TEACHER')) {
-                continue; // Skip if not targeted to teacher
+                continue;
               }
             }
 
             String formattedDate = '';
             DateTime parsedDate = DateTime.now();
             try {
-              parsedDate = DateTime.parse(e['createdAt'] ??
-                  e['publishedAt'] ??
-                  DateTime.now().toIso8601String());
-              formattedDate =
-                  '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}';
+              parsedDate = DateTime.parse(e['createdAt'] ?? e['publishedAt'] ?? DateTime.now().toIso8601String());
+              formattedDate = '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}';
             } catch (_) {}
 
-            final annId = e['id'] as String;
+            final annId = e['id'] as String? ?? '';
             fetched.add(AnnouncementModel(
               id: annId,
               title: e['title'] as String? ?? '',
@@ -373,11 +342,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         });
       }
     } catch (e) {
-      dev.log('❌ [ANNOUNCEMENTS FETCH ERROR] Error loading from Supabase: $e',
-          name: 'AnnouncementsScreen');
+      dev.log('❌ [ANNOUNCEMENTS FETCH ERROR] Error loading from API: $e', name: 'AnnouncementsScreen');
       if (mounted) {
-        setState(() => _errorMessage =
-            'Unable to load announcements. Please check your internet connection.');
+        setState(() => _errorMessage = 'Unable to load announcements. Please check your internet connection.');
       }
     } finally {
       if (mounted) {
@@ -389,30 +356,22 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   // --- Add Announcement ---
   Future<void> _addAnnouncement(AnnouncementModel announcement) async {
     try {
-      final client = Supabase.instance.client;
       final List<String> audienceList = announcement.audience
           .split(',')
           .map((e) => e.trim().toUpperCase())
           .where((e) => e.isNotEmpty)
           .toList();
 
-      await client.from('Announcement').insert({
-        'id': announcement.id,
+      await ApiService.instance.post('announcements', body: {
         'title': announcement.title,
         'content': announcement.content,
         'priority': announcement.priority,
         'targetAudience': audienceList,
-        'classIds': [],
-        'isPublished': true,
-        'publishedAt': DateTime.now().toIso8601String(),
-        'createdBy': 'system',
-        'createdAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
         'expiresAt': announcement.expiresAt,
       });
       _loadAnnouncements(showLoading: false);
     } catch (e) {
-      dev.log('Error adding announcement to Supabase: $e',
+      dev.log('Error adding announcement via API: $e',
           name: 'AnnouncementsScreen');
     }
   }
@@ -420,8 +379,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   // --- Delete Announcement ---
   Future<void> _deleteAnnouncement(String id) async {
     try {
-      final client = Supabase.instance.client;
-      await client.from('Announcement').delete().eq('id', id);
+      await ApiService.instance.delete('announcements/$id');
       _loadAnnouncements(showLoading: false);
 
       if (mounted) {

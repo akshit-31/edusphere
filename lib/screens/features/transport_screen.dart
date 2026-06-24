@@ -6,7 +6,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../theme/colors.dart';
 import '../../services/api_service.dart';
+import '../../services/socket_service.dart';
 import 'package:edusphere/theme/typography.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../scratch/fetch_allocations.dart';
 
 class TransportScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -23,11 +26,14 @@ class _TransportScreenState extends State<TransportScreen> {
 
   // Dynamic route details
   bool _isLoading = true;
-  String _routeName = 'Route 1 - City Center';
-  String _stopName = 'Stop A';
-  String _arrivalTime = '07:00 AM';
+  String _routeName = '—';
+  String _stopName = '—';
+  String _arrivalTime = '—';
+  String _vehicleNumber = '—';
+  String _driverName = '—';
 
   RealtimeChannel? _transportChannel;
+  String _studentIdDebug = 'Unknown';
 
   // Real-time map simulation state
   LatLng _busLocation = const LatLng(28.70410, 77.10250);
@@ -55,6 +61,7 @@ class _TransportScreenState extends State<TransportScreen> {
   @override
   void initState() {
     super.initState();
+    dumpTransportAllocations();
     _loadTransportAllocation();
     _connectRealTime();
     _startBusSimulation();
@@ -112,39 +119,61 @@ class _TransportScreenState extends State<TransportScreen> {
     });
 
     try {
-      final response =
-          await ApiService.instance.get('transport/allocations/my');
-      if (response != null &&
-          response['success'] == true &&
-          response['allocation'] != null) {
-        final allocation = response['allocation'] as Map<String, dynamic>;
-        _isTransportAssigned = true;
+      final prefs = await SharedPreferences.getInstance();
+      final studentId = prefs.getString('student_id');
+      if (mounted) {
+        setState(() {
+          _studentIdDebug = studentId ?? 'null';
+        });
+      }
 
-        final routeObj = allocation['route'] as Map<String, dynamic>?;
-        if (routeObj != null) {
-          _routeName = routeObj['name'] as String? ?? 'Route 1 - City Center';
-        }
+      if (studentId == null || studentId.isEmpty) {
+        throw Exception('Student ID not found in SharedPreferences');
+      }
 
-        final stopObj = allocation['stop'] as Map<String, dynamic>?;
-        if (stopObj != null) {
-          _stopName = stopObj['name'] as String? ?? 'Stop A';
-          final timeVal = stopObj['arrivalTime'];
-          if (timeVal != null) {
-            _arrivalTime = _formatArrivalTime(timeVal.toString());
+      final res = await ApiService.instance.get('transport/allocations/my');
+      if (mounted) {
+        setState(() {
+          _studentIdDebug = res != null ? res.toString() : 'API returned null';
+        });
+      }
+
+      if (res != null && res['success'] == true) {
+        final allocation = res['allocation'] ?? res['data'] ?? res['TransportAllocation'];
+        if (allocation != null) {
+          _isTransportAssigned = true;
+          
+          final routeObj = allocation['route'] ?? allocation['TransportRoute'];
+          if (routeObj != null) {
+            _routeName = routeObj['name'] as String? ?? '—';
+            _vehicleNumber = routeObj['vehicleNumber'] as String? ?? '—';
+            _driverName = routeObj['driverName'] as String? ?? '—';
           }
+          
+          final stopObj = allocation['stop'] ?? allocation['RouteStop'];
+          if (stopObj != null) {
+            _stopName = stopObj['name'] as String? ?? '—';
+            final timeVal = stopObj['arrivalTime'] ?? stopObj['time'];
+            if (timeVal != null) {
+              _arrivalTime = _formatArrivalTime(timeVal.toString());
+            }
+          }
+          final statusVal = allocation['status'] as String?;
+          // Enrollment status
+        } else {
+          _isTransportAssigned = false;
         }
       } else {
         _isTransportAssigned = false;
-        _routeName = 'Route 1 - City Center';
-        _stopName = 'Stop A';
-        _arrivalTime = '07:00 AM';
       }
     } catch (e) {
       debugPrint('Error loading transport allocation: $e');
       _isTransportAssigned = false;
-      _routeName = 'Route 1 - City Center';
-      _stopName = 'Stop A';
-      _arrivalTime = '07:00 AM';
+      _routeName = '—';
+      _stopName = '—';
+      _arrivalTime = '—';
+      _vehicleNumber = '—';
+      _driverName = '—';
     } finally {
       if (mounted) {
         setState(() {
@@ -340,11 +369,11 @@ class _TransportScreenState extends State<TransportScreen> {
                   padding: EdgeInsets.all(16.r),
                   child: Row(
                     children: [
-                      Icon(Icons.map_outlined,
+                      Icon(Icons.route_outlined,
                           color: const Color(0xFF0076F6), size: 20.sp),
                       SizedBox(width: 10.w),
                       Text(
-                        'Allocation Summary',
+                        'Route Summary',
                         style: AppTypography.button
                             .copyWith(color: const Color(0xFF0F2547)),
                       ),
@@ -368,7 +397,7 @@ class _TransportScreenState extends State<TransportScreen> {
                     height: 1.h,
                     thickness: 1.h),
                 _buildAllocationRow(
-                    'SCHEDULED TIME', _arrivalTime, Icons.access_time),
+                    'SCHEDULED PICKUP', _arrivalTime, Icons.access_time),
                 Divider(
                     color: const Color(0xFFE2EAF4),
                     height: 1.h,
@@ -382,14 +411,14 @@ class _TransportScreenState extends State<TransportScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'STATUS',
+                            'ENROLLMENT STATUS',
                             style: AppTypography.caption.copyWith(
                                 color: const Color(0xFF10B981),
                                 letterSpacing: 0.5),
                           ),
                           SizedBox(height: 4.h),
                           Text(
-                            'Active Enrollment',
+                            'Active',
                             style: AppTypography.small
                                 .copyWith(color: const Color(0xFF10B981)),
                           ),
@@ -411,42 +440,35 @@ class _TransportScreenState extends State<TransportScreen> {
           ),
           SizedBox(height: 16.h),
 
-          // Guidelines Card
+          // Safety Guidelines Card
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(16.r),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFFFFFBEB), // Pale yellow background
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: const Color(0xFFE2EAF4)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 10.r,
-                  offset: Offset(0, 4.h),
-                )
-              ],
+              border: Border.all(color: const Color(0xFFFDE68A)), // Orange border
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.warning_amber_rounded,
-                    color: const Color(0xFFF59E0B), size: 20.sp),
+                    color: const Color(0xFFD97706), size: 20.sp),
                 SizedBox(width: 12.w),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Guidelines',
+                        'Safety Guidelines',
                         style: AppTypography.small
-                            .copyWith(color: const Color(0xFF0F2547)),
+                            .copyWith(color: const Color(0xFF92400E)), // Dark orange title
                       ),
                       SizedBox(height: 6.h),
                       Text(
-                        'Students are advised to be at the pickup point at least 5 minutes before the scheduled arrival time.',
+                        'Be at your pickup point at least 5 minutes before the scheduled time. Carry your ID card.',
                         style: AppTypography.caption.copyWith(
-                            color: const Color(0xFF475569), height: 1.4),
+                            color: const Color(0xFFB45309), height: 1.4), // Medium orange text
                       ),
                     ],
                   ),
@@ -495,14 +517,28 @@ class _TransportScreenState extends State<TransportScreen> {
                         padding: EdgeInsets.symmetric(
                             horizontal: 10.w, vertical: 4.h),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: const Color(0xFFE2EAF4)),
+                          color: const Color(0xFFDCFCE7),
+                          border: Border.all(color: const Color(0xFF86EFAC)),
                           borderRadius: BorderRadius.circular(20.r),
                         ),
-                        child: Text(
-                          'GPS Active',
-                          style: AppTypography.caption
-                              .copyWith(color: const Color(0xFF475569)),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 6.w,
+                              height: 6.w,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF16A34A),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            SizedBox(width: 4.w),
+                            Text(
+                              'GPS Active',
+                              style: AppTypography.caption.copyWith(
+                                  color: const Color(0xFF16A34A),
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -540,7 +576,7 @@ class _TransportScreenState extends State<TransportScreen> {
                             children: [
                               TileLayer(
                                 urlTemplate:
-                                    'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
                                 userAgentPackageName: 'com.edusphere.transport',
                               ),
                               PolylineLayer(
@@ -630,7 +666,7 @@ class _TransportScreenState extends State<TransportScreen> {
               ),
               SizedBox(height: 4.h),
               Text(
-                value.toLowerCase() == value ? value : value,
+                value,
                 style: AppTypography.small
                     .copyWith(color: const Color(0xFF0F2547)),
               ),
@@ -639,10 +675,10 @@ class _TransportScreenState extends State<TransportScreen> {
           Container(
             padding: EdgeInsets.all(8.r),
             decoration: const BoxDecoration(
-              color: Color(0xFFF0F6FF),
+              color: Color(0xFFEEF2FF),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: const Color(0xFF0076F6), size: 16.sp),
+            child: Icon(icon, color: const Color(0xFF6366F1), size: 16.sp),
           ),
         ],
       ),

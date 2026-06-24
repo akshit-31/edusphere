@@ -227,6 +227,210 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
     void _resetProfileFields() {
+  Future<void> _loadAllTabDetails(String studentId, String? sectionId) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingTabDetails = true;
+    });
+    final client = Supabase.instance.client;
+
+    // 1. Fetch Attendance Records
+    try {
+      final attRes =
+          await ApiService.instance.get('students/$studentId/attendance');
+      if (attRes != null && attRes['success'] == true && mounted) {
+        setState(() {
+          _attendanceRecords =
+              List<Map<String, dynamic>>.from(attRes['attendance'] ?? []);
+        });
+      } else {
+        final List<dynamic> attResDb = await client
+            .from('AttendanceRecord')
+            .select('date, status, remarks')
+            .eq('studentId', studentId)
+            .order('date', ascending: false);
+        if (mounted) {
+          setState(() {
+            _attendanceRecords = List<Map<String, dynamic>>.from(attResDb);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching attendance details: $e');
+    }
+
+    // 2. Fetch Fee Ledger and Payments
+    try {
+      final feeRes =
+          await ApiService.instance.get('fees/students/$studentId/status');
+      if (feeRes != null && feeRes['hasLedger'] == true && mounted) {
+        final ledgers = feeRes['ledgers'] as List<dynamic>? ?? [];
+        final recentPayments = (feeRes['recentPayments'] ?? feeRes['payments'])
+                as List<dynamic>? ??
+            [];
+        setState(() {
+          _feeLedger =
+              ledgers.isNotEmpty ? Map<String, dynamic>.from(ledgers[0]) : null;
+          _feePayments = List<Map<String, dynamic>>.from(recentPayments);
+        });
+      } else {
+        final feeLedgerRes = await client
+            .from('StudentFeeLedger')
+            .select(
+                'id, totalPayable, totalPaid, totalPending, status, feeStructure:FeeStructure(name)')
+            .eq('studentId', studentId)
+            .maybeSingle();
+
+        if (feeLedgerRes != null && mounted) {
+          setState(() {
+            _feeLedger = Map<String, dynamic>.from(feeLedgerRes);
+          });
+
+          final List<dynamic> paymentsRes = await client
+              .from('FeePayment')
+              .select('receiptNumber, amount, paymentDate, paymentMode, status')
+              .eq('studentId', studentId)
+              .order('paymentDate', ascending: false);
+          if (mounted) {
+            setState(() {
+              _feePayments = List<Map<String, dynamic>>.from(paymentsRes);
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching fee details: $e');
+    }
+
+    // 3. Fetch Transport Allocation
+    try {
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('TransportAllocation')
+          .select('*, TransportRoute(*), RouteStop(*)')
+          .eq('studentId', studentId)
+          .eq('status', 'ACTIVE')
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        setState(() {
+          _transportAllocation = {
+            'status': response['status'],
+            'stop': response['RouteStop'],
+            'route': response['TransportRoute'],
+          };
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _transportAllocation = null;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching transport details: $e');
+    }
+
+    // 4. Fetch Timetable slots if sectionId is present
+    if (sectionId != null) {
+      try {
+        final timetableRes =
+            await ApiService.instance.get('timetable/student/$sectionId');
+        if (timetableRes != null &&
+            timetableRes['success'] == true &&
+            mounted) {
+          final rawSchedule = timetableRes['schedule'] as List<dynamic>? ?? [];
+          final Map<int, List<Map<String, dynamic>>> grouped = {};
+
+          for (var slot in rawSchedule) {
+            final sMap = slot as Map<String, dynamic>;
+            final day = sMap['dayOfWeek'] as int? ?? 1;
+
+            final teacherObj = sMap['teacher'] as Map<String, dynamic>?;
+            final userObj = teacherObj?['user'] as Map<String, dynamic>?;
+            final roomObj = sMap['room'] as Map<String, dynamic>?;
+
+            final formattedSlot = {
+              'dayOfWeek': day,
+              'startTime': sMap['startTime'] ?? '—',
+              'endTime': sMap['endTime'] ?? '—',
+              'period': sMap['period'],
+              'durationMinutes': sMap['durationMinutes'],
+              'subject': sMap['subject'],
+              'teacher': {
+                'User': userObj,
+              },
+              'room': roomObj,
+            };
+            grouped.putIfAbsent(day, () => []).add(formattedSlot);
+          }
+          setState(() {
+            _timetableSlots = grouped;
+          });
+        } else {
+          final List<dynamic> slotsRes = await client
+              .from('TimetableSlot')
+              .select(
+                  'dayOfWeek, startTime, endTime, period, durationMinutes, subject:Subject(name, code), teacher:Teacher(User(firstName, lastName)), room:Room(name)')
+              .eq('sectionId', sectionId)
+              .order('period', ascending: true);
+
+          final Map<int, List<Map<String, dynamic>>> grouped = {};
+          for (var s in slotsRes) {
+            final slot = Map<String, dynamic>.from(s);
+            final day = slot['dayOfWeek'] as int? ?? 1;
+            grouped.putIfAbsent(day, () => []).add(slot);
+          }
+          if (mounted) {
+            setState(() {
+              _timetableSlots = grouped;
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching timetable details: $e');
+      }
+    }
+
+    // 5. Fetch Documents
+    try {
+      final docRes =
+          await ApiService.instance.get('students/$studentId/documents');
+      if (docRes != null && docRes['success'] == true && mounted) {
+        final docsList = docRes['documents'] as List<dynamic>? ?? [];
+        setState(() {
+          _uploadedDocuments = docsList.map((d) {
+            final dMap = d as Map<String, dynamic>;
+            final String docName =
+                dMap['documentName'] as String? ?? 'Document.pdf';
+            final String? uploadDateStr = dMap['uploadedAt'] as String?;
+            String dateStr = '—';
+            if (uploadDateStr != null) {
+              try {
+                final parsed = DateTime.parse(uploadDateStr);
+                dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
+              } catch (_) {}
+            }
+            return {
+              'name': docName,
+              'date': dateStr,
+              'id': dMap['id']?.toString() ?? '',
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching documents: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingTabDetails = false;
+      });
+    }
+  }
+
+  void _resetProfileFields() {
     _studentName = '—';
     _studentEmail = '—';
     _admissionNo = '—';
@@ -945,6 +1149,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         } catch (e) {
           debugPrint('Error handling Socket.IO update: $e');
+        }
+      });
+
+      SocketService().on('FEE_UPDATED', (data) {
+        if (!mounted) return;
+        try {
+          final String? updatedStudentId =
+              data?['id']?.toString() ?? data?['studentId']?.toString();
+          if (widget.role == 'student') {
+            _loadStudentDataFromSupabase();
+          } else if (widget.studentId != null &&
+              updatedStudentId == widget.studentId) {
+            _loadStudentDataFromSupabase();
+          }
+        } catch (e) {
+          debugPrint('Error handling Socket.IO FEE_UPDATED: $e');
         }
       });
     } catch (e) {
@@ -1804,23 +2024,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _admissionNo = _employeeId;
         }
       } else {
-        _userName = prefs.getString('student_name') ?? 'Alex Rivera';
-        _email = prefs.getString('student_email') ?? 'alex.rivera@edusmart.edu';
+        _userName = prefs.getString('student_name') ?? '—';
+        _email = prefs.getString('student_email') ?? '—';
         _phone = prefs.getString('student_phone') ?? 'N/A';
         _gender = prefs.getString('student_gender') ?? 'Not Specified';
         _dob = prefs.getString('student_dob') ?? 'Not set';
         _bloodGroup = prefs.getString('student_blood') ?? 'Not assigned';
-        _address =
-            prefs.getString('student_address') ?? 'No location registered';
-        _rollNumber = prefs.getString('student_roll') ?? '24';
-        _className = prefs.getString('student_class') ?? 'Grade 12-A';
-        _admissionId =
-            prefs.getString('student_admission_id') ?? 'ADM-2026-024';
+        _address = prefs.getString('student_address') ?? 'No location registered';
+        _rollNumber = prefs.getString('student_roll') ?? '—';
+        _className = prefs.getString('student_class') ?? '—';
+        _admissionId = prefs.getString('student_admission_id') ?? '—';
         _activityStatus = prefs.getString('student_activity') ?? 'Offline';
         _pushEnabled = prefs.getBool('notifications_enabled') ?? true;
         _inAppEnabled = prefs.getBool('in_app_notifications') ?? true;
-        _lastPasswordChange =
-            prefs.getString('student_last_pwd') ?? 'Action Required';
+        _lastPasswordChange = prefs.getString('student_last_pwd') ?? 'Action Required';
       }
     });
   }
@@ -2650,6 +2867,1298 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool isDesktop = width > 800;
 
     return _buildTabbedStudentProfile(isDesktop);
+  }
+
+  Widget _buildDigitalIdentityCard(bool isDesktop, {String? customTitle}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: const Color(0xFFE2EAF4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.qr_code_2_rounded,
+                  size: 18.sp, color: const Color(0xFF1A6FDB)),
+              SizedBox(width: 8.w),
+              Text(
+                customTitle ?? 'Digital Identity & QR Attendance',
+                style: GoogleFonts.outfit(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F2547),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          if (isDesktop)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 4, child: _buildQRCodeContainer()),
+                SizedBox(width: 20.w),
+                Expanded(flex: 6, child: _buildQRInfoContainer()),
+              ],
+            )
+          else
+            Column(
+              children: [
+                _buildQRCodeContainer(),
+                SizedBox(height: 20.h),
+                _buildQRInfoContainer(),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQRCodeContainer() {
+    return Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF0F6),
+        borderRadius: BorderRadius.circular(12.r),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: _tabs.map((tab) {
+            final bool isActive = _selectedTab == tab;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedTab = tab),
+              child: Container(
+                margin: EdgeInsets.only(right: 6.w),
+                padding: EdgeInsets.symmetric(
+                    horizontal: isDesktop ? 20.w : 14.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color:
+                      isActive ? const Color(0xFFDFEEFA) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Text(
+                  tab,
+                  style: GoogleFonts.inter(
+                    fontSize: isDesktop ? 13.sp : 12.sp,
+                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                    color: isActive
+                        ? const Color(0xFF0F2547)
+                        : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabbedTabContent(bool isDesktop) {
+    if (_isLoadingTabDetails) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(40.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF1A6FDB)),
+        ),
+      );
+    }
+
+    if (_selectedTab == 'Personal Details') {
+      final personalCard = Container(
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Personal Information',
+                style: AppTypography.small
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 20.h),
+            _buildGridRow(
+                'Gender',
+                _studentGender != '—' ? _studentGender : 'N/A',
+                'Blood Group',
+                _studentBloodGroup != '—' ? _studentBloodGroup : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow('Roll Number', _rollNo.isNotEmpty ? _rollNo : 'N/A',
+                'Admission Number', _admissionNo),
+          ],
+        ),
+      );
+
+      final coreIdentityCard = Container(
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Core Identity',
+                style: AppTypography.small
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 20.h),
+            _buildGridRow(
+                'Caste Group',
+                _casteGroup.isNotEmpty ? _casteGroup : 'N/A',
+                'Religion',
+                _religion.isNotEmpty ? _religion : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Nationality',
+                _nationality.isNotEmpty ? _nationality : 'N/A',
+                'Date of Birth',
+                _studentDob != '—' ? _studentDob : 'N/A'),
+          ],
+        ),
+      );
+
+      final guardianCard = Container(
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Guardian Details',
+                style: AppTypography.small
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 20.h),
+            _buildGridRow(
+                'Father Name',
+                _fatherName.isNotEmpty ? _fatherName : 'N/A',
+                'Mother Name',
+                _motherName.isNotEmpty ? _motherName : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Guardian Phone',
+                _guardianPhone.isNotEmpty ? _guardianPhone : 'N/A',
+                'Emergency Phone',
+                _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A'),
+          ],
+        ),
+      );
+
+      if (isDesktop) {
+        return Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: personalCard),
+                SizedBox(width: 20.w),
+                Expanded(child: coreIdentityCard),
+              ],
+            ),
+            SizedBox(height: 20.h),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: guardianCard),
+                SizedBox(width: 20.w),
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.all(20.r),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16.r),
+                      border: Border.all(color: const Color(0xFFE2EAF4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Address Info',
+                            style: AppTypography.small
+                                .copyWith(color: const Color(0xFF0F2547))),
+                        SizedBox(height: 20.h),
+                        Text('Address',
+                            style: AppTypography.caption
+                                .copyWith(color: const Color(0xFF64748B))),
+                        SizedBox(height: 4.h),
+                        Text(
+                            _address.isNotEmpty &&
+                                    _address != 'No location registered'
+                                ? _address
+                                : 'No registered address available',
+                            style: AppTypography.caption
+                                .copyWith(color: const Color(0xFF0F2547))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      } else {
+        return Column(
+          children: [
+            personalCard,
+            SizedBox(height: 16.h),
+            coreIdentityCard,
+            SizedBox(height: 16.h),
+            guardianCard,
+            SizedBox(height: 16.h),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20.r),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(color: const Color(0xFFE2EAF4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Address Info',
+                      style: AppTypography.small
+                          .copyWith(color: const Color(0xFF0F2547))),
+                  SizedBox(height: 20.h),
+                  Text('Address',
+                      style: AppTypography.caption
+                          .copyWith(color: const Color(0xFF64748B))),
+                  SizedBox(height: 4.h),
+                  Text(
+                      _address.isNotEmpty &&
+                              _address != 'No location registered'
+                          ? _address
+                          : 'No registered address available',
+                      style: AppTypography.caption
+                          .copyWith(color: const Color(0xFF0F2547))),
+                ],
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    if (_selectedTab == 'Academic') {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Academic Details',
+                style: AppTypography.small
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 20.h),
+            _buildGridRow('Current Class', _studentClass, 'Section', _section),
+            SizedBox(height: 16.h),
+            _buildGridRow('Roll Number', _rollNo.isNotEmpty ? _rollNo : 'N/A',
+                'Admission Number', _admissionNo),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Academic Batch', _batch, 'Medium of Instruction', _medium),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Enrollment Date', _studentJoinedDate, 'Status', 'ACTIVE'),
+          ],
+        ),
+      );
+    }
+
+    if (_selectedTab == 'Attendance') {
+      final int total = _attendanceRecords.length;
+      final int present = _attendanceRecords
+          .where((r) => r['status']?.toString().toUpperCase() == 'PRESENT')
+          .length;
+      final int late = _attendanceRecords
+          .where((r) => r['status']?.toString().toUpperCase() == 'LATE')
+          .length;
+      final int absent = _attendanceRecords
+          .where((r) => r['status']?.toString().toUpperCase() == 'ABSENT')
+          .length;
+
+      final double percentage =
+          total > 0 ? (present + late) / total * 100 : 92.5;
+      final int displayPresent = total > 0 ? present + late : 24;
+      final int displayAbsent = total > 0 ? absent : 2;
+      final int displayTotal = total > 0 ? total : 26;
+
+      return Column(
+        children: [
+          Row(
+            children: [
+              _buildAttendanceStatCard(
+                  'Attendance Rate',
+                  '${percentage.toStringAsFixed(1)}%',
+                  const Color(0xFF1A6FDB),
+                  const Color(0xFFE8F1FB)),
+              SizedBox(width: 8.w),
+              _buildAttendanceStatCard(
+                  'Days Present',
+                  '$displayPresent/$displayTotal',
+                  const Color(0xFF10B981),
+                  const Color(0xFFECFDF5)),
+              SizedBox(width: 8.w),
+              _buildAttendanceStatCard('Days Absent', '$displayAbsent',
+                  const Color(0xFFEF4444), const Color(0xFFFEF2F2)),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20.r),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              border: Border.all(color: const Color(0xFFE2EAF4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Recent Attendance Log',
+                    style: AppTypography.small
+                        .copyWith(color: const Color(0xFF0F2547))),
+                SizedBox(height: 16.h),
+                if (_attendanceRecords.isEmpty)
+                  _buildMockAttendanceList()
+                else
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _attendanceRecords.length > 5
+                        ? 5
+                        : _attendanceRecords.length,
+                    itemBuilder: (ctx, idx) {
+                      final r = _attendanceRecords[idx];
+                      final dateStr = r['date']?.toString() ?? '—';
+                      final status = r['status']?.toString() ?? 'PRESENT';
+                      final remarks =
+                          r['remarks']?.toString() ?? 'Scanned via QR Code';
+                      return _buildAttendanceRow(dateStr, status, remarks);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_selectedTab == 'Fees') {
+      final double payable = _feeLedger != null
+          ? double.tryParse(
+                  _feeLedger!['totalPayable']?.toString() ?? '0') ??
+              0.0
+          : 0.0;
+      final double paid = _feeLedger != null
+          ? double.tryParse(_feeLedger!['totalPaid']?.toString() ?? '0') ??
+              0.0
+          : 0.0;
+      final double pending = _feeLedger != null
+          ? (double.tryParse(_feeLedger!['totalPending']?.toString() ?? '') ??
+              (payable - paid))
+          : 0.0;
+      final String status = _feeLedger != null
+          ? _feeLedger!['status']?.toString() ?? 'PENDING'
+          : 'PENDING';
+      final String structureName =
+          _feeLedger != null && _feeLedger!['feeStructure'] != null
+              ? _feeLedger!['feeStructure']['name'].toString()
+              : (_feeLedger != null ? 'Fee Structure' : 'No Active Fee Structure');
+
+      Color statusColor = const Color(0xFFF59E0B);
+      Color statusBg = const Color(0xFFFFFBEB);
+      if (status.toUpperCase() == 'PAID') {
+        statusColor = const Color(0xFF10B981);
+        statusBg = const Color(0xFFECFDF5);
+      } else if (status.toUpperCase() == 'PENDING') {
+        statusColor = const Color(0xFFEF4444);
+        statusBg = const Color(0xFFFEF2F2);
+      }
+
+      return Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20.r),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              border: Border.all(color: const Color(0xFFE2EAF4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        structureName,
+                        style: AppTypography.small
+                            .copyWith(color: const Color(0xFF0F2547)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                      decoration: BoxDecoration(
+                          color: statusBg,
+                          borderRadius: BorderRadius.circular(6.r)),
+                      child: Text(
+                        status.replaceAll('_', ' ').toUpperCase(),
+                        style:
+                            AppTypography.caption.copyWith(color: statusColor),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 20.h),
+                _buildGridRow(
+                    'Total Fee Payable',
+                    '₹${payable.toStringAsFixed(2)}',
+                    'Total Amount Paid',
+                    '₹${paid.toStringAsFixed(2)}'),
+                SizedBox(height: 16.h),
+                _buildGridRow('Pending Balance',
+                    '₹${pending.toStringAsFixed(2)}', 'Academic Year', _batch),
+              ],
+            ),
+          ),
+          SizedBox(height: 16.h),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20.r),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              border: Border.all(color: const Color(0xFFE2EAF4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Recent Payment Transactions',
+                    style: AppTypography.small
+                        .copyWith(color: const Color(0xFF0F2547))),
+                SizedBox(height: 16.h),
+                if (_feePayments.isEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20.h),
+                    child: Center(
+                      child: Text(
+                        'No payment transactions found.',
+                        style: AppTypography.caption.copyWith(color: AppColors.textLight),
+                      ),
+                    ),
+                  )
+                else
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _feePayments.length,
+                    itemBuilder: (ctx, idx) {
+                      final p = _feePayments[idx];
+                      final receipt = p['receiptNumber']?.toString() ?? '—';
+                      final amount =
+                          double.tryParse(p['amount']?.toString() ?? '0') ??
+                              0.0;
+                      final dateStr = p['paymentDate']?.toString() ?? '—';
+                      final mode = p['paymentMode']?.toString() ?? 'ONLINE';
+                      return _buildFeePaymentRow(
+                          receipt, amount, dateStr, mode);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_selectedTab == 'Time Table') {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(10.r),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEFF6FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.access_time_filled_rounded,
+                      color: const Color(0xFF1A6FDB), size: 22.sp),
+                ),
+                SizedBox(width: 14.w),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Class Time Table',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F2547),
+                      ),
+                    ),
+                    SizedBox(height: 3.h),
+                    Text(
+                      'Weekly period distribution and timings',
+                      style: AppTypography.caption
+                          .copyWith(color: const Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 24.h),
+            _buildScrollableTable(),
+          ],
+        ),
+      );
+    }
+
+    if (_selectedTab == 'Transport') {
+      final String routeName =
+          _transportAllocation != null && _transportAllocation!['route'] != null
+              ? _transportAllocation!['route']['name'].toString()
+              : 'Route 102 - North Delhi Bypass';
+      final String stopName =
+          _transportAllocation != null && _transportAllocation!['stop'] != null
+              ? _transportAllocation!['stop']['name'].toString()
+              : 'Rohini Sector 15 Crossing';
+      final String startLoc =
+          _transportAllocation != null && _transportAllocation!['route'] != null
+              ? _transportAllocation!['route']['startLocation']?.toString() ??
+                  'School Campus'
+              : 'School Campus';
+      final String endLoc =
+          _transportAllocation != null && _transportAllocation!['route'] != null
+              ? _transportAllocation!['route']['endLocation']?.toString() ??
+                  'Rohini Bus Depot'
+              : 'Rohini Bus Depot';
+      final String transStatus = _transportAllocation != null
+          ? _transportAllocation!['status'].toString()
+          : 'ACTIVE';
+
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Transport Bus Allocation',
+                    style: AppTypography.small
+                        .copyWith(color: const Color(0xFF0F2547))),
+                Container(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(6.r)),
+                  child: Text(
+                    transStatus.toUpperCase(),
+                    style: AppTypography.caption
+                        .copyWith(color: const Color(0xFF10B981)),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20.h),
+            _buildGridRow(
+                'Assigned Route', routeName, 'Assigned Bus Stop', stopName),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Route Start Location', startLoc, 'Route End Location', endLoc),
+            SizedBox(height: 20.h),
+            Container(
+              padding: EdgeInsets.all(14.r),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: const Color(0xFFE2EAF4)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.directions_bus_filled_outlined,
+                      color: const Color(0xFF1A6FDB), size: 20.sp),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Text(
+                      'Bus routes run on schedule every working day. Student scans RFID card upon entry and exit for real-time tracking.',
+                      style: AppTypography.caption.copyWith(
+                          color: const Color(0xFF64748B), height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_selectedTab == 'Documents') {
+      return _buildDocumentsVault();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(48.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2EAF4)),
+      ),
+      child: Center(
+        child: Text(
+          '$_selectedTab details coming soon...',
+          style: AppTypography.small.copyWith(color: const Color(0xFF94A3B8)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridRow(
+      String label1, String value1, String label2, String value2) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label1,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF64748B))),
+              SizedBox(height: 4.h),
+              Text(value1,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF0F2547)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label2,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF64748B))),
+              SizedBox(height: 4.h),
+              Text(value2,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF0F2547)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceStatCard(
+      String label, String value, Color textColor, Color bgColor) {
+    return Expanded(
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 14.h, horizontal: 12.w),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+        child: Column(
+          children: [
+            Text(label,
+                style: AppTypography.caption
+                    .copyWith(color: const Color(0xFF64748B)),
+                textAlign: TextAlign.center),
+            SizedBox(height: 6.h),
+            Text(value, style: AppTypography.body.copyWith(color: textColor)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceRow(String dateStr, String status, String remarks) {
+    Color badgeBg;
+    Color badgeText;
+    if (status.toUpperCase() == 'PRESENT') {
+      badgeBg = const Color(0xFFECFDF5);
+      badgeText = const Color(0xFF10B981);
+    } else if (status.toUpperCase() == 'ABSENT') {
+      badgeBg = const Color(0xFFFEF2F2);
+      badgeText = const Color(0xFFEF4444);
+    } else {
+      badgeBg = const Color(0xFFFFFBEB);
+      badgeText = const Color(0xFFD97706);
+    }
+
+    String formattedDate = dateStr;
+    try {
+      final dateObj = DateTime.parse(dateStr);
+      formattedDate = '${dateObj.day}/${dateObj.month}/${dateObj.year}';
+    } catch (_) {}
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: const Color(0xFFE2EAF4)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(formattedDate,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF0F2547))),
+              SizedBox(height: 2.h),
+              Text(remarks,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF868E96))),
+            ],
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+            decoration: BoxDecoration(
+                color: badgeBg, borderRadius: BorderRadius.circular(6.r)),
+            child: Text(
+              status.toUpperCase(),
+              style: AppTypography.caption.copyWith(color: badgeText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockAttendanceList() {
+    final List<Map<String, String>> mockData = [
+      {
+        'date': '2026-06-08',
+        'status': 'PRESENT',
+        'remarks': 'Scanned at Library Gate'
+      },
+      {
+        'date': '2026-06-05',
+        'status': 'PRESENT',
+        'remarks': 'Scanned at Main Entry Gate'
+      },
+      {
+        'date': '2026-06-04',
+        'status': 'ABSENT',
+        'remarks': 'Absent (No scan detected)'
+      },
+      {
+        'date': '2026-06-03',
+        'status': 'PRESENT',
+        'remarks': 'Scanned at Classroom Gate'
+      },
+    ];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: mockData.length,
+      itemBuilder: (ctx, idx) {
+        final r = mockData[idx];
+        return _buildAttendanceRow(r['date']!, r['status']!, r['remarks']!);
+      },
+    );
+  }
+
+  Widget _buildFeePaymentRow(
+      String receipt, double amount, String dateStr, String mode) {
+    String formattedDate = dateStr;
+    try {
+      final dateObj = DateTime.parse(dateStr);
+      formattedDate = '${dateObj.day}/${dateObj.month}/${dateObj.year}';
+    } catch (_) {}
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 8.h),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(color: const Color(0xFFE2EAF4)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Receipt #$receipt',
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF0F2547))),
+              SizedBox(height: 2.h),
+              Text('Paid on $formattedDate via $mode',
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF868E96))),
+            ],
+          ),
+          Text(
+            '₹${amount.toStringAsFixed(2)}',
+            style:
+                AppTypography.caption.copyWith(color: const Color(0xFF10B981)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockFeePayments() {
+    final List<Map<String, dynamic>> mockData = [
+      {
+        'receipt': 'RCPT-2026-9081',
+        'amount': 15000.0,
+        'date': '2026-05-10',
+        'mode': 'UPI'
+      },
+      {
+        'receipt': 'RCPT-2026-4402',
+        'amount': 15000.0,
+        'date': '2026-04-12',
+        'mode': 'CASH'
+      },
+    ];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: mockData.length,
+      itemBuilder: (ctx, idx) {
+        final p = mockData[idx];
+        return _buildFeePaymentRow(
+            p['receipt']!, p['amount']!, p['date']!, p['mode']!);
+      },
+    );
+  }
+
+  final List<String> _timetableDays = const [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday'
+  ];
+
+  final List<Map<String, String>> _timetableColumns = const [
+    {'title': 'PERIOD 1', 'time': '08:00 - 08:40', 'start': '08:00'},
+    {'title': 'PERIOD 2', 'time': '08:40 - 09:20', 'start': '08:40'},
+    {'title': 'PERIOD 3', 'time': '09:20 - 10:00', 'start': '09:20'},
+    {'title': 'PERIOD 4', 'time': '10:00 - 10:40', 'start': '10:00'},
+    {'title': 'PERIOD 5', 'time': '10:40 - 11:20', 'start': '10:40'},
+    {'title': 'PERIOD 6', 'time': '11:20 - 12:00', 'start': '11:20'},
+    {'title': 'LUNCH BREAK', 'time': '12:00 - 12:30', 'start': '12:00'},
+    {'title': 'PERIOD 7', 'time': '12:30 - 13:10', 'start': '12:30'},
+    {'title': 'PERIOD 8', 'time': '13:10 - 13:50', 'start': '13:10'},
+    {'title': 'PERIOD 9', 'time': '13:50 - 14:30', 'start': '13:50'},
+  ];
+
+  String? _getSubjectForSlot(String day, String startPrefix) {
+    final Map<String, int> dayToNum = {
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+    };
+    final int? dayNum = dayToNum[day];
+    if (dayNum == null) return null;
+    final slots = _timetableSlots[dayNum];
+    if (slots == null) return null;
+    for (var slot in slots) {
+      String startTime = slot['startTime']?.toString() ?? '';
+      List<String> parts = startTime.split(':');
+      if (parts.length >= 2) {
+        String hh = parts[0].padLeft(2, '0');
+        String mm = parts[1].padLeft(2, '0');
+        String normalizedStartTime = '$hh:$mm';
+
+        if (normalizedStartTime == startPrefix) {
+          final subject = slot['subject'];
+          if (subject is Map) {
+            return subject['name']?.toString() ?? subject['title']?.toString();
+          } else if (subject is String) {
+            return subject;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  Widget _buildScrollableTable() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: const Color(0xFFE9F0F8), width: 1.5.w),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.r),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTableHeaderRow(),
+              ..._timetableDays.map((day) => _buildDayRow(day)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableHeaderRow() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _buildCell('DAY',
+              width: 110.w, isHeader: true, alignment: Alignment.centerLeft),
+          ..._timetableColumns
+              .map((col) => _buildTimeCell(col['title']!, col['time']!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayRow(String day) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Row(
+        children: [
+          _buildCell(day,
+              width: 110.w, isDayLabel: true, alignment: Alignment.centerLeft),
+          ..._timetableColumns.map((col) {
+            if (col['title'] == 'LUNCH BREAK') {
+              return _buildCell('Lunch Break',
+                  width: 110.w,
+                  isLunchBreak: true,
+                  bgColor: const Color(0xFFFFF9F2));
+            }
+            final subject = _getSubjectForSlot(day, col['start']!);
+            return _buildCell(subject ?? 'Unassigned',
+                width: 110.w, isUnassigned: subject == null);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeCell(String title, String time) {
+    return Container(
+      width: 110.w,
+      padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 4.w),
+      decoration: const BoxDecoration(
+        border: Border(right: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            title,
+            style:
+                AppTypography.caption.copyWith(color: const Color(0xFF4A5568)),
+          ),
+          SizedBox(height: 6.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4.r),
+              border: Border.all(color: const Color(0xFFE2EAF4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.access_time,
+                    size: 10.sp, color: const Color(0xFFA0AEC0)),
+                SizedBox(width: 4.w),
+                Text(
+                  time,
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF718096)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCell(
+    String text, {
+    required double width,
+    bool isHeader = false,
+    bool isDayLabel = false,
+    bool isUnassigned = false,
+    bool isLunchBreak = false,
+    Alignment alignment = Alignment.center,
+    Color? bgColor,
+  }) {
+    return Container(
+      width: width,
+      padding: EdgeInsets.symmetric(vertical: 24.h, horizontal: 12.w),
+      alignment: alignment,
+      decoration: BoxDecoration(
+        color: bgColor,
+        border:
+            const Border(right: BorderSide(color: Color(0xFFE9F0F8), width: 1)),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: isHeader || isDayLabel ? 11.sp : 12.sp,
+          fontWeight:
+              isHeader || isDayLabel ? FontWeight.w800 : FontWeight.w600,
+          fontStyle: isUnassigned || isLunchBreak
+              ? FontStyle.italic
+              : FontStyle.normal,
+          color: isLunchBreak
+              ? const Color(0xFFE87D3E)
+              : isUnassigned
+                  ? const Color(0xFF94A3B8)
+                  : const Color(0xFF2D3748),
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.role == 'teacher') {
+      return _buildTeacherProfile();
+    }
+
+    final double width = MediaQuery.of(context).size.width;
+    final bool isDesktop = width > 800;
+
+    return _buildTabbedStudentProfile(isDesktop);
+  }
+
+  Widget _buildDocumentsVault() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: const Color(0xFFE2EAF4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.insert_drive_file_outlined,
+                  size: 18.sp, color: const Color(0xFF1A6FDB)),
+              SizedBox(width: 8.w),
+              Text(
+                'Documents Asset Vault',
+                style: GoogleFonts.outfit(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F2547),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          _uploadedDocuments.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20.h),
+                    child: Column(
+                      children: [
+                        Icon(Icons.insert_drive_file_outlined,
+                            size: 36.sp, color: const Color(0xFF868E96)),
+                        SizedBox(height: 12.h),
+                        Text(
+                          'No documents uploaded yet',
+                          style: AppTypography.caption
+                              .copyWith(color: const Color(0xFF868E96)),
+                        ),
+                        SizedBox(height: 16.h),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF1A6FDB),
+                            side: const BorderSide(color: Color(0xFF1A6FDB)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.r)),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16.w, vertical: 8.h),
+                            elevation: 0,
+                          ),
+                          onPressed:
+                              _isUploadingDoc ? null : _simulateDocumentUpload,
+                          icon: _isUploadingDoc
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.upload_file, size: 14),
+                          label: Text(
+                            _isUploadingDoc
+                                ? 'Uploading...'
+                                : 'Upload Document',
+                            style: AppTypography.caption,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Column(
+                  children: [
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _uploadedDocuments.length,
+                      itemBuilder: (ctx, idx) {
+                        final doc = _uploadedDocuments[idx];
+                        return Container(
+                          margin: EdgeInsets.only(bottom: 8.h),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 12.w, vertical: 10.h),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12.r),
+                            border: Border.all(color: const Color(0xFFE2EAF4)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.insert_drive_file_outlined,
+                                  size: 18.sp, color: const Color(0xFF868E96)),
+                              SizedBox(width: 10.w),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      doc['name'] ?? '',
+                                      style: AppTypography.caption.copyWith(
+                                          color: const Color(0xFF0F2547)),
+                                    ),
+                                    SizedBox(height: 2.h),
+                                    Text(
+                                      'Uploaded on: ${doc['date']}',
+                                      style: AppTypography.caption.copyWith(
+                                          color: const Color(0xFF868E96)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    color: Color(0xFFE03131), size: 18),
+                                onPressed: () => _removeDocument(idx),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    SizedBox(height: 12.h),
+                    Center(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF1A6FDB),
+                          side: const BorderSide(color: Color(0xFF1A6FDB)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r)),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16.w, vertical: 8.h),
+                          elevation: 0,
+                        ),
+                        onPressed:
+                            _isUploadingDoc ? null : _simulateDocumentUpload,
+                        icon: _isUploadingDoc
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.upload_file, size: 14),
+                        label: Text(
+                          _isUploadingDoc ? 'Uploading...' : 'Upload Document',
+                          style: AppTypography.caption,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDigitalIdentityCard(bool isDesktop, {String? customTitle}) {

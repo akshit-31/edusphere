@@ -423,17 +423,86 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
         ),
         Row(
           children: [
-            Builder(builder: (context) {
-              final isFilterActive = _selectedFilter != 'All Categories';
-              return _actionBtn(Icons.filter_alt_outlined,
-                  isFilterActive ? _selectedFilter : 'Filters',
-                  trailingIcon: Icons.keyboard_arrow_down,
-                  isActive: isFilterActive, onTap: () {
-                final RenderBox button =
-                    context.findRenderObject() as RenderBox;
-                _showFiltersMenu(context, button);
-              });
-            }),
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                setState(() {
+                  _selectedFilter = val;
+                });
+              },
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.r),
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              offset: const Offset(0, 48),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: _selectedFilter != 'All Categories' ? const Color(0xFFE0F2FE) : Colors.white,
+                  borderRadius: BorderRadius.circular(8.r),
+                  border: Border.all(
+                      color: _selectedFilter != 'All Categories' ? const Color(0xFF0066CC) : const Color(0xFFE2E8F0), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.filter_alt_outlined,
+                      size: 16.sp,
+                      color: _selectedFilter != 'All Categories' ? const Color(0xFF0066CC) : const Color(0xFF475569),
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      _selectedFilter != 'All Categories' ? _selectedFilter : 'Filters',
+                      style: AppTypography.caption.copyWith(
+                          color: _selectedFilter != 'All Categories' ? const Color(0xFF0066CC) : const Color(0xFF0F172A)),
+                    ),
+                    SizedBox(width: 4.w),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16.sp,
+                      color: _selectedFilter != 'All Categories' ? const Color(0xFF0066CC) : const Color(0xFF475569),
+                    ),
+                  ],
+                ),
+              ),
+              itemBuilder: (context) => [
+                'All Categories',
+                'Holiday',
+                'Event',
+                'Exam',
+                'Emergency',
+                'Notice'
+              ].map((String choice) {
+                final isSelected = choice == _selectedFilter;
+                return PopupMenuItem<String>(
+                  value: choice,
+                  padding: EdgeInsets.zero,
+                  height: 36.h,
+                  child: Container(
+                    width: 140.w,
+                    margin: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFFE0F2FE) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Text(
+                      choice,
+                      style: AppTypography.caption.copyWith(
+                          color: isSelected ? const Color(0xFF0066CC) : const Color(0xFF0F172A)),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
             SizedBox(width: 8.w),
             _actionBtn(
               Icons.file_upload_outlined,
@@ -503,63 +572,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     );
   }
 
-  void _showFiltersMenu(BuildContext context, RenderBox button) {
-    final RenderBox overlay =
-        Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(Offset(0, button.size.height + 8),
-            ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(const Offset(0, 8)),
-            ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
 
-    showMenu<String>(
-      context: context,
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-      color: Colors.white,
-      elevation: 4,
-      items: [
-        'All Categories',
-        'Holiday',
-        'Event',
-        'Exam',
-        'Emergency',
-        'Notice'
-      ].map((String choice) {
-        final isSelected = choice == _selectedFilter;
-        return PopupMenuItem<String>(
-          value: choice,
-          padding: EdgeInsets.zero,
-          child: Container(
-            width: 140.w,
-            margin: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFE0F2FE) : Colors.transparent,
-              borderRadius: BorderRadius.circular(8.r),
-            ),
-            child: Text(
-              choice,
-              style: AppTypography.caption.copyWith(
-                  color: isSelected
-                      ? const Color(0xFF0066CC)
-                      : const Color(0xFF0F172A)),
-            ),
-          ),
-        );
-      }).toList(),
-    ).then((value) {
-      if (value != null) {
-        setState(() {
-          _selectedFilter = value;
-        });
-      }
-    });
-  }
 
   // ── Full Calendar Card ─────────────────────────────────────────────────────
   Widget _buildCalendarCard() {

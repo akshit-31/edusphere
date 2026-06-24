@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
+import '../../services/socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:edusphere/theme/typography.dart';
@@ -19,7 +21,7 @@ class AssignmentsScreen extends StatefulWidget {
 class _AssignmentsScreenState extends State<AssignmentsScreen> {
   bool _isLoading = true;
 
-  String _studentEmailStr = 'alex.rivera@edusmart.edu';
+  String _studentEmailStr = '';
   String _studentIdStr = '';
   String _classNameStr = 'Grade 12';
   String _sectionStr = 'A';
@@ -27,7 +29,6 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   final List<Map<String, dynamic>> _assignments = [];
   final String _selectedSubject = 'All';
 
-  RealtimeChannel? _assignmentsChannel;
   Timer? _assignmentsPollTimer;
 
   @override
@@ -40,67 +41,34 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   @override
   void dispose() {
     _assignmentsPollTimer?.cancel();
-    if (_assignmentsChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_assignmentsChannel!);
-      } catch (_) {}
+    try {
+      SocketService().off('ASSIGNMENT_CREATED');
+      SocketService().off('ASSIGNMENT_UPDATED');
+      SocketService().off('SUBMISSION_UPDATED');
+    } catch (e) {
+      dev.log('Error unregistering Socket.IO events: $e', name: 'AssignmentsScreen');
     }
     super.dispose();
   }
 
   void _connectRealTime() {
     try {
-      final client = Supabase.instance.client;
-
-      if (_assignmentsChannel != null) {
-        client.removeChannel(_assignmentsChannel!);
+      dev.log('📡 Subscribing to Socket.IO changes for Assignments...', name: 'AssignmentsScreen');
+      
+      final events = ['ASSIGNMENT_CREATED', 'ASSIGNMENT_UPDATED', 'SUBMISSION_UPDATED'];
+      for (var event in events) {
+        SocketService().on(event, (payload) {
+          dev.log('🔥 Real-time event received: $event | Data: $payload', name: 'AssignmentsScreen');
+          if (mounted) {
+            _loadAssignmentsData(showLoading: false);
+          }
+        });
       }
-
-      dev.log(
-          '📡 Subscribing to Supabase Realtime changes for Assignments Screen...',
-          name: 'AssignmentsScreen');
-      _assignmentsChannel = client
-          .channel('public:assignments_screen_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Assignment',
-            callback: (payload) {
-              dev.log('🔥 Real-time assignment event payload: $payload',
-                  name: 'AssignmentsScreen');
-              if (mounted) {
-                _loadAssignmentsData(showLoading: false);
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AssignmentSubmission',
-            callback: (payload) {
-              dev.log('🔥 Real-time submission event payload: $payload',
-                  name: 'AssignmentsScreen');
-              if (mounted) {
-                _loadAssignmentsData(showLoading: false);
-              }
-            },
-          );
-
-      _assignmentsChannel!.subscribe((status, [error]) {
-        dev.log('📡 Supabase Realtime Assignments channel status: $status',
-            name: 'AssignmentsScreen');
-        if (error != null) {
-          dev.log('❌ Supabase Realtime Assignments subscription error: $error',
-              name: 'AssignmentsScreen');
-        }
-      });
     } catch (e) {
-      dev.log('⚠️ Error connecting Supabase Realtime Assignments channel: $e',
-          name: 'AssignmentsScreen');
+      dev.log('⚠️ Error connecting Socket.IO for Assignments: $e', name: 'AssignmentsScreen');
     }
 
-    // Polling fallback every 2 seconds for robust real-time updates
-    _assignmentsPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    _assignmentsPollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
         _loadAssignmentsData(showLoading: false);
       }
@@ -116,125 +84,63 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedEmail =
-          prefs.getString('student_email') ?? prefs.getString('user_email');
-      if (savedEmail != null) {
-        _studentEmailStr = savedEmail;
-      }
-
-      // 1. Fetch student info
-      final userRes = await Supabase.instance.client
-          .from('User')
-          .select()
-          .eq('email', _studentEmailStr)
-          .maybeSingle();
-
-      if (userRes != null) {
-        final userId = userRes['id'] as String;
-
-        final studentRes = await Supabase.instance.client
-            .from('Student')
-            .select()
-            .eq('userId', userId)
-            .maybeSingle();
-
-        if (studentRes != null) {
-          _studentIdStr = studentRes['id'] as String;
-          _classNameStr = studentRes['currentClassId'] as String? ?? '';
-          _sectionStr = studentRes['sectionId'] as String? ?? '';
-        }
-      }
-
-      // 2. Fetch assignments for this class & section
-      final List<dynamic> assignmentsRes = _classNameStr.isNotEmpty
-          ? await Supabase.instance.client
-              .from('Assignment')
-              .select()
-              .eq('classId', _classNameStr)
-          : [];
-
-      final List<dynamic> filteredAssignments = assignmentsRes.where((a) {
-        final aSecId = a['sectionId'];
-        return aSecId == null || _sectionStr.isEmpty || aSecId == _sectionStr;
-      }).toList();
-
-      // 3. Fetch submissions by this student
-      final List<dynamic> submissionsRes = _studentIdStr.isNotEmpty
-          ? await Supabase.instance.client
-              .from('AssignmentSubmission')
-              .select()
-              .eq('studentId', _studentIdStr)
-          : [];
-
-      // Map submissions by assignmentId
-      final Map<String, Map<String, dynamic>> submissionsMap = {};
-      for (var sub in submissionsRes) {
-        final assId = (sub['assignmentId'] ?? sub['assignment_id']) as String;
-        submissionsMap[assId] = Map<String, dynamic>.from(sub);
-      }
-
+      final savedEmail = prefs.getString('student_email') ?? prefs.getString('user_email');
+      if (savedEmail != null) _studentEmailStr = savedEmail;
+      
+      _studentIdStr = prefs.getString('student_id') ?? '';
+      
+      final res = await ApiService.instance.get('assignments/student');
+      
+      final List<dynamic> assignmentsData = res['assignments'] ?? [];
       final List<Map<String, dynamic>> tempAssignments = [];
-
-      for (var ass in filteredAssignments) {
-        final assId = ass['id'] as String;
-        final title = ass['title'] as String? ?? 'Untitled';
-        final desc = ass['description'] as String? ?? '';
-        final dueDateStr = (ass['dueDate'] ?? ass['due_date']) as String?;
-
-        // Fetch subject name dynamically
-        String subject = 'General';
-        final subId = ass['subjectId'] as String?;
-        if (subId != null && subId.isNotEmpty) {
-          try {
-            final subRes = await Supabase.instance.client
-                .from('Subject')
-                .select('name')
-                .eq('id', subId)
-                .maybeSingle();
-            if (subRes != null) {
-              subject = subRes['name'] as String? ?? 'General';
-            }
-          } catch (_) {}
-        }
-
+      
+      for (var a in assignmentsData) {
+        final assId = a['id']?.toString() ?? '';
+        final title = a['title']?.toString() ?? 'Untitled';
+        final desc = a['description']?.toString() ?? '';
+        final dueDateStr = a['dueDate']?.toString();
+        
+        final subjectObj = a['subject'] as Map? ?? {};
+        final subject = subjectObj['name']?.toString() ?? 'General';
+        
+        final subs = a['submissions'] as List? ?? [];
+        final sub = subs.isNotEmpty ? subs.first : null;
+        
         DateTime? due;
         if (dueDateStr != null) {
           try {
             due = DateTime.parse(dueDateStr);
           } catch (_) {}
         }
-
-        final isUrgent = due != null &&
-            due.year == DateTime.now().year &&
-            due.month == DateTime.now().month &&
-            due.day == DateTime.now().day;
-
-        final bool isSubmitted = submissionsMap.containsKey(assId);
-        final sub = submissionsMap[assId];
-
+        
         final now = DateTime.now();
+        final isUrgent = due != null &&
+            due.year == now.year &&
+            due.month == now.month &&
+            due.day == now.day;
+            
+        final bool isSubmitted = sub != null;
         final today = DateTime(now.year, now.month, now.day);
         final bool isOverdue = !isSubmitted &&
             due != null &&
             DateTime(due.year, due.month, due.day).isBefore(today);
-
+            
         String formattedDue = 'No due date';
         if (due != null) {
-          formattedDue = intl.DateFormat('MMM d, yyyy').format(due);
+          formattedDue = intl.DateFormat('MMM d, yyyy').format(due.toLocal());
         }
-
+        
         String? formattedSub;
         if (sub != null) {
-          final subAtStr =
-              (sub['submittedAt'] ?? sub['submitted_at']) as String?;
+          final subAtStr = sub['submittedAt']?.toString() ?? sub['createdAt']?.toString();
           if (subAtStr != null) {
             try {
               final subAt = DateTime.parse(subAtStr);
-              formattedSub = intl.DateFormat('MMM d, yyyy').format(subAt);
+              formattedSub = intl.DateFormat('MMM d, yyyy').format(subAt.toLocal());
             } catch (_) {}
           }
         }
-
+        
         tempAssignments.add({
           'id': assId,
           'title': title,
@@ -245,16 +151,12 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
           'isOverdue': isOverdue,
           'isSubmitted': isSubmitted,
           'submittedAt': formattedSub ?? 'Recently',
-          'grade': sub?['grade'] as String? ?? 'Pending',
-          'score':
-              (sub?['feedback'] ?? sub?['score'])?.toString() ?? 'Not Graded',
-          'fileName': (sub?['filePath'] ??
-              sub?['fileName'] ??
-              sub?['file_name']) as String?,
+          'grade': sub?['grade']?.toString() ?? 'Pending',
+          'score': (sub?['feedback'] ?? sub?['score'])?.toString() ?? 'Not Graded',
+          'fileName': (sub?['filePath'] ?? sub?['fileName'] ?? sub?['fileUrl'])?.toString(),
         });
       }
-
-      // Mock assignment removed to match real-time empty state matching target design.
+      
       if (mounted) {
         setState(() {
           _assignments.clear();
@@ -263,6 +165,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
         });
       }
     } catch (e) {
+      dev.log('Error loading assignments from API: $e', name: 'AssignmentsScreen');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -702,6 +605,24 @@ class _AdvancedAssignmentModalState extends State<AdvancedAssignmentModal>
     }
 
     try {
+      if (widget.assignment['id'] == 'mock-chapter-1-assignment-id') {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('mock_sub_chapter_1', true);
+        await prefs.setString('mock_file_chapter_1', selectedFile!.name);
+        await prefs.setString('mock_date_chapter_1',
+            intl.DateFormat('MMM d, yyyy').format(DateTime.now()));
+      } else {
+        final res = await ApiService.instance.post(
+          'assignments/${widget.assignment['id']}/submit',
+          body: {
+            'studentId': widget.studentIdStr,
+            'fileName': selectedFile!.name,
+          },
+        );
+        if (res['success'] != true) {
+          throw Exception(res['message'] ?? 'Failed to submit assignment');
+        }
+      }
       await Supabase.instance.client.from('AssignmentSubmission').upsert({
         'assignmentId': widget.assignment['id'],
         'studentId': widget.studentIdStr,
