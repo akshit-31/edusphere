@@ -4,8 +4,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
-import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
 
 class TeacherOverdueManagementScreen extends StatefulWidget {
@@ -322,8 +320,26 @@ class _TeacherOverdueManagementScreenState
     final double totalFines = _totalPendingFines;
 
     return Scaffold(
-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 0),
-      appBar: const TeacherAppBar(title: 'Overdue Management'),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+        title: Text(
+          'Overdue Management',
+          style: GoogleFonts.outfit(
+            fontSize: 22.sp,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+            onPressed: () {},
+          ),
+          SizedBox(width: 8.w),
+        ],
+      ),
       backgroundColor: const Color(0xFFF0F4F8),
       body: SafeArea(
         child: Column(

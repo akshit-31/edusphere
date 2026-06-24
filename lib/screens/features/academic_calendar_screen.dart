@@ -8,7 +8,6 @@ import 'package:file_saver/file_saver.dart';
 import '../../services/api_service.dart';
 import 'dart:developer' as dev;
 import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -342,8 +341,35 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
           ? const EduSphereDrawer(
               role: 'teacher', activeLabel: 'Academic Calendar')
           : null,
-      appBar:
-          widget.showAppBar ? const TeacherAppBar(title: 'EduSphere') : null,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.menu, size: 28.sp, color: const Color(0xFF0F172A)),
+                onPressed: () {
+                  _scaffoldKey.currentState?.openDrawer();
+                  widget.onOpenDrawer?.call();
+                },
+              ),
+              title: Text(
+                'EduSphere',
+                style: GoogleFonts.outfit(
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon:
+                      Icon(Icons.notifications_none_rounded, size: 26.sp),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Container(
@@ -366,8 +392,6 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
                 ),
               ),
             ),
-      bottomNavigationBar:
-          widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 1) : null,
     );
   }
 

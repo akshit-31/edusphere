@@ -276,8 +276,6 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
       drawer: widget.showAppBar
           ? const EduSphereDrawer(role: 'teacher', activeLabel: 'Assignments')
           : null,
-      bottomNavigationBar:
-          widget.showAppBar ? const TeacherBottomNavBar(activeIndex: 6) : null,
       backgroundColor: const Color(0xFFF3F8FC),
       appBar: widget.showAppBar
           ? AppBar(

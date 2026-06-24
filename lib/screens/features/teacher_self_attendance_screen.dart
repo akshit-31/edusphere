@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,8 +8,6 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
-import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
 
 class TeacherPersonalAttendanceScreen extends StatefulWidget {
@@ -269,8 +268,26 @@ class _TeacherPersonalAttendanceScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: const TeacherAppBar(title: 'My Attendance'),
-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 3),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+        title: Text(
+          'My Attendance',
+          style: GoogleFonts.outfit(
+            fontSize: 22.sp,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none_rounded, size: 28.sp),
+            onPressed: () {},
+          ),
+          SizedBox(width: 8.w),
+        ],
+      ),
       body: Column(
         children: [
           PageHeader(

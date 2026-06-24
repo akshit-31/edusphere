@@ -15,7 +15,6 @@ import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'main_screen.dart';
 import '../config/api_config.dart';
-import '../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
 
 // ── CUSTOM QR SIMULATOR PAINTER ──
@@ -142,18 +141,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _pushEnabled = true;
   bool _inAppEnabled = true;
 
-  // Desktop Tabs State
-  String _selectedTab = 'Personal Details';
-  final List<String> _tabs = [
-    'Personal Details',
-    'Academic',
-    'Attendance',
-    'Fees',
-    'Time Table',
-    'Transport',
-    'Documents'
-  ];
-
   // Student details state
   String? _currentStudentDbId;
   String _studentName = 'Kavya Yadav';
@@ -186,14 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _motherName = 'Priya Sharma';
   String _guardianPhone = '+91 98765 43210';
   final List<RealtimeChannel> _realtimeChannels = [];
-
-  // Tab details database variables
-  bool _isLoadingTabDetails = false;
-  List<Map<String, dynamic>> _attendanceRecords = [];
-  Map<String, dynamic>? _feeLedger;
-  List<Map<String, dynamic>> _feePayments = [];
-  Map<String, dynamic>? _transportAllocation;
-  Map<int, List<Map<String, dynamic>>> _timetableSlots = {};
 
   @override
   void initState() {
@@ -247,6 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+    void _resetProfileFields() {
   Future<void> _loadAllTabDetails(String studentId, String? sectionId) async {
     if (!mounted) return;
     setState(() {
@@ -484,11 +464,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _motherName = '—';
     _guardianPhone = '—';
     _uploadedDocuments = [];
-    _attendanceRecords = [];
-    _feeLedger = null;
-    _feePayments = [];
-    _timetableSlots = {};
-    _transportAllocation = null;
   }
 
   @override
@@ -740,8 +715,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           });
         }
 
-        final String? sectionId = studentData['sectionId'] as String?;
-        _loadAllTabDetails(studentId, sectionId);
+
         _connectRealTimeSync();
 
         if (userMap['id'] != null) {
@@ -919,8 +893,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final studentId = studentResMap['id'] as String;
       await prefs.setString('student_id', studentId);
 
-      final String? sectionId = studentResMap['sectionId'] as String?;
-      _loadAllTabDetails(studentId, sectionId);
       _connectRealTimeSync();
 
       try {
@@ -1536,7 +1508,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final ctrl = TextEditingController(text: _emergencyInfo == '—' || _emergencyInfo == 'UNSET' ? '' : _emergencyInfo);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
         title: Text('Edit Emergency Info', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         content: TextField(
@@ -1550,7 +1522,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
@@ -1560,7 +1532,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             onPressed: () async {
               final String val = ctrl.text.trim();
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               setState(() {
                 _emergencyInfo = val.isEmpty ? '—' : val;
               });
@@ -1579,9 +1551,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     await client.from('Student').update({'emergencyPhone': val.isEmpty ? null : val}).eq('userId', currentUser.id);
                   }
                 }
-                showToast(context, 'Emergency contact updated!');
+                if (mounted) {
+                  showToast(context, 'Emergency contact updated!');
+                }
               } catch (e) {
-                showToast(context, 'Error updating contact');
+                if (mounted) {
+                  showToast(context, 'Error updating contact');
+                }
               }
             },
             child: Text('Save', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -2761,7 +2737,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: _togglePushNotifications,
                 title: Text('Push Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 subtitle: Text('Receive alerts about attendance & announcements', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
-                activeColor: const Color(0xFF1A6FDB),
+                activeThumbColor: const Color(0xFF1A6FDB),
               ),
               _divider(),
               SwitchListTile(
@@ -2769,7 +2745,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: _toggleInAppNotifications,
                 title: Text('In-App Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 subtitle: Text('Show popups and badge counts inside the app', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
-                activeColor: const Color(0xFF1A6FDB),
+                activeThumbColor: const Color(0xFF1A6FDB),
               ),
             ],
           ),
@@ -2877,204 +2853,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTabbedHeaderCard(bool isDesktop) {
-    final List<String> parts = _studentName.trim().split(RegExp(r'\s+'));
-    final String initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : (parts.isNotEmpty && parts[0].isNotEmpty
-            ? parts[0][0].toUpperCase()
-            : 'ST');
 
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.role == 'teacher') {
+      return _buildTeacherProfile();
+    }
+
+    final double width = MediaQuery.of(context).size.width;
+    final bool isDesktop = width > 800;
+
+    return _buildTabbedStudentProfile(isDesktop);
+  }
+
+  Widget _buildDigitalIdentityCard(bool isDesktop, {String? customTitle}) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(isDesktop ? 24.r : 16.r),
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(24.r),
         border: Border.all(color: const Color(0xFFE2EAF4)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    width: isDesktop ? 64.w : 52.w,
-                    height: isDesktop ? 64.w : 52.w,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE8F1FB),
-                      shape: BoxShape.circle,
-                    ),
-                    child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(isDesktop ? 32.r : 26.r),
-                      child: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                          ? (_avatarUrl!.startsWith('data:image')
-                              ? Image.memory(
-                                  base64Decode(_avatarUrl!.split(',').last),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Center(
-                                    child: Text(
-                                      initials,
-                                      style: GoogleFonts.inter(
-                                        fontSize: isDesktop ? 22.sp : 18.sp,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF1A6FDB),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : Image.network(
-                                  _avatarUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Center(
-                                    child: Text(
-                                      initials,
-                                      style: GoogleFonts.inter(
-                                        fontSize: isDesktop ? 22.sp : 18.sp,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF1A6FDB),
-                                      ),
-                                    ),
-                                  ),
-                                ))
-                          : Center(
-                              child: Text(
-                                initials,
-                                style: GoogleFonts.inter(
-                                  fontSize: isDesktop ? 22.sp : 18.sp,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1A6FDB),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                  if (widget.studentId == null)
-                    GestureDetector(
-                      onTap: _openEditProfileSheet,
-                      child: Container(
-                        padding: EdgeInsets.all(4.r),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF1A6FDB),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(color: Colors.black12, blurRadius: 4)
-                          ],
-                        ),
-                        child: Icon(Icons.edit_rounded,
-                            size: 10.sp, color: Colors.white),
-                      ),
-                    ),
-                ],
-              ),
-              SizedBox(width: isDesktop ? 24.w : 16.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _studentName,
-                      style: GoogleFonts.inter(
-                        fontSize: isDesktop ? 20.sp : 16.sp,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F2547),
-                      ),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      'Admission No: $_admissionNo',
-                      style: GoogleFonts.inter(
-                        fontSize: isDesktop ? 12.sp : 10.5.sp,
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(6.r),
-                ),
-                child: Text(
-                  'ACTIVE',
-                  style: GoogleFonts.inter(
-                    fontSize: isDesktop ? 11.sp : 9.sp,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF10B981),
-                  ),
+              Icon(Icons.qr_code_2_rounded,
+                  size: 18.sp, color: const Color(0xFF1A6FDB)),
+              SizedBox(width: 8.w),
+              Text(
+                customTitle ?? 'Digital Identity & QR Attendance',
+                style: GoogleFonts.outfit(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F2547),
                 ),
               ),
             ],
           ),
-          SizedBox(height: isDesktop ? 24.h : 16.h),
-          const Divider(color: Color(0xFFE2EAF4), height: 1),
-          SizedBox(height: isDesktop ? 24.h : 16.h),
+          SizedBox(height: 16.h),
           if (isDesktop)
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                    child: _buildHeaderItem(
-                        Icons.email_outlined, 'Email', _studentEmail)),
+                Expanded(flex: 4, child: _buildQRCodeContainer()),
                 SizedBox(width: 20.w),
-                Expanded(
-                    child: _buildHeaderItem(Icons.phone_outlined, 'Phone',
-                        _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A')),
-                SizedBox(width: 20.w),
-                Expanded(
-                    child: _buildHeaderItem(
-                        Icons.calendar_today_outlined,
-                        'Date of Birth',
-                        _studentDob != '—' ? _studentDob : 'N/A')),
-                SizedBox(width: 20.w),
-                Expanded(
-                    child: _buildHeaderItem(Icons.menu_book_outlined, 'Class',
-                        '$_studentClass - $_section')),
+                Expanded(flex: 6, child: _buildQRInfoContainer()),
               ],
             )
           else
-            Wrap(
-              spacing: 16.w,
-              runSpacing: 16.h,
+            Column(
               children: [
-                SizedBox(
-                  width: 145.w,
-                  child: _buildHeaderItem(
-                      Icons.email_outlined, 'Email', _studentEmail),
-                ),
-                SizedBox(
-                  width: 145.w,
-                  child: _buildHeaderItem(Icons.phone_outlined, 'Phone',
-                      _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A'),
-                ),
-                SizedBox(
-                  width: 145.w,
-                  child: _buildHeaderItem(
-                      Icons.calendar_today_outlined,
-                      'Date of Birth',
-                      _studentDob != '—' ? _studentDob : 'N/A'),
-                ),
-                SizedBox(
-                  width: 145.w,
-                  child: _buildHeaderItem(Icons.menu_book_outlined, 'Class',
-                      '$_studentClass - $_section'),
-                ),
+                _buildQRCodeContainer(),
+                SizedBox(height: 20.h),
+                _buildQRInfoContainer(),
               ],
             ),
         ],
@@ -3082,40 +2919,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildHeaderItem(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(icon, size: 18.sp, color: const Color(0xFF64748B)),
-        SizedBox(width: 10.w),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.caption
-                    .copyWith(color: const Color(0xFF64748B)),
-              ),
-              SizedBox(height: 2.h),
-              Text(
-                value,
-                style: AppTypography.caption
-                    .copyWith(color: const Color(0xFF0F2547)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabbedNavigation(bool isDesktop) {
+  Widget _buildQRCodeContainer() {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 6.h),
+      padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF0F6),
         borderRadius: BorderRadius.circular(12.r),
@@ -4802,11 +4608,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
       drawer: isPushed
           ? const EduSphereDrawer(role: 'teacher', activeLabel: 'My Profile')
           : null,
-      bottomNavigationBar:
-          isPushed ? const TeacherBottomNavBar(activeIndex: 13) : null,
       backgroundColor: const Color(0xFFEFF6FF), // From image background color
-      appBar:
-          widget.showAppBar ? const TeacherAppBar(title: 'EduSphere') : null,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => _teacherScaffoldKey.currentState?.openDrawer(),
+              ),
+              actions: [
+                IconButton(
+                  icon: Stack(
+                    children: [
+                      Icon(Icons.notifications_none, color: const Color(0xFF0F172A), size: 22.sp),
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+                        ),
+                      )
+                    ],
+                  ),
+                  onPressed: () {},
+                ),
+                SizedBox(width: 8.w),
+              ],
+            )
+          : null,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(

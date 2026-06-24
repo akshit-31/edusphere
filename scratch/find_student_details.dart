@@ -7,20 +7,14 @@ void main() async {
   );
 
   try {
-    final record = await supabase
-        .from('AttendanceRecord')
-        .select('*')
-        .limit(1)
+    final student = await supabase
+        .from('Student')
+        .select('id, admissionNumber, currentClassId, sectionId, User(id, email, firstName, lastName, qrCode)')
+        .eq('userId', '161367f4-ead0-4d92-abe7-6a664875e8b9')
         .maybeSingle();
 
-    print('AttendanceRecord structure:');
-    if (record != null) {
-      record.forEach((key, val) {
-        print('  $key : type=${val.runtimeType} | value=$val');
-      });
-    } else {
-      print('No attendance records found.');
-    }
+    print('Student details:');
+    print(student);
   } catch (e) {
     print('Error: $e');
   } finally {

@@ -18,7 +18,6 @@ class _AddLessonScreenState extends State<AddLessonScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 0),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,

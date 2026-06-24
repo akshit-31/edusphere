@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,9 +8,10 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../config/supabase_config.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
-import '../../widgets/teacher_app_bar.dart';
 import '../profile_screen.dart';
 import 'package:edusphere/theme/typography.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../services/socket_service.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -40,27 +41,20 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   RealtimeChannel? _realtimeChannel;
 
   // QR Scanner State
-  final MobileScannerController _qrController = MobileScannerController();
+  final MobileScannerController _qrController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.normal,
+    formats: [BarcodeFormat.qrCode],
+  );
   bool _isProcessingQR = false;
 
   // Manual scanner entry for desktop/fallback
   final TextEditingController _manualScanCtrl = TextEditingController();
 
-  bool get _isDesktopOrWeb {
-    if (kIsWeb) return true;
-    try {
-      const platform =
-          String.fromEnvironment('FLUTTER_PLATFORM', defaultValue: '');
-      if (platform.isNotEmpty) return false;
-    } catch (_) {}
-    return defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux;
-  }
 
   @override
   void initState() {
     super.initState();
+    _requestCameraPermission();
     _loadLiveDashboard();
     _loadTeacherName();
     _setupRealtimeSubscription();
@@ -71,6 +65,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         _loadLiveFeed();
       }
     });
+  }
+
+  Future<void> _requestCameraPermission() async {
+    try {
+      final status = await Permission.camera.request();
+      debugPrint('📷 [Camera Permission Status] $status');
+    } catch (e) {
+      debugPrint('⚠️ [Camera Permission Error] Failed to request permission: $e');
+    }
   }
 
   void _setupRealtimeSubscription() {
@@ -161,7 +164,6 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   Future<void> _processQRData(String rawCode) async {
     if (_isProcessingQR) return;
     setState(() => _isProcessingQR = true);
-    await _qrController.stop();
 
     debugPrint(
         '================================================================');
@@ -172,11 +174,27 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     try {
       final codeTrimmed = rawCode.trim();
 
-      // Check if it's a teacher employeeId first
+      // Parse QR code JSON payload if applicable
+      String resolvedIdentifier = codeTrimmed;
+      try {
+        if (codeTrimmed.startsWith('{') && codeTrimmed.endsWith('}')) {
+          final Map<String, dynamic> jsonMap = jsonDecode(codeTrimmed);
+          if (jsonMap.containsKey('uid')) {
+            resolvedIdentifier = jsonMap['uid'].toString().trim();
+            debugPrint('🔑 Extracted UID from JSON payload: $resolvedIdentifier');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Failed to parse QR payload as JSON: $e');
+      }
+
+      final resolvedIdentifierUpper = resolvedIdentifier.toUpperCase();
+
+      // Check if it's a teacher employeeId/userId/id first (case-insensitive for employeeId)
       final teacherRes = await Supabase.instance.client
           .from('Teacher')
           .select('id, userId, employeeId, user:User(firstName, lastName)')
-          .eq('employeeId', codeTrimmed)
+          .or('employeeId.eq.$resolvedIdentifier,employeeId.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
           .maybeSingle();
 
       if (teacherRes != null) {
@@ -198,6 +216,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
             widget.sessionAction?.toLowerCase() == 'check_in';
 
+        // Check if teacher attendance record already exists for today
+        final existingTeacherRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .select('id')
+            .eq('teacherId', teacherId)
+            .eq('date', dateStr)
+            .eq('attendeeType', 'TEACHER')
+            .maybeSingle();
+
         final Map<String, dynamic> scanData = {
           'attendeeType': 'TEACHER',
           'teacherId': teacherId,
@@ -214,15 +241,32 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
           scanData['checkOutTime'] = DateTime.now().toIso8601String();
         }
 
-        debugPrint('📤 Teacher Attendance insert payload: $scanData');
+        dynamic resultRecord;
+        if (existingTeacherRecord != null) {
+          final recordId = existingTeacherRecord['id'];
+          debugPrint('📤 Teacher Attendance update payload: $scanData for ID: $recordId');
+          resultRecord = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .update(scanData)
+              .eq('id', recordId)
+              .select()
+              .single();
+        } else {
+          debugPrint('📤 Teacher Attendance insert payload: $scanData');
+          resultRecord = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .insert(scanData)
+              .select()
+              .single();
+        }
 
-        final insertResponse = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .insert(scanData)
-            .select()
-            .single();
+        debugPrint('📥 Teacher Attendance response: $resultRecord');
 
-        debugPrint('📥 Teacher Attendance insert response: $insertResponse');
+        try {
+          SocketService().emit('ATTENDANCE_UPDATED', {'teacherId': teacherId, 'source': 'teacher_qr_scan'});
+        } catch (e) {
+          debugPrint('Socket emit error: $e');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -247,20 +291,20 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         return;
       }
 
-      // Check if it's a student admission number
+      // Check if it's a student admission number/userId/id (case-insensitive for admissionNumber)
       final studentRes = await Supabase.instance.client
           .from('Student')
           .select('id, user:User(firstName, lastName)')
-          .eq('admissionNumber', codeTrimmed)
+          .or('admissionNumber.eq.$resolvedIdentifier,admissionNumber.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
           .maybeSingle();
 
       if (studentRes == null) {
         debugPrint(
-            '❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed');
+            '❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed (Resolved ID: $resolvedIdentifier)');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Student/Teacher not found for QR: $codeTrimmed'),
+                content: Text('Student/Teacher not found for QR: $resolvedIdentifier'),
                 backgroundColor: AppColors.error),
           );
         }
@@ -284,6 +328,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
           widget.sessionAction?.toLowerCase() == 'check_in';
 
+      // Check if student attendance record already exists for today
+      final existingStudentRecord = await Supabase.instance.client
+          .from('AttendanceRecord')
+          .select('id')
+          .eq('studentId', studentId)
+          .eq('date', dateStr)
+          .eq('attendeeType', 'STUDENT')
+          .maybeSingle();
+
       final Map<String, dynamic> scanData = {
         'attendeeType': 'STUDENT',
         'studentId': studentId,
@@ -300,15 +353,32 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         scanData['checkOutTime'] = DateTime.now().toIso8601String();
       }
 
-      debugPrint('📤 Attendance insert request payload: $scanData');
+      dynamic resultRecord;
+      if (existingStudentRecord != null) {
+        final recordId = existingStudentRecord['id'];
+        debugPrint('📤 Student Attendance update payload: $scanData for ID: $recordId');
+        resultRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .update(scanData)
+            .eq('id', recordId)
+            .select()
+            .single();
+      } else {
+        debugPrint('📤 Student Attendance insert payload: $scanData');
+        resultRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(scanData)
+            .select()
+            .single();
+      }
 
-      final insertResponse = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .insert(scanData)
-          .select()
-          .single();
+      debugPrint('📥 Student Attendance response: $resultRecord');
 
-      debugPrint('📥 Attendance insert response: $insertResponse');
+      try {
+        SocketService().emit('ATTENDANCE_UPDATED', {'studentId': studentId, 'source': 'teacher_qr_scan'});
+      } catch (e) {
+        debugPrint('Socket emit error: $e');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -331,10 +401,9 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       debugPrint(
           '================================================================');
       if (mounted) {
-        setState(() => _isProcessingQR = false);
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && !_isDesktopOrWeb) {
-            _qrController.start();
+          if (mounted) {
+            setState(() => _isProcessingQR = false);
           }
         });
       }
@@ -518,9 +587,34 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     final isDesktop = size.width > 800;
 
     return Scaffold(
-      appBar: const TeacherAppBar(title: 'EduSphere'),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+        leading: IconButton(
+          icon: const Icon(Icons.menu, size: 28),
+          onPressed: () {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            MainScreen.openDrawer();
+          },
+        ),
+        title: Text(
+          'EduSphere',
+          style: GoogleFonts.outfit(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded, size: 28),
+            onPressed: () {},
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       backgroundColor: const Color(0xFFF8FAFC),
-      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 5),
       body: _isLoading
           ? Center(
               child: CircularProgressIndicator(
@@ -854,93 +948,78 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   Widget _buildCameraPanel() {
     return Container(
       width: double.infinity,
-      height: 420.h,
+      padding: EdgeInsets.symmetric(vertical: 20.h),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: _isDesktopOrWeb
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.desktop_windows_rounded,
-                  size: 48.sp,
-                  color: const Color(0xFF94A3B8),
-                ),
-                SizedBox(height: 12.h),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24.w),
-                  child: Text(
-                    'Camera scanning is not supported on this device/browser. Please type student QR payload below to verify & scan.',
-                    style: AppTypography.caption
-                        .copyWith(color: const Color(0xFF64748B)),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                SizedBox(height: 20.h),
-                _buildManualEntryField(),
-              ],
-            )
-          : Stack(
-              alignment: Alignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16.r),
-                  child: Stack(
-                    children: [
-                      MobileScanner(
-                        controller: _qrController,
-                        onDetect: (capture) async {
-                          if (_isProcessingQR) return;
-                          final barcodes = capture.barcodes;
-                          if (barcodes.isNotEmpty) {
-                            final code = barcodes.first.rawValue?.trim() ?? '';
-                            if (code.isEmpty) return;
-                            await _processQRData(code);
-                          }
-                        },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Camera Preview Box
+          SizedBox(
+            height: 260.h,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12.r),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    MobileScanner(
+                      controller: _qrController,
+                      onDetect: (capture) async {
+                        if (_isProcessingQR) return;
+                        final barcodes = capture.barcodes;
+                        if (barcodes.isNotEmpty) {
+                          final code = barcodes.first.rawValue?.trim() ?? '';
+                          if (code.isEmpty) return;
+                          await _processQRData(code);
+                        }
+                      },
+                    ),
+                    Center(
+                      child: Container(
+                        width: 160.w,
+                        height: 160.w,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: widget.theme.primary, width: 4),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      Center(
-                        child: Container(
-                          width: 250.w,
-                          height: 250.w,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                                color: widget.theme.primary, width: 6),
-                            borderRadius: BorderRadius.circular(16),
+                    ),
+                    if (_isProcessingQR)
+                      Container(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(color: Colors.white),
+                              SizedBox(height: 12.h),
+                              Text(
+                                'Processing...',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                if (_isProcessingQR)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(16.r),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(color: Colors.white),
-                          SizedBox(height: 12.h),
-                          Text(
-                            'Processing...',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
+          ),
+          SizedBox(height: 16.h),
+          // Manual Fallback Entry
+          _buildManualEntryField(),
+        ],
+      ),
     );
   }
 

@@ -7,20 +7,20 @@ void main() async {
   );
 
   try {
-    final record = await supabase
-        .from('AttendanceRecord')
-        .select('*')
-        .limit(1)
+    final classRes = await supabase
+        .from('Class')
+        .select('name')
+        .eq('id', 'eca75480-c96e-4ea6-8e66-c934a89c9bc0')
         .maybeSingle();
 
-    print('AttendanceRecord structure:');
-    if (record != null) {
-      record.forEach((key, val) {
-        print('  $key : type=${val.runtimeType} | value=$val');
-      });
-    } else {
-      print('No attendance records found.');
-    }
+    final sectionRes = await supabase
+        .from('Section')
+        .select('name')
+        .eq('id', 'd95c2927-205f-4f6a-a84c-67df58611eaa')
+        .maybeSingle();
+
+    print('Class Name: ${classRes?['name']}');
+    print('Section Name: ${sectionRes?['name']}');
   } catch (e) {
     print('Error: $e');
   } finally {
