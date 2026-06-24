@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/colors.dart';
@@ -196,6 +197,40 @@ class _MainScreenState extends State<MainScreen> {
       SocketService().disconnect();
     } catch (_) {}
     super.dispose();
+  }
+
+  String _getRelativeTime(String? createdAtStr) {
+    if (createdAtStr == null) return '';
+    try {
+      final date = DateTime.parse(createdAtStr).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      if (difference.inMinutes < 1) {
+        return 'just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes}m ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return DateFormat('dd MMM').format(date);
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toUpperCase()) {
+      case 'URGENT':
+        return const Color(0xFFEF4444); // Red
+      case 'HIGH':
+        return const Color(0xFFF59E0B); // Amber
+      case 'NORMAL':
+        return const Color(0xFF3B82F6); // Blue
+      default:
+        return const Color(0xFF94A3B8); // Grey
+    }
   }
 
   void _initSocketConnection() {
@@ -527,6 +562,7 @@ class _MainScreenState extends State<MainScreen> {
                               .stream(primaryKey: ['id']),
                           builder: (context, snapshot) {
                             bool hasNew = false;
+                            List<Map<String, dynamic>> latestAnnouncements = [];
                             if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                               final announcements =
                                   List<Map<String, dynamic>>.from(
@@ -534,6 +570,7 @@ class _MainScreenState extends State<MainScreen> {
                               announcements.sort((a, b) =>
                                   (b['createdAt'] ?? '')
                                       .compareTo(a['createdAt'] ?? ''));
+                              latestAnnouncements = announcements.take(3).toList();
                               final newestStr =
                                   announcements.first['createdAt'] as String?;
                               if (newestStr != null) {
@@ -595,15 +632,16 @@ class _MainScreenState extends State<MainScreen> {
                                         position: position,
                                         shape: RoundedRectangleBorder(
                                             borderRadius:
-                                                BorderRadius.circular(12.r)),
+                                                BorderRadius.circular(16.r)),
                                         color: Colors.white,
-                                        elevation: 4,
+                                        elevation: 6,
                                         items: [
                                           PopupMenuItem(
                                             enabled: false,
                                             padding: EdgeInsets.zero,
-                                            child: SizedBox(
+                                            child: Container(
                                               width: 320.w,
+                                              constraints: BoxConstraints(maxHeight: 450.h),
                                               child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
@@ -622,49 +660,121 @@ class _MainScreenState extends State<MainScreen> {
                                                   const Divider(
                                                       height: 1,
                                                       color: Color(0xFFE2E8F0)),
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            vertical: 40.h,
-                                                            horizontal: 16.w),
-                                                    child: Center(
-                                                      child: Column(
-                                                        children: [
-                                                          Container(
-                                                            padding:
-                                                                EdgeInsets.all(
-                                                                    16.r),
-                                                            decoration:
-                                                                const BoxDecoration(
-                                                              color: Color(
-                                                                  0xFFF1F5F9),
-                                                              shape: BoxShape
-                                                                  .circle,
+                                                  if (latestAnnouncements.isEmpty)
+                                                    Padding(
+                                                      padding: EdgeInsets.symmetric(
+                                                          vertical: 40.h, horizontal: 16.w),
+                                                      child: Center(
+                                                        child: Column(
+                                                          children: [
+                                                            Container(
+                                                              padding: EdgeInsets.all(16.r),
+                                                              decoration: const BoxDecoration(
+                                                                color: Color(0xFFF1F5F9),
+                                                                shape: BoxShape.circle,
+                                                              ),
+                                                              child: Icon(
+                                                                  Icons.notifications_off_outlined,
+                                                                  color: const Color(0xFF94A3B8),
+                                                                  size: 32.sp),
                                                             ),
-                                                            child: Icon(
-                                                                Icons
-                                                                    .notifications_off_outlined,
-                                                                color: const Color(
-                                                                    0xFF94A3B8),
-                                                                size: 32.sp),
-                                                          ),
-                                                          SizedBox(
-                                                              height: 16.h),
-                                                          Text('All caught up!',
-                                                              style: AppTypography
-                                                                  .small
-                                                                  .copyWith(
-                                                                      color: const Color(
-                                                                          0xFF334155))),
-                                                          SizedBox(height: 8.h),
-                                                          Text(
-                                                              'No new notifications to show.',
-                                                              style: AppTypography
-                                                                  .caption
-                                                                  .copyWith(
-                                                                      color: const Color(
-                                                                          0xFF94A3B8))),
-                                                        ],
+                                                            SizedBox(height: 16.h),
+                                                            Text('All caught up!',
+                                                                style: AppTypography.small.copyWith(
+                                                                    color: const Color(0xFF334155))),
+                                                            SizedBox(height: 8.h),
+                                                            Text('No new notifications to show.',
+                                                                style: AppTypography.caption.copyWith(
+                                                                    color: const Color(0xFF94A3B8))),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    )
+                                                  else
+                                                    Flexible(
+                                                      child: ListView.separated(
+                                                        shrinkWrap: true,
+                                                        physics: const NeverScrollableScrollPhysics(),
+                                                        itemCount: latestAnnouncements.length,
+                                                        separatorBuilder: (_, __) =>
+                                                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                                        itemBuilder: (context, index) {
+                                                          final ann = latestAnnouncements[index];
+                                                          final title = ann['title'] as String? ?? 'Notification';
+                                                          final content = ann['content'] as String? ?? '';
+                                                          final priority = ann['priority'] as String? ?? 'NORMAL';
+                                                          final relativeTime = _getRelativeTime(ann['createdAt'] as String?);
+
+                                                          return InkWell(
+                                                            onTap: () {
+                                                              Navigator.pop(context); // Close popup menu
+                                                              _navigateTo(6); // Navigate to Announcements Screen (index 6 for Student)
+                                                            },
+                                                            child: Padding(
+                                                              padding: EdgeInsets.all(12.r),
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  Row(
+                                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                    children: [
+                                                                      Container(
+                                                                        padding: EdgeInsets.symmetric(
+                                                                            horizontal: 8.w, vertical: 2.h),
+                                                                        decoration: BoxDecoration(
+                                                                          color: _getPriorityColor(priority).withValues(alpha: 0.1),
+                                                                          borderRadius: BorderRadius.circular(6.r),
+                                                                        ),
+                                                                        child: Text(
+                                                                          priority.toUpperCase(),
+                                                                          style: AppTypography.caption.copyWith(
+                                                                              color: _getPriorityColor(priority)),
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        relativeTime,
+                                                                        style: AppTypography.caption.copyWith(
+                                                                            color: const Color(0xFF64748B)),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                  SizedBox(height: 6.h),
+                                                                  Text(
+                                                                    title,
+                                                                    maxLines: 1,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                    style: AppTypography.caption.copyWith(
+                                                                        color: const Color(0xFF1E293B)),
+                                                                  ),
+                                                                  SizedBox(height: 4.h),
+                                                                  Text(
+                                                                    content,
+                                                                    maxLines: 2,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                    style: AppTypography.caption.copyWith(
+                                                                        color: const Color(0xFF64748B)),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      Navigator.pop(context); // Close popup menu
+                                                      _navigateTo(6); // Navigate to Announcements tab
+                                                    },
+                                                    child: Container(
+                                                      width: double.infinity,
+                                                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                                                      alignment: Alignment.center,
+                                                      child: Text(
+                                                        'View All Announcements',
+                                                        style: AppTypography.caption.copyWith(
+                                                            color: const Color(0xFF0D7DDC)),
                                                       ),
                                                     ),
                                                   ),
