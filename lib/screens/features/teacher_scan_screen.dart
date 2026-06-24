@@ -59,7 +59,7 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
 
   // Detect desktop/web to use manual fallback instead of camera
   bool get _isDesktopOrWeb {
-    if (kIsWeb) return true;
+    if (kIsWeb) return false; // Enable camera access on Web browser
     try {
       // ignore: do_not_use_environment
       const platform =
@@ -150,12 +150,13 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
     try {
       // QR data = admission number or teacher employee ID
       final admissionNo = rawCode.trim();
+      final admissionNoUpper = admissionNo.toUpperCase();
 
-      // Check if it's a teacher employeeId first
+      // Check if it's a teacher employeeId first (case-insensitive for employeeId)
       final teacherRes = await Supabase.instance.client
           .from('Teacher')
           .select('id, userId, employeeId, user:User(firstName, lastName)')
-          .eq('employeeId', admissionNo)
+          .or('employeeId.eq.$admissionNo,employeeId.eq.$admissionNoUpper,userId.eq.$admissionNo,id.eq.$admissionNo')
           .maybeSingle();
 
       if (teacherRes != null) {
@@ -172,26 +173,14 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
 
         final today = DateTime.now().toIso8601String().substring(0, 10);
 
-        // Check if already marked today
-        final existing = await Supabase.instance.client
+        // Check if teacher attendance record already exists for today
+        final existingTeacherRecord = await Supabase.instance.client
             .from('AttendanceRecord')
-            .select('id, status')
+            .select('id')
             .eq('teacherId', teacherId)
             .eq('date', today)
             .eq('attendeeType', 'TEACHER')
             .maybeSingle();
-
-        if (existing != null) {
-          debugPrint(
-              '⚠️ [QR SCAN ALREADY MARKED] teacherId $teacherId already marked today');
-          _showResult(_ScanResult(
-            success: false,
-            message: 'Teacher $teacherName already marked today',
-            icon: Icons.info_outline_rounded,
-            color: Colors.orange,
-          ));
-          return;
-        }
 
         final Map<String, dynamic> insertPayload = {
           'attendeeType': 'TEACHER',
@@ -210,15 +199,26 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
           insertPayload['checkOutTime'] = DateTime.now().toIso8601String();
         }
 
-        debugPrint('📤 Teacher Attendance insert payload: $insertPayload');
+        debugPrint('📤 Teacher Attendance insert/update payload: $insertPayload');
 
-        final insertResponse = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .insert(insertPayload)
-            .select()
-            .single();
+        dynamic insertResponse;
+        if (existingTeacherRecord != null) {
+          final recordId = existingTeacherRecord['id'];
+          insertResponse = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .update(insertPayload)
+              .eq('id', recordId)
+              .select()
+              .single();
+        } else {
+          insertResponse = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .insert(insertPayload)
+              .select()
+              .single();
+        }
 
-        debugPrint('📥 Teacher Attendance insert response: $insertResponse');
+        debugPrint('📥 Teacher Attendance response: $insertResponse');
 
         _showResult(_ScanResult(
           success: true,
@@ -264,11 +264,11 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
         return;
       }
 
-      // 1. Look up student by admission no
+      // 1. Look up student by admission no (case-insensitive for admissionNumber)
       final studentRes = await Supabase.instance.client
           .from('Student')
           .select('id, admissionNumber, user:User(firstName, lastName)')
-          .eq('admissionNumber', admissionNo)
+          .or('admissionNumber.eq.$admissionNo,admissionNumber.eq.$admissionNoUpper,userId.eq.$admissionNo,id.eq.$admissionNo')
           .maybeSingle();
 
       if (studentRes == null) {
@@ -293,26 +293,14 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
       // Ensure scanner exists in DB
       await _ensureScannerExists(widget.scannerId);
 
-      // 2. Check if already marked today
-      final existing = await Supabase.instance.client
+      // 2. Check if student attendance record already exists for today
+      final existingStudentRecord = await Supabase.instance.client
           .from('AttendanceRecord')
-          .select('id, status')
+          .select('id')
           .eq('studentId', studentId)
           .eq('date', today)
           .eq('attendeeType', 'STUDENT')
           .maybeSingle();
-
-      if (existing != null) {
-        debugPrint(
-            '⚠️ [QR SCAN ALREADY MARKED] studentId $studentId already marked today');
-        _showResult(_ScanResult(
-          success: false,
-          message: '$studentName already marked today',
-          icon: Icons.info_outline_rounded,
-          color: Colors.orange,
-        ));
-        return;
-      }
 
       final Map<String, dynamic> insertPayload = {
         'attendeeType': 'STUDENT',
@@ -331,16 +319,27 @@ class _TeacherScanScreenState extends State<TeacherScanScreen>
         insertPayload['checkOutTime'] = DateTime.now().toIso8601String();
       }
 
-      debugPrint('📤 Attendance insert request payload: $insertPayload');
+      debugPrint('📤 Attendance insert/update payload: $insertPayload');
 
-      // 3. Insert attendance record
-      final insertResponse = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .insert(insertPayload)
-          .select()
-          .single();
+      // 3. Upsert attendance record
+      dynamic insertResponse;
+      if (existingStudentRecord != null) {
+        final recordId = existingStudentRecord['id'];
+        insertResponse = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .update(insertPayload)
+            .eq('id', recordId)
+            .select()
+            .single();
+      } else {
+        insertResponse = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(insertPayload)
+            .select()
+            .single();
+      }
 
-      debugPrint('📥 Attendance insert response: $insertResponse');
+      debugPrint('📥 Attendance response: $insertResponse');
 
       _showResult(_ScanResult(
         success: true,

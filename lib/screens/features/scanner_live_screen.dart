@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +12,8 @@ import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import '../profile_screen.dart';
 import 'package:edusphere/theme/typography.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../services/socket_service.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -46,8 +49,17 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   // Manual scanner entry for desktop/fallback
   final TextEditingController _manualScanCtrl = TextEditingController();
 
+  bool _useManualMode = false;
+
+  bool get _isDesktopPlatform {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
   bool get _isDesktopOrWeb {
-    if (kIsWeb) return true;
+    if (kIsWeb) return false; // Enable camera access on Web browser
     try {
       const platform =
           String.fromEnvironment('FLUTTER_PLATFORM', defaultValue: '');
@@ -61,6 +73,8 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   @override
   void initState() {
     super.initState();
+    _useManualMode = _isDesktopPlatform;
+    _requestCameraPermission();
     _loadLiveDashboard();
     _loadTeacherName();
     _setupRealtimeSubscription();
@@ -71,6 +85,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         _loadLiveFeed();
       }
     });
+  }
+
+  Future<void> _requestCameraPermission() async {
+    try {
+      final status = await Permission.camera.request();
+      debugPrint('📷 [Camera Permission Status] $status');
+    } catch (e) {
+      debugPrint('⚠️ [Camera Permission Error] Failed to request permission: $e');
+    }
   }
 
   void _setupRealtimeSubscription() {
@@ -172,11 +195,27 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     try {
       final codeTrimmed = rawCode.trim();
 
-      // Check if it's a teacher employeeId first
+      // Parse QR code JSON payload if applicable
+      String resolvedIdentifier = codeTrimmed;
+      try {
+        if (codeTrimmed.startsWith('{') && codeTrimmed.endsWith('}')) {
+          final Map<String, dynamic> jsonMap = jsonDecode(codeTrimmed);
+          if (jsonMap.containsKey('uid')) {
+            resolvedIdentifier = jsonMap['uid'].toString().trim();
+            debugPrint('🔑 Extracted UID from JSON payload: $resolvedIdentifier');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Failed to parse QR payload as JSON: $e');
+      }
+
+      final resolvedIdentifierUpper = resolvedIdentifier.toUpperCase();
+
+      // Check if it's a teacher employeeId/userId/id first (case-insensitive for employeeId)
       final teacherRes = await Supabase.instance.client
           .from('Teacher')
           .select('id, userId, employeeId, user:User(firstName, lastName)')
-          .eq('employeeId', codeTrimmed)
+          .or('employeeId.eq.$resolvedIdentifier,employeeId.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
           .maybeSingle();
 
       if (teacherRes != null) {
@@ -198,6 +237,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
             widget.sessionAction?.toLowerCase() == 'check_in';
 
+        // Check if teacher attendance record already exists for today
+        final existingTeacherRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .select('id')
+            .eq('teacherId', teacherId)
+            .eq('date', dateStr)
+            .eq('attendeeType', 'TEACHER')
+            .maybeSingle();
+
         final Map<String, dynamic> scanData = {
           'attendeeType': 'TEACHER',
           'teacherId': teacherId,
@@ -214,15 +262,32 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
           scanData['checkOutTime'] = DateTime.now().toIso8601String();
         }
 
-        debugPrint('📤 Teacher Attendance insert payload: $scanData');
+        dynamic resultRecord;
+        if (existingTeacherRecord != null) {
+          final recordId = existingTeacherRecord['id'];
+          debugPrint('📤 Teacher Attendance update payload: $scanData for ID: $recordId');
+          resultRecord = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .update(scanData)
+              .eq('id', recordId)
+              .select()
+              .single();
+        } else {
+          debugPrint('📤 Teacher Attendance insert payload: $scanData');
+          resultRecord = await Supabase.instance.client
+              .from('AttendanceRecord')
+              .insert(scanData)
+              .select()
+              .single();
+        }
 
-        final insertResponse = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .insert(scanData)
-            .select()
-            .single();
+        debugPrint('📥 Teacher Attendance response: $resultRecord');
 
-        debugPrint('📥 Teacher Attendance insert response: $insertResponse');
+        try {
+          SocketService().emit('ATTENDANCE_UPDATED', {'teacherId': teacherId, 'source': 'teacher_qr_scan'});
+        } catch (e) {
+          debugPrint('Socket emit error: $e');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -247,20 +312,20 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         return;
       }
 
-      // Check if it's a student admission number
+      // Check if it's a student admission number/userId/id (case-insensitive for admissionNumber)
       final studentRes = await Supabase.instance.client
           .from('Student')
           .select('id, user:User(firstName, lastName)')
-          .eq('admissionNumber', codeTrimmed)
+          .or('admissionNumber.eq.$resolvedIdentifier,admissionNumber.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
           .maybeSingle();
 
       if (studentRes == null) {
         debugPrint(
-            '❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed');
+            '❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed (Resolved ID: $resolvedIdentifier)');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Student/Teacher not found for QR: $codeTrimmed'),
+                content: Text('Student/Teacher not found for QR: $resolvedIdentifier'),
                 backgroundColor: AppColors.error),
           );
         }
@@ -284,6 +349,15 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
           widget.sessionAction?.toLowerCase() == 'check_in';
 
+      // Check if student attendance record already exists for today
+      final existingStudentRecord = await Supabase.instance.client
+          .from('AttendanceRecord')
+          .select('id')
+          .eq('studentId', studentId)
+          .eq('date', dateStr)
+          .eq('attendeeType', 'STUDENT')
+          .maybeSingle();
+
       final Map<String, dynamic> scanData = {
         'attendeeType': 'STUDENT',
         'studentId': studentId,
@@ -300,15 +374,32 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         scanData['checkOutTime'] = DateTime.now().toIso8601String();
       }
 
-      debugPrint('📤 Attendance insert request payload: $scanData');
+      dynamic resultRecord;
+      if (existingStudentRecord != null) {
+        final recordId = existingStudentRecord['id'];
+        debugPrint('📤 Student Attendance update payload: $scanData for ID: $recordId');
+        resultRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .update(scanData)
+            .eq('id', recordId)
+            .select()
+            .single();
+      } else {
+        debugPrint('📤 Student Attendance insert payload: $scanData');
+        resultRecord = await Supabase.instance.client
+            .from('AttendanceRecord')
+            .insert(scanData)
+            .select()
+            .single();
+      }
 
-      final insertResponse = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .insert(scanData)
-          .select()
-          .single();
+      debugPrint('📥 Student Attendance response: $resultRecord');
 
-      debugPrint('📥 Attendance insert response: $insertResponse');
+      try {
+        SocketService().emit('ATTENDANCE_UPDATED', {'studentId': studentId, 'source': 'teacher_qr_scan'});
+      } catch (e) {
+        debugPrint('Socket emit error: $e');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -333,7 +424,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
       if (mounted) {
         setState(() => _isProcessingQR = false);
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && !_isDesktopOrWeb) {
+          if (mounted && !_useManualMode && !_isDesktopOrWeb) {
             _qrController.start();
           }
         });
@@ -860,10 +951,14 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: _isDesktopOrWeb
+      child: _useManualMode
           ? Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (!_isDesktopPlatform) ...[
+                  _buildToggleHeader(),
+                  const Spacer(),
+                ],
                 Icon(
                   Icons.desktop_windows_rounded,
                   size: 48.sp,
@@ -873,7 +968,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24.w),
                   child: Text(
-                    'Camera scanning is not supported on this device/browser. Please type student QR payload below to verify & scan.',
+                    'Please type student QR payload below to verify & scan.',
                     style: AppTypography.caption
                         .copyWith(color: const Color(0xFF64748B)),
                     textAlign: TextAlign.center,
@@ -881,6 +976,7 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                 ),
                 SizedBox(height: 20.h),
                 _buildManualEntryField(),
+                if (!_isDesktopPlatform) const Spacer(),
               ],
             )
           : Stack(
@@ -916,6 +1012,11 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                     ],
                   ),
                 ),
+                if (!_isDesktopPlatform)
+                  Positioned(
+                    top: 12.h,
+                    child: _buildToggleHeader(),
+                  ),
                 if (_isProcessingQR)
                   Container(
                     decoration: BoxDecoration(
@@ -941,6 +1042,85 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
                   ),
               ],
             ),
+    );
+  }
+
+  Widget _buildToggleHeader() {
+    return Container(
+      padding: EdgeInsets.all(4.r),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleTab(
+            title: 'Camera Scanner',
+            isSelected: !_useManualMode,
+            onTap: () {
+              setState(() {
+                _useManualMode = false;
+              });
+              try {
+                _qrController.start();
+              } catch (e) {
+                debugPrint('Error starting camera: $e');
+              }
+            },
+          ),
+          _buildToggleTab(
+            title: 'Manual Entry',
+            isSelected: _useManualMode,
+            onTap: () {
+              setState(() {
+                _useManualMode = true;
+              });
+              try {
+                _qrController.stop();
+              } catch (e) {
+                debugPrint('Error stopping camera: $e');
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleTab({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(8.r),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4.r,
+                    offset: Offset(0, 2.h),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          title,
+          style: GoogleFonts.outfit(
+            fontSize: 13.sp,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? widget.theme.primary : const Color(0xFF64748B),
+          ),
+        ),
+      ),
     );
   }
 

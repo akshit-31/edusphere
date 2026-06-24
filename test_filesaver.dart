@@ -4,7 +4,8 @@ void main() {
   FileSaver.instance.saveAs(
     name: 'test',
     bytes: null,
-    ext: 'pdf',
+    fileExtension: 'pdf',
     mimeType: MimeType.pdf,
   );
 }
+
