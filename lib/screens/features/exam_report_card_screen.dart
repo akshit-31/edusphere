@@ -7,7 +7,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
@@ -55,23 +54,26 @@ class _ExamReportCardScreenState extends State<ExamReportCardScreen> {
         studentName = savedName;
       }
 
-      // 2. Fetch exams list directly from Supabase Exam table
-      final client = Supabase.instance.client;
-      final examsRes = await client
-          .from('Exam')
-          .select('id, name')
-          .order('name', ascending: true);
+      // 2. Fetch exams list directly from REST API
+      final response = await ApiService.instance.get('exams?limit=100');
+      if (response != null && response['exams'] != null) {
+        final List<dynamic> rawExams = response['exams'];
+        final List<Map<String, dynamic>> loadedExams = rawExams.map((e) {
+          return {
+            'id': e['id'],
+            'name': e['name'] as String? ?? 'Exam',
+          };
+        }).toList();
 
-      final List<Map<String, dynamic>> loadedExams = List<Map<String, dynamic>>.from(examsRes);
-
-      if (loadedExams.isNotEmpty) {
-        _examsList = loadedExams;
-        _selectedExamId = widget.initialExamId ?? _examsList.first['id'] as String;
-        await _fetchReportCardDetails();
-        return;
+        if (loadedExams.isNotEmpty) {
+          _examsList = loadedExams;
+          _selectedExamId = widget.initialExamId ?? _examsList.first['id'] as String;
+          await _fetchReportCardDetails();
+          return;
+        }
       }
     } catch (e) {
-      dev.log('⚠️ Error loading exams from Supabase: $e', name: 'ExamReportCard');
+      dev.log('⚠️ Error loading exams from REST API: $e', name: 'ExamReportCard');
     }
 
     _selectedExamId = null;

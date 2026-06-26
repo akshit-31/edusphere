@@ -43,7 +43,7 @@ const uploadDocument = asyncHandler(async (req, res) => {
                 }
 
                 // Verify student exists
-                const student = await prisma.student.findUnique({ where: { id: studentId } });
+                const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
                 if (!student) {
                     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
                     return res.status(404).json({ 
@@ -101,9 +101,36 @@ const getStudentDocuments = asyncHandler(async (req, res) => {
     const { id: studentId } = req.params;
 
     // Check permissions: Student can see own, Parent can see linked student
-    if (req.user.role === 'STUDENT' || (req.user.roles && req.user.roles.includes('PARENT'))) {
-        const student = await prisma.student.findUnique({ where: { userId: req.user.id } });
-        if (!student || student.id !== studentId) {
+    const userRoles = req.user.roles || [req.user.role];
+    const isStudent = userRoles.includes('STUDENT');
+    const isParent = userRoles.includes('PARENT');
+
+    if (isStudent || isParent) {
+        let authorized = false;
+
+        // 1. Check if logged in as the student themselves
+        if (req.user.studentId === studentId) {
+            authorized = true;
+        }
+
+        // 2. Check Parent linkage in StudentParent table
+        if (!authorized && isParent) {
+            const orConditions = [];
+            if (req.user.email) orConditions.push({ email: req.user.email });
+            if (req.user.phone) orConditions.push({ phone: req.user.phone });
+
+            if (orConditions.length > 0) {
+                const parent = await prisma.parentProfile.findFirst({
+                    where: { OR: orConditions },
+                    include: { students: true }
+                });
+                if (parent && parent.students.some(sp => sp.studentId === studentId)) {
+                    authorized = true;
+                }
+            }
+        }
+
+        if (!authorized) {
             return res.status(403).json({ 
                 success: false,
                 message: 'Access denied' 
@@ -117,7 +144,7 @@ const getStudentDocuments = asyncHandler(async (req, res) => {
             where: { userId: req.user.id },
             include: { assignedClass: true }
         });
-        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
         
         if (!teacher || !student || teacher.assignedClass?.id !== student.currentClassId) {
             return res.status(403).json({ 

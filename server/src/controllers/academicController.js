@@ -559,7 +559,7 @@ const getTimetables = asyncHandler(async (req, res) => {
 
   // For students/teachers, we might want to restrict based on their class
   if (req.user.role === 'STUDENT') {
-    const student = await prisma.student.findFirst({ where: { userId: req.user.userId } });
+    const student = await prisma.studentProfile.findFirst({ where: { userId: req.user.userId } });
     if (student && student.currentClassId) {
       where.classId = student.currentClassId;
     }

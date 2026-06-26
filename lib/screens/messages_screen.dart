@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import 'dart:developer' as dev;
 import '../theme/colors.dart';
@@ -200,7 +199,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   // Periodic polling timer for robust real-time database synchronization
   Timer? _pollTimer;
-  RealtimeChannel? _messagesChannel;
 
   // --- Community Redesign State ---
   List<CommunityPostModel> _communityPosts = [];
@@ -404,9 +402,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
       final prefs = await SharedPreferences.getInstance();
 
       if (mounted) setState(() => _isLoadingContacts = true);
-
-      _messagesChannel = Supabase.instance.client.channel('calls');
-      _messagesChannel!.subscribe();
 
       _currentUserId = prefs.getString('user_id') ?? 'local_user';
       _currentUserRole = prefs.getString('user_role') ?? widget.role;
@@ -1678,17 +1673,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> _handlePollVote(CommunityPostModel post, int optionIndex) async {
-    final updatedOptions = List<Map<String, dynamic>>.from(post.pollOptions);
-    updatedOptions[optionIndex]['votes'] =
-        (updatedOptions[optionIndex]['votes'] ?? 0) + 1;
-
-    try {
-      await Supabase.instance.client
-          .from('CommunityPost')
-          .update({'poll_options': updatedOptions}).eq('id', post.id);
-    } catch (e) {
-      dev.log('Error voting on poll: $e');
-    }
+    setState(() {
+      final updatedOptions = List<Map<String, dynamic>>.from(post.pollOptions);
+      updatedOptions[optionIndex]['votes'] =
+          (updatedOptions[optionIndex]['votes'] ?? 0) + 1;
+      post.pollOptions[optionIndex]['votes'] = updatedOptions[optionIndex]['votes'];
+    });
   }
 
   Widget _buildPollWidget(CommunityPostModel post) {
@@ -1977,12 +1967,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
           post.userInsightful = false;
         }
       });
-      try {
-        await Supabase.instance.client.from('CommunityPost').update({
-          'likes': post.likes,
-          'insightfuls': post.insightfuls,
-        }).eq('id', post.id);
-      } catch (_) {}
       return;
     }
 
@@ -2020,13 +2004,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             post.likes++;
                             post.userLiked = true;
                           });
-                          try {
-                            await Supabase.instance.client
-                                .from('CommunityPost')
-                                .update({
-                              'likes': post.likes,
-                            }).eq('id', post.id);
-                          } catch (_) {}
+                          // Local state update only
                         },
                         child: Container(
                           padding: EdgeInsets.symmetric(vertical: 16.h),
@@ -2059,13 +2037,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             post.insightfuls++;
                             post.userInsightful = true;
                           });
-                          try {
-                            await Supabase.instance.client
-                                .from('CommunityPost')
-                                .update({
-                              'insightfuls': post.insightfuls,
-                            }).eq('id', post.id);
-                          } catch (_) {}
+                          // Local state update only
                         },
                         child: Container(
                           padding: EdgeInsets.symmetric(vertical: 16.h),
@@ -2344,32 +2316,29 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               const SnackBar(content: Text('Publishing...')),
                             );
 
-                            try {
-                              await Supabase.instance.client
-                                  .from('CommunityPost')
-                                  .insert({
-                                'author_name': '$_firstName Gupta',
-                                'author_role': 'Student',
-                                'category': selectedCategory,
-                                'content': contentCtrl.text.trim(),
-                                'poll_options': finalPollOptions,
-                                'comments': [],
-                              });
+                            setState(() {
+                              final newPost = CommunityPostModel(
+                                id: 'post_${DateTime.now().millisecondsSinceEpoch}',
+                                authorName: '$_firstName Gupta',
+                                authorRole: 'Student',
+                                timeAgo: 'Just now',
+                                category: selectedCategory,
+                                content: contentCtrl.text.trim(),
+                                likes: 0,
+                                insightfuls: 0,
+                                commentsCount: 0,
+                                comments: [],
+                                pollOptions: finalPollOptions,
+                                createdAt: DateTime.now(),
+                              );
+                              _communityPosts.insert(0, newPost);
+                            });
 
-                              if (mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .hideCurrentSnackBar();
-                                showToast(
-                                    context, '🎉 Post published successfully!');
-                                // Realtime listener will automatically fetch the new post!
-                              }
-                            } catch (e) {
-                              dev.log('Error creating post: $e');
-                              if (mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .hideCurrentSnackBar();
-                                showToast(context, 'Failed to publish post');
-                              }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context)
+                                  .hideCurrentSnackBar();
+                              showToast(
+                                  context, '🎉 Post published successfully!');
                             }
                           },
                           child: Text(
@@ -2567,15 +2536,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               });
                               setModalState(() {});
 
-                              try {
-                                await Supabase.instance.client
-                                    .from('CommunityPost')
-                                    .update({
-                                  'comments': post.comments
-                                      .map((c) => c.toJson())
-                                      .toList(),
-                                }).eq('id', post.id);
-                              } catch (_) {}
+                              // Local state comment update only
 
                               commentCtrl.clear();
                             },
@@ -3446,15 +3407,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   void _sendCallSignal(String event, Map<String, dynamic> payload) {
-    try {
-      _messagesChannel?.sendBroadcastMessage(
-        event: event,
-        payload: payload,
-      );
-      dev.log('📞 Broadcasted call signal: $event', name: 'MessagesScreen');
-    } catch (e) {
-      dev.log('⚠️ Failed to send call broadcast: $e', name: 'MessagesScreen');
-    }
+    dev.log('📞 Simulated call signal: $event', name: 'MessagesScreen');
   }
 
   void _startCall(bool isVideo) {

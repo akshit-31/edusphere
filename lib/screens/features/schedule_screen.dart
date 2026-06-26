@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/academic_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../../services/api_service.dart';
@@ -77,8 +77,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       final prefs = await SharedPreferences.getInstance();
       final isStudent = widget.role == 'student';
 
-      final client = Supabase.instance.client;
-      List<dynamic> slotsRes = [];
+      Map<String, dynamic> response = {};
       if (isStudent) {
         String? sectionId = prefs.getString('student_section_id');
         if (sectionId == null || sectionId.isEmpty) {
@@ -98,47 +97,31 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           throw Exception('Student section ID could not be resolved');
         }
 
-        slotsRes = await client
-            .from('TimetableSlot')
-            .select(
-                '*, Subject(name), Section(name, Class(name)), Teacher(id, User(firstName, lastName))')
-            .eq('sectionId', sectionId);
+        response = await AcademicService.instance.getStudentTimetable(sectionId);
       } else {
         String? teacherId = prefs.getString('teacher_id');
         if (teacherId == null || teacherId.isEmpty) {
           teacherId = 'me';
         }
-        if (teacherId == 'me') {
-          final currentUser = client.auth.currentUser;
-          if (currentUser != null) {
-            final teacherRes = await client
-                .from('Teacher')
-                .select('id')
-                .eq('userId', currentUser.id)
-                .maybeSingle();
-            if (teacherRes != null) {
-              teacherId = teacherRes['id'] as String;
-            }
-          }
-        }
-        slotsRes = await client
-            .from('TimetableSlot')
-            .select(
-                '*, Subject(name), Section(name, Class(name)), Teacher(id, User(firstName, lastName))')
-            .eq('teacherId', teacherId);
+        response = await AcademicService.instance.getTeacherTimetable(teacherId);
       }
 
+      final List<dynamic> slotsRes = response['schedule'] ?? response['data'] ?? [];
+
       final rawSchedule = slotsRes.map((slot) {
-        final subject = slot['Subject'] as Map<String, dynamic>?;
-        final section = slot['Section'] as Map<String, dynamic>?;
-        final classData = section?['Class'] as Map<String, dynamic>?;
-        final teacher = slot['Teacher'] as Map<String, dynamic>?;
-        final user = teacher?['User'] as Map<String, dynamic>?;
+        final subject = (slot['subject'] ?? slot['Subject']) as Map<String, dynamic>?;
+        final section = (slot['section'] ?? slot['Section']) as Map<String, dynamic>?;
+        final classData = (section?['class'] ?? section?['Class']) as Map<String, dynamic>?;
+        final teacher = (slot['teacher'] ?? slot['Teacher']) as Map<String, dynamic>?;
+        final user = (teacher?['user'] ?? teacher?['User']) as Map<String, dynamic>?;
+        final room = (slot['room'] ?? slot['Room']) as Map<String, dynamic>?;
 
         String resolvedTeacherName = 'Class Teacher';
         if (user != null) {
           resolvedTeacherName =
               '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        } else if (teacher != null && teacher['name'] != null) {
+          resolvedTeacherName = teacher['name'] as String;
         }
 
         return {
@@ -146,7 +129,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           'startTime': slot['startTime'],
           'endTime': slot['endTime'],
           'room': {
-            'name': slot['roomId'] ?? 'Room 101',
+            'name': room?['name'] ?? slot['roomId'] ?? 'Room 101',
           },
           'section': {
             'name': section?['name'] ?? '',

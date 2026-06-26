@@ -2,10 +2,9 @@ import 'dart:io';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'config/supabase_config.dart';
 import 'config/api_config.dart';
 import 'app.dart';
+import 'services/cache_service.dart';
 
 /// Restricted SSL override — ONLY accepts connections to the known Render
 /// server IPs when the server certificate CN matches the expected host.
@@ -43,16 +42,11 @@ class MyHttpOverrides extends HttpOverrides {
 void main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: SupabaseConfig.supabaseUrl,
-    anonKey: SupabaseConfig.supabaseAnonKey,
-  );
+  await CacheService.instance.init();
 
   // Application startup logging (debug only — dev.log strips from release builds)
   dev.log('APP STARTUP: Base URL = ${ApiConfig.serverBaseUrl}', name: 'Main');
   dev.log('APP STARTUP: API Endpoint = ${ApiConfig.apiUrl}', name: 'Main');
-  dev.log('APP STARTUP: Supabase URL = ${SupabaseConfig.supabaseUrl}', name: 'Main');
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

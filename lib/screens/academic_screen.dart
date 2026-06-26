@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/socket_service.dart';
+import '../services/student_service.dart';
+import '../services/academic_service.dart';
 import 'dart:developer' as dev;
 import 'package:intl/intl.dart' as intl;
 import '../theme/colors.dart';
@@ -255,7 +257,6 @@ class _AcademicScreenState extends State<AcademicScreen> {
     ],
   };
 
-  RealtimeChannel? _realtimeChannel;
   Timer? _realtimePollTimer;
 
   @override
@@ -272,11 +273,11 @@ class _AcademicScreenState extends State<AcademicScreen> {
   @override
   void dispose() {
     _realtimePollTimer?.cancel();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
+    try {
+      SocketService().off('attendanceMarked', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().off('TIMETABLE_UPDATE', _onRealtimeEvent);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -298,32 +299,17 @@ class _AcademicScreenState extends State<AcademicScreen> {
           'student1@demoschool.com';
       _studentEmail = savedEmail;
 
-      // 1. Fetch User and Student profile
-      final userRes = await Supabase.instance.client
-          .from('User')
-          .select()
-          .eq('email', _studentEmail)
-          .maybeSingle();
-
-      if (userRes != null) {
-        final userId = userRes['id'] as String;
-        _studentName =
-            '${userRes['firstName'] ?? ''} ${userRes['lastName'] ?? ''}'.trim();
-
-        final studentRes = await Supabase.instance.client
-            .from('Student')
-            .select('*, currentClass:Class(name)')
-            .eq('userId', userId)
-            .maybeSingle();
-
-        if (studentRes != null) {
-          _studentId = studentRes['id'] as String;
-          _classId = studentRes['currentClassId'] as String? ?? '';
-          _sectionId = studentRes['sectionId'] as String? ?? '';
-          if (studentRes['currentClass'] != null) {
-            _className =
-                studentRes['currentClass']['name'] as String? ?? 'Grade 1';
-          }
+      // 1. Fetch Student profile via REST API
+      final profileRes = await StudentService.instance.getStudentProfile();
+      final student = profileRes['student'];
+      if (student != null) {
+        _studentId = student['id'] ?? '';
+        final user = student['user'] ?? {};
+        _studentName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        _classId = student['currentClassId'] ?? '';
+        _sectionId = student['sectionId'] ?? '';
+        if (student['currentClass'] != null) {
+          _className = student['currentClass']['name'] ?? 'Grade 1';
         }
       } else {
         // Fallback for demo student if no database record exists
@@ -334,88 +320,71 @@ class _AcademicScreenState extends State<AcademicScreen> {
         }
       }
 
-      // 2. Fetch Subjects assigned to their class
+      // 2. Fetch Subjects assigned to their class via REST API
       if (_classId.isNotEmpty) {
-        final List<dynamic> subjectsRes = await Supabase.instance.client
-            .from('Subject')
-            .select()
-            .eq('classId', _classId);
-
-        _studentSubjects = List<Map<String, dynamic>>.from(subjectsRes);
+        final subjectsRes = await AcademicService.instance.getSubjects(classId: _classId);
+        final rawSubjects = subjectsRes['subjects'] ?? subjectsRes['data'] ?? [];
+        _studentSubjects = List<Map<String, dynamic>>.from(rawSubjects);
       }
 
-      // 3. Fetch Timetable slots for their section/class
+      // 3. Fetch Timetable slots for their section/class via REST API
       if (_sectionId.isNotEmpty) {
-        final List<dynamic> slotsRes = await Supabase.instance.client
-            .from('TimetableSlot')
-            .select('*, subject:Subject(name, code)')
-            .eq('sectionId', _sectionId);
-
-        _timetableSlots = List<Map<String, dynamic>>.from(slotsRes);
+        final timetableRes = await ApiService.instance.get('timetables/student/$_sectionId');
+        if (timetableRes['success'] == true) {
+          _timetableSlots = List<Map<String, dynamic>>.from(timetableRes['schedule'] ?? []);
+        }
       }
 
-      // 4. Fetch Attendance records
+      // 4. Fetch Attendance records via REST API
       if (_studentId.isNotEmpty) {
         try {
-          final List<dynamic> rawList = await Supabase.instance.client
-              .from('AttendanceRecord')
-              .select()
-              .eq('studentId', _studentId);
+          final attendanceRes = await ApiService.instance.get('students/$_studentId/attendance');
+          if (attendanceRes['success'] == true) {
+            _attendanceRate = (attendanceRes['stats']?['percentage'] ?? 100.0).toDouble();
+            _hasAttendanceData = true;
 
-          int present = 0;
-          List<Map<String, dynamic>> validRecords = [];
+            final List<dynamic> rawList = attendanceRes['attendance'] ?? [];
+            List<Map<String, dynamic>> validRecords = [];
 
-          for (var r in rawList) {
-            final dateStr = r['date']?.toString() ?? '';
-            if (dateStr.isEmpty) continue;
-
-            validRecords.add(Map<String, dynamic>.from(r));
-
-            final status = r['status']?.toString() ?? '';
-            if (status == 'PRESENT' ||
-                status == 'P' ||
-                status == 'LATE' ||
-                status == 'HALF_DAY') {
-              present++;
+            for (var r in rawList) {
+              final dateStr = r['date']?.toString() ?? '';
+              if (dateStr.isEmpty) continue;
+              validRecords.add(Map<String, dynamic>.from(r));
             }
-          }
 
-          _attendanceRate =
-              rawList.isNotEmpty ? (present / rawList.length) * 100 : 100.0;
-          _hasAttendanceData = true;
+            _attendanceRecords.clear();
 
-          _attendanceRecords.clear();
+            final DateTime today = DateTime.now();
+            for (int i = 0; i < 7; i++) {
+              final date = today.subtract(Duration(days: i));
+              final dateStr =
+                  '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-          final DateTime today = DateTime.now();
-          for (int i = 0; i < 7; i++) {
-            final date = today.subtract(Duration(days: i));
-            final dateStr =
-                '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+              final matchingRecord = validRecords
+                  .where((r) => r['date']?.toString().startsWith(dateStr) == true)
+                  .toList();
+              final isWeekend = date.weekday == DateTime.saturday ||
+                  date.weekday == DateTime.sunday;
 
-            final matchingRecord = validRecords
-                .where((r) => r['date']?.toString().startsWith(dateStr) == true)
-                .toList();
-            final isWeekend = date.weekday == DateTime.saturday ||
-                date.weekday == DateTime.sunday;
-
-            if (matchingRecord.isNotEmpty) {
-              final rec = matchingRecord.first;
-              _attendanceRecords.add({
-                ...rec,
-                'date': dateStr, // normalized
-                'isWeekend': isWeekend,
-                'markedBy': rec['markedByName'] ?? rec['markedBy'] ?? 'System',
-              });
-            } else {
-              _attendanceRecords.add({
-                'date': dateStr,
-                'status': isWeekend ? 'WEEKEND' : 'NOT_MARKED',
-                'isWeekend': isWeekend,
-              });
+              if (matchingRecord.isNotEmpty) {
+                final rec = matchingRecord.first;
+                _attendanceRecords.add({
+                  ...rec,
+                  'date': dateStr, // normalized
+                  'isWeekend': isWeekend,
+                  'markedBy': rec['markedByName'] ?? rec['markedBy'] ?? 'System',
+                });
+              } else {
+                _attendanceRecords.add({
+                  'date': dateStr,
+                  'status': isWeekend ? 'WEEKEND' : 'NOT_MARKED',
+                  'isWeekend': isWeekend,
+                });
+              }
             }
           }
         } catch (e) {
-          dev.log('❌ Error fetching Attendance from Supabase: $e',
+          dev.log('❌ Error fetching Attendance from REST API: $e',
               name: 'AcademicScreen');
           _hasAttendanceData = false;
         }
@@ -436,142 +405,24 @@ class _AcademicScreenState extends State<AcademicScreen> {
     }
   }
 
+  void _onRealtimeEvent(dynamic payload) {
+    dev.log('🔥 Real-time event received in AcademicScreen: $payload', name: 'AcademicScreen');
+    if (mounted) {
+      if (widget.role == 'student') {
+        _loadStudentOverviewData(showLoading: false);
+      } else {
+        _loadLocalData();
+      }
+    }
+  }
+
   void _connectRealTime() {
     try {
-      final client = Supabase.instance.client;
-      if (_realtimeChannel != null) {
-        client.removeChannel(_realtimeChannel!);
-      }
-
-      dev.log(
-          '📡 Subscribing to Supabase Realtime changes for Academic Screen...',
-          name: 'AcademicScreen');
-      _realtimeChannel = client
-          .channel('public:academic_screen_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AttendanceRecord',
-            callback: (payload) {
-              dev.log('🔥 Real-time attendance change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Subject',
-            callback: (payload) {
-              dev.log('🔥 Real-time subject change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'TimetableSlot',
-            callback: (payload) {
-              dev.log('🔥 Real-time timetable slot change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Student',
-            callback: (payload) {
-              dev.log('🔥 Real-time student profile change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Class',
-            callback: (payload) {
-              dev.log('🔥 Real-time class change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Section',
-            callback: (payload) {
-              dev.log('🔥 Real-time section change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AttendanceRecord',
-            callback: (payload) {
-              dev.log('🔥 Real-time attendance change payload: $payload',
-                  name: 'AcademicScreen');
-              if (mounted) {
-                if (widget.role == 'student') {
-                  _loadStudentOverviewData(showLoading: false);
-                } else {
-                  _loadLocalData();
-                }
-              }
-            },
-          );
-
-      _realtimeChannel!.subscribe((status, [error]) {
-        dev.log('📡 Supabase Realtime Academic channel status: $status',
-            name: 'AcademicScreen');
-        if (error != null) {
-          dev.log('❌ Supabase Realtime Academic subscription error: $error',
-              name: 'AcademicScreen');
-        }
-      });
+      SocketService().on('attendanceMarked', _onRealtimeEvent);
+      SocketService().on('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().on('TIMETABLE_UPDATE', _onRealtimeEvent);
     } catch (e) {
-      dev.log('⚠️ Error connecting Supabase Realtime Academic channel: $e',
-          name: 'AcademicScreen');
+      dev.log('⚠️ Error connecting Socket.IO for Academic Screen: $e', name: 'AcademicScreen');
     }
 
     // Polling fallback every 30 seconds
@@ -2397,17 +2248,28 @@ class _AcademicScreenState extends State<AcademicScreen> {
               if (nameCtrl.text.trim().isEmpty) return;
               final navigator = Navigator.of(ctx);
               try {
-                final client = Supabase.instance.client;
-                final acYears = await client
-                    .from('Class')
-                    .select('academicYearId')
-                    .limit(1);
-                final academicYearId =
-                    acYears.isNotEmpty ? acYears.first['academicYearId'] : null;
+                final yearsRes = await ApiService.instance.get('academic/years');
+                final years = (yearsRes['academicYears'] ?? []) as List;
+                String? academicYearId;
+                if (years.isNotEmpty) {
+                  final currentYear = years.firstWhere(
+                    (y) => y['isCurrent'] == true,
+                    orElse: () => years.first,
+                  );
+                  academicYearId = currentYear['id'];
+                }
 
-                await client.from('Class').insert({
+                if (academicYearId == null) {
+                  final classesRes = await ApiService.instance.get('academic/classes');
+                  final classes = (classesRes['classes'] ?? classesRes['data'] ?? []) as List;
+                  if (classes.isNotEmpty) {
+                    academicYearId = classes.first['academicYearId'];
+                  }
+                }
+
+                await ApiService.instance.post('academic/classes', body: {
                   'name': nameCtrl.text.trim(),
-                  'level': levelCtrl.text.trim(),
+                  'numericValue': int.tryParse(levelCtrl.text.trim()) ?? 1,
                   'academicYearId': academicYearId,
                 });
 
@@ -2473,28 +2335,37 @@ class _AcademicScreenState extends State<AcademicScreen> {
               final navigator = Navigator.of(ctx);
               try {
                 final className = classCtrl.text.trim();
-                final client = Supabase.instance.client;
-                final classes = await client
-                    .from('Class')
-                    .select('id')
-                    .eq('name', className)
-                    .limit(1);
-                final classId = classes.isNotEmpty ? classes.first['id'] : null;
-
-                String? targetClassId = classId;
-                if (targetClassId == null) {
-                  final insertRes = await client
-                      .from('Class')
-                      .insert({
-                        'name': className,
-                        'level': 'Standard',
-                      })
-                      .select('id')
-                      .single();
-                  targetClassId = insertRes['id'] as String;
+                String? targetClassId;
+                final match = _classesList.firstWhere(
+                  (c) => c['name'].toString().toLowerCase() == className.toLowerCase(),
+                  orElse: () => {},
+                );
+                if (match.isNotEmpty) {
+                  targetClassId = match['id'];
                 }
 
-                await client.from('Subject').insert({
+                if (targetClassId == null) {
+                  final yearsRes = await ApiService.instance.get('academic/years');
+                  final years = (yearsRes['academicYears'] ?? []) as List;
+                  String? academicYearId;
+                  if (years.isNotEmpty) {
+                    final currentYear = years.firstWhere(
+                      (y) => y['isCurrent'] == true,
+                      orElse: () => years.first,
+                    );
+                    academicYearId = currentYear['id'];
+                  }
+                  
+                  final newClassRes = await ApiService.instance.post('academic/classes', body: {
+                    'name': className,
+                    'numericValue': 1,
+                    'academicYearId': academicYearId,
+                  });
+                  final newClass = newClassRes['class'] ?? newClassRes['data'] ?? {};
+                  targetClassId = newClass['id'];
+                }
+
+                await ApiService.instance.post('academic/subjects', body: {
                   'name': nameCtrl.text.trim(),
                   'code': codeCtrl.text.trim(),
                   'classId': targetClassId,
@@ -2563,28 +2434,37 @@ class _AcademicScreenState extends State<AcademicScreen> {
               final navigator = Navigator.of(ctx);
               try {
                 final className = classCtrl.text.trim();
-                final client = Supabase.instance.client;
-                final classes = await client
-                    .from('Class')
-                    .select('id')
-                    .eq('name', className)
-                    .limit(1);
-                final classId = classes.isNotEmpty ? classes.first['id'] : null;
-
-                String? targetClassId = classId;
-                if (targetClassId == null) {
-                  final insertRes = await client
-                      .from('Class')
-                      .insert({
-                        'name': className,
-                        'level': 'Standard',
-                      })
-                      .select('id')
-                      .single();
-                  targetClassId = insertRes['id'] as String;
+                String? targetClassId;
+                final match = _classesList.firstWhere(
+                  (c) => c['name'].toString().toLowerCase() == className.toLowerCase(),
+                  orElse: () => {},
+                );
+                if (match.isNotEmpty) {
+                  targetClassId = match['id'];
                 }
 
-                await client.from('Section').insert({
+                if (targetClassId == null) {
+                  final yearsRes = await ApiService.instance.get('academic/years');
+                  final years = (yearsRes['academicYears'] ?? []) as List;
+                  String? academicYearId;
+                  if (years.isNotEmpty) {
+                    final currentYear = years.firstWhere(
+                      (y) => y['isCurrent'] == true,
+                      orElse: () => years.first,
+                    );
+                    academicYearId = currentYear['id'];
+                  }
+                  
+                  final newClassRes = await ApiService.instance.post('academic/classes', body: {
+                    'name': className,
+                    'numericValue': 1,
+                    'academicYearId': academicYearId,
+                  });
+                  final newClass = newClassRes['class'] ?? newClassRes['data'] ?? {};
+                  targetClassId = newClass['id'];
+                }
+
+                await ApiService.instance.post('academic/sections', body: {
                   'name': nameCtrl.text.trim(),
                   'classId': targetClassId,
                   'maxStudents': int.tryParse(maxCtrl.text.trim()) ?? 40,

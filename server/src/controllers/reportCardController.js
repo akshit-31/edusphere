@@ -81,7 +81,7 @@ const getReportCards = asyncHandler(async (req, res) => {
 
     // Data isolation: Students only see their own published report cards
     if (req.user.role === 'STUDENT') {
-        const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+        const student = await prisma.studentProfile.findFirst({ where: { userId: req.user.id } });
         if (!student) return res.status(404).json({ 
             success: false,
             message: 'Student profile not found' 
@@ -326,7 +326,7 @@ const downloadReportCard = asyncHandler(async (req, res) => {
 
     // IDOR Check: Students can only download their own report card
     if (req.user.role === 'STUDENT') {
-        const student = await prisma.student.findFirst({ where: { userId: req.user.id } });
+        const student = await prisma.studentProfile.findFirst({ where: { userId: req.user.id } });
         if (!student || reportCard.studentId !== student.id) {
             return res.status(403).json({ 
                 success: false,

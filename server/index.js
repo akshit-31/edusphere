@@ -49,6 +49,7 @@ const timetableRoutes = require('./src/routes/timetableRoutes');
 const backupRoutes = require('./src/routes/backupRoutes');
 const aiRoutes = require('./src/routes/AiRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const quizRoutes = require('./src/routes/quizRoutes');
 const { initSocket } = require('./src/services/socketService');
 const { initScheduler } = require('./src/config/scheduler');
 const errorHandler = require('./src/middleware/errorHandler');
@@ -119,35 +120,40 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/teachers', teacherRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/academic', academicRoutes);
-app.use('/api/fees', feeRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/library', libraryRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/services', serviceRoutes);
-app.use('/api/hr', hrRoutes);
-app.use('/api/payroll', payrollRoutes);
-app.use('/api/terms', termRoutes);
-app.use('/api/grade-scales', gradeScaleRoutes);
-app.use('/api/report-cards', reportCardRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/school-config', schoolConfigRoutes);
-app.use('/api/enquiries', enquiryRoutes);
-app.use('/api/scanners', scannerRoutes);
-app.use('/api/assignments', assignmentRoutes);
-app.use('/api/transport', transportRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/timetables', timetableRoutes);
-app.use('/api/admin/backups', backupRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/notifications', notificationRoutes);
+const apiRouter = express.Router();
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/students', studentRoutes);
+apiRouter.use('/teachers', teacherRoutes);
+apiRouter.use('/attendance', attendanceRoutes);
+apiRouter.use('/academic', academicRoutes);
+apiRouter.use('/fees', feeRoutes);
+apiRouter.use('/exams', examRoutes);
+apiRouter.use('/library', libraryRoutes);
+apiRouter.use('/inventory', inventoryRoutes);
+apiRouter.use('/announcements', announcementRoutes);
+apiRouter.use('/dashboard', dashboardRoutes);
+apiRouter.use('/users', userRoutes);
+apiRouter.use('/services', serviceRoutes);
+apiRouter.use('/hr', hrRoutes);
+apiRouter.use('/payroll', payrollRoutes);
+apiRouter.use('/terms', termRoutes);
+apiRouter.use('/grade-scales', gradeScaleRoutes);
+apiRouter.use('/report-cards', reportCardRoutes);
+apiRouter.use('/payments', paymentRoutes);
+apiRouter.use('/school-config', schoolConfigRoutes);
+apiRouter.use('/enquiries', enquiryRoutes);
+apiRouter.use('/scanners', scannerRoutes);
+apiRouter.use('/assignments', assignmentRoutes);
+apiRouter.use('/transport', transportRoutes);
+apiRouter.use('/calendar', calendarRoutes);
+apiRouter.use('/timetables', timetableRoutes);
+apiRouter.use('/admin/backups', backupRoutes);
+apiRouter.use('/ai', aiRoutes);
+apiRouter.use('/notifications', notificationRoutes);
+apiRouter.use('/quizzes', quizRoutes);
+
+app.use('/api', apiRouter);
+app.use('/api/v1', apiRouter);
 
 // 404 handler
 app.use((req, res) => {

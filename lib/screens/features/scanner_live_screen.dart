@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../config/supabase_config.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
@@ -14,6 +12,8 @@ import '../profile_screen.dart';
 import 'package:edusphere/theme/typography.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/socket_service.dart';
+import '../../services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ScannerLiveScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -40,7 +40,14 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   Timer? _refreshTimer;
   String _teacherName = 'Vikram Yadav';
   final bool _showBotBubble = true;
-  RealtimeChannel? _realtimeChannel;
+
+  // Socket.IO event handler helper
+  void _onAttendanceMarked(dynamic data) {
+    debugPrint('⚡ [Socket Event] ATTENDANCE_MARKED: $data');
+    if (mounted) {
+      _loadLiveFeed();
+    }
+  }
 
   // QR Scanner State
   final MobileScannerController _qrController = MobileScannerController();
@@ -98,71 +105,10 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
 
   void _setupRealtimeSubscription() {
     try {
-      const supabaseUrl = SupabaseConfig.supabaseUrl;
-      debugPrint(
-          '⚡ [Realtime Subscription Status] Subscribing to AttendanceRecord realtime changes. URL: $supabaseUrl');
-
-      _realtimeChannel = Supabase.instance.client
-          .channel('public:AttendanceRecord')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AttendanceRecord',
-            callback: (payload) {
-              debugPrint(
-                  '⚡ [Realtime Change Received] Event: ${payload.eventType}, Payload: ${payload.newRecord}');
-              if (mounted) {
-                _loadLiveFeed();
-              }
-            },
-          );
-      _realtimeChannel!.subscribe((status, [error]) {
-        debugPrint(
-            '⚡ [Realtime Subscription Status] Connection state: $status ${error != null ? "- Error: $error" : ""}');
-      });
+      debugPrint('⚡ [Socket.IO Subscription] Listening to ATTENDANCE_MARKED events');
+      SocketService().on('ATTENDANCE_MARKED', _onAttendanceMarked);
     } catch (e) {
-      debugPrint('⚡ [Realtime Subscription Error] Failed to subscribe: $e');
-    }
-  }
-
-  Future<void> _ensureScannerExists(String scannerId) async {
-    debugPrint(
-        '🔍 [QRScanner Lookup] Checking database for scannerId: $scannerId');
-    try {
-      final res = await Supabase.instance.client
-          .from('QRScanner')
-          .select('*')
-          .eq('id', scannerId)
-          .maybeSingle();
-
-      debugPrint('🔍 [QRScanner Lookup Result] Lookup response: $res');
-      if (res == null) {
-        debugPrint(
-            '🆕 [QRScanner Auto-create] Scanner $scannerId not found. Creating default QRScanner in DB...');
-        final currentUser = Supabase.instance.client.auth.currentUser;
-        final creatorId =
-            currentUser?.id ?? 'e8f5de9c-114f-4ffd-9698-49f349208bfb';
-
-        final newScanner = {
-          'id': scannerId,
-          'name': 'main gate scanner',
-          'location': 'Main Gate',
-          'scannerType': 'ENTRY',
-          'isActive': true,
-          'createdBy': creatorId,
-          'updatedAt': DateTime.now().toIso8601String(),
-        };
-        debugPrint('🆕 [QRScanner Auto-create] Insert Payload: $newScanner');
-        final insertRes = await Supabase.instance.client
-            .from('QRScanner')
-            .insert(newScanner)
-            .select()
-            .single();
-        debugPrint(
-            '🆕 [QRScanner Auto-create Result] Auto-creation response: $insertRes');
-      }
-    } catch (e) {
-      debugPrint('⚠️ [QRScanner Auto-create Error] Error: $e');
+      debugPrint('⚡ [Socket.IO Subscription Error] Failed to subscribe: $e');
     }
   }
 
@@ -171,12 +117,10 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
     _refreshTimer?.cancel();
     _qrController.dispose();
     _manualScanCtrl.dispose();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (e) {
-        debugPrint('⚠️ [Realtime Dispose Error] Failed to remove channel: $e');
-      }
+    try {
+      SocketService().off('ATTENDANCE_MARKED', _onAttendanceMarked);
+    } catch (e) {
+      debugPrint('⚠️ [Socket.IO Dispose Error] Failed to remove listener: $e');
     }
     super.dispose();
   }
@@ -188,114 +132,37 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
 
     debugPrint(
         '================================================================');
-    debugPrint('📸 [QR SCAN INITIATED]');
+    debugPrint('📸 [QR SCAN INITIATED (REST API)]');
     debugPrint('📍 Current scannerId: ${widget.scannerId}');
     debugPrint('📦 QR payload: $rawCode');
 
     try {
-      final codeTrimmed = rawCode.trim();
+      final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
+          widget.sessionAction?.toLowerCase() == 'check_in';
+      final actionParam = isCheckIn ? 'checkin' : 'checkout';
 
-      // Parse QR code JSON payload if applicable
-      String resolvedIdentifier = codeTrimmed;
-      try {
-        if (codeTrimmed.startsWith('{') && codeTrimmed.endsWith('}')) {
-          final Map<String, dynamic> jsonMap = jsonDecode(codeTrimmed);
-          if (jsonMap.containsKey('uid')) {
-            resolvedIdentifier = jsonMap['uid'].toString().trim();
-            debugPrint('🔑 Extracted UID from JSON payload: $resolvedIdentifier');
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ Failed to parse QR payload as JSON: $e');
-      }
+      final response = await ApiService.instance.post('attendance/qr-scan', body: {
+        'qrPayload': rawCode.trim(),
+        'scannerId': widget.scannerId,
+        'action': actionParam,
+      });
 
-      final resolvedIdentifierUpper = resolvedIdentifier.toUpperCase();
-
-      // Check if it's a teacher employeeId/userId/id first (case-insensitive for employeeId)
-      final teacherRes = await Supabase.instance.client
-          .from('Teacher')
-          .select('id, userId, employeeId, user:User(firstName, lastName)')
-          .or('employeeId.eq.$resolvedIdentifier,employeeId.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
-          .maybeSingle();
-
-      if (teacherRes != null) {
-        final teacherId = teacherRes['id'].toString();
-        final teacherUserId = teacherRes['userId']?.toString();
-        final user = teacherRes['user'] as Map<String, dynamic>? ?? {};
-        final teacherName =
-            '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
-        debugPrint(
-            '👤 Teacher Identified - ID: $teacherId, Name: $teacherName, UserID: $teacherUserId');
-
-        // Ensure the scanner exists in the database
-        await _ensureScannerExists(widget.scannerId);
-
-        final dateStr = widget.sessionDate != null
-            ? widget.sessionDate!.toIso8601String().substring(0, 10)
-            : DateTime.now().toIso8601String().substring(0, 10);
-
-        final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
-            widget.sessionAction?.toLowerCase() == 'check_in';
-
-        // Check if teacher attendance record already exists for today
-        final existingTeacherRecord = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .select('id')
-            .eq('teacherId', teacherId)
-            .eq('date', dateStr)
-            .eq('attendeeType', 'TEACHER')
-            .maybeSingle();
-
-        final Map<String, dynamic> scanData = {
-          'attendeeType': 'TEACHER',
-          'teacherId': teacherId,
-          'date': dateStr,
-          'status': 'PRESENT',
-          'scannedByQR': true,
-          'scannerId': widget.scannerId,
-          'updatedAt': DateTime.now().toIso8601String(),
-        };
-
-        if (isCheckIn) {
-          scanData['checkInTime'] = DateTime.now().toIso8601String();
-        } else {
-          scanData['checkOutTime'] = DateTime.now().toIso8601String();
-        }
-
-        dynamic resultRecord;
-        if (existingTeacherRecord != null) {
-          final recordId = existingTeacherRecord['id'];
-          debugPrint('📤 Teacher Attendance update payload: $scanData for ID: $recordId');
-          resultRecord = await Supabase.instance.client
-              .from('AttendanceRecord')
-              .update(scanData)
-              .eq('id', recordId)
-              .select()
-              .single();
-        } else {
-          debugPrint('📤 Teacher Attendance insert payload: $scanData');
-          resultRecord = await Supabase.instance.client
-              .from('AttendanceRecord')
-              .insert(scanData)
-              .select()
-              .single();
-        }
-
-        debugPrint('📥 Teacher Attendance response: $resultRecord');
-
-        try {
-          SocketService().emit('ATTENDANCE_UPDATED', {'teacherId': teacherId, 'source': 'teacher_qr_scan'});
-        } catch (e) {
-          debugPrint('Socket emit error: $e');
-        }
+      if (response != null && response['success'] == true) {
+        final user = response['user'] as Map<String, dynamic>? ?? {};
+        final attendeeName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        final action = response['action'] as String?;
+        final isCheckout = action == 'checkout';
+        final message = response['message'] as String? ?? 'Attendance marked';
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Successfully scanned Teacher: $teacherName'),
+                content: Text(isCheckout ? 'Successfully checked out: $attendeeName' : 'Successfully scanned: $attendeeName'),
                 backgroundColor: AppColors.success),
           );
-          if (teacherUserId != null) {
+          final String role = user['role']?.toString().toLowerCase() ?? '';
+          if (role == 'teacher' && user['id'] != null) {
+            final teacherUserId = user['id'].toString();
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -309,112 +176,24 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
           }
         }
         await _loadLiveFeed();
-        return;
-      }
-
-      // Check if it's a student admission number/userId/id (case-insensitive for admissionNumber)
-      final studentRes = await Supabase.instance.client
-          .from('Student')
-          .select('id, user:User(firstName, lastName)')
-          .or('admissionNumber.eq.$resolvedIdentifier,admissionNumber.eq.$resolvedIdentifierUpper,userId.eq.$resolvedIdentifier,id.eq.$resolvedIdentifier')
-          .maybeSingle();
-
-      if (studentRes == null) {
-        debugPrint(
-            '❌ [QR SCAN ERROR] Student/Teacher not found for QR payload: $codeTrimmed (Resolved ID: $resolvedIdentifier)');
+      } else {
+        final errorMsg = response != null ? (response['error'] ?? response['message']) : 'Failed to mark attendance';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Student/Teacher not found for QR: $resolvedIdentifier'),
+                content: Text('Error: $errorMsg'),
                 backgroundColor: AppColors.error),
           );
         }
-        return;
       }
-
-      final studentId = studentRes['id'].toString();
-      final user = studentRes['user'] as Map<String, dynamic>? ?? {};
-      final studentName =
-          '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
-
-      debugPrint('👤 Student Identified - ID: $studentId, Name: $studentName');
-
-      // Ensure the scanner exists in the database
-      await _ensureScannerExists(widget.scannerId);
-
-      final dateStr = widget.sessionDate != null
-          ? widget.sessionDate!.toIso8601String().substring(0, 10)
-          : DateTime.now().toIso8601String().substring(0, 10);
-
-      final isCheckIn = widget.sessionAction?.toLowerCase() == 'check-in' ||
-          widget.sessionAction?.toLowerCase() == 'check_in';
-
-      // Check if student attendance record already exists for today
-      final existingStudentRecord = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .select('id')
-          .eq('studentId', studentId)
-          .eq('date', dateStr)
-          .eq('attendeeType', 'STUDENT')
-          .maybeSingle();
-
-      final Map<String, dynamic> scanData = {
-        'attendeeType': 'STUDENT',
-        'studentId': studentId,
-        'date': dateStr,
-        'status': 'PRESENT',
-        'scannedByQR': true,
-        'scannerId': widget.scannerId,
-        'updatedAt': DateTime.now().toIso8601String(),
-      };
-
-      if (isCheckIn) {
-        scanData['checkInTime'] = DateTime.now().toIso8601String();
-      } else {
-        scanData['checkOutTime'] = DateTime.now().toIso8601String();
-      }
-
-      dynamic resultRecord;
-      if (existingStudentRecord != null) {
-        final recordId = existingStudentRecord['id'];
-        debugPrint('📤 Student Attendance update payload: $scanData for ID: $recordId');
-        resultRecord = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .update(scanData)
-            .eq('id', recordId)
-            .select()
-            .single();
-      } else {
-        debugPrint('📤 Student Attendance insert payload: $scanData');
-        resultRecord = await Supabase.instance.client
-            .from('AttendanceRecord')
-            .insert(scanData)
-            .select()
-            .single();
-      }
-
-      debugPrint('📥 Student Attendance response: $resultRecord');
-
-      try {
-        SocketService().emit('ATTENDANCE_UPDATED', {'studentId': studentId, 'source': 'teacher_qr_scan'});
-      } catch (e) {
-        debugPrint('Socket emit error: $e');
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Successfully scanned: $studentName'),
-              backgroundColor: AppColors.success),
-        );
-      }
-      await _loadLiveFeed();
     } catch (e) {
       debugPrint('❌ [QR SCAN EXCEPTION] Error processing QR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error marking attendance: $e'),
+              content: Text(e.toString().contains('400') || e.toString().contains('403') || e.toString().contains('404')
+                  ? e.toString()
+                  : 'Error marking attendance: $e'),
               backgroundColor: AppColors.error),
         );
       }
@@ -433,43 +212,28 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
   }
 
   Future<void> _loadTeacherName() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user != null) {
-      try {
-        final profileRes = await Supabase.instance.client
-            .from('User')
-            .select('firstName, lastName')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (profileRes != null && mounted) {
-          final pFName = profileRes['firstName'] as String? ?? '';
-          final pLName = profileRes['lastName'] as String? ?? '';
-          setState(() {
-            _teacherName = '$pFName $pLName'.trim();
-          });
-        }
-      } catch (e) {
-        debugPrint('Error loading teacher profile name: $e');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedName = prefs.getString('teacher_name') ?? '';
+      if (savedName.isNotEmpty && mounted) {
+        setState(() {
+          _teacherName = savedName;
+        });
       }
+    } catch (e) {
+      debugPrint('Error loading teacher profile name from prefs: $e');
     }
   }
 
   Future<void> _loadLiveDashboard() async {
     setState(() => _isLoading = true);
     try {
-      // 1. Fetch QR Scanner details
-      final scannerRes = await Supabase.instance.client
-          .from('QRScanner')
-          .select('*')
-          .eq('id', widget.scannerId)
-          .maybeSingle();
-
-      if (scannerRes != null) {
-        _scannerDetails = Map<String, dynamic>.from(scannerRes);
+      final response = await ApiService.instance.get('scanners/${widget.scannerId}');
+      if (response != null && response['success'] == true && response['scanner'] != null) {
+        _scannerDetails = Map<String, dynamic>.from(response['scanner']);
+        final records = List<Map<String, dynamic>>.from(_scannerDetails?['attendanceRecords'] ?? []);
+        _processLiveFeedRecords(records);
       }
-
-      // 2. Fetch live scans list
-      await _loadLiveFeed();
     } catch (e) {
       debugPrint('Error loading live dashboard details: $e');
     } finally {
@@ -481,70 +245,59 @@ class _ScannerLiveScreenState extends State<ScannerLiveScreen> {
 
   Future<void> _loadLiveFeed() async {
     try {
-      final dateStr = widget.sessionDate != null
-          ? widget.sessionDate!.toIso8601String().substring(0, 10)
-          : DateTime.now().toIso8601String().substring(0, 10);
-
-      final recordsRes = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .select(
-              '*, student:Student(*, user:User(*)), teacher:Teacher(*, user:User(*)), staff:Staff(*, user:User(*))')
-          .eq('scannerId', widget.scannerId)
-          .eq('date', dateStr)
-          .order('createdAt', ascending: false)
-          .limit(40);
-
-      final records = List<Map<String, dynamic>>.from(recordsRes);
-      final actionFilter =
-          widget.sessionAction?.toUpperCase().replaceAll('-', '_');
-
-      // Decompose row check-in / check-out timestamps into distinct chronological scan events
-      final List<Map<String, dynamic>> tempEvents = [];
-      for (var rec in records) {
-        final name = _getAttendeeName(rec);
-        final status = (rec['status'] ?? 'PRESENT').toString();
-
-        final checkInTimeStr = rec['checkInTime'];
-        final checkOutTimeStr = rec['checkOutTime'];
-
-        if (checkOutTimeStr != null &&
-            (actionFilter == null || actionFilter == 'CHECK_OUT')) {
-          tempEvents.add({
-            'id': '${rec['id']}_out',
-            'name': name,
-            'time': checkOutTimeStr,
-            'action': 'CHECK_OUT',
-            'status': status,
-            'type': (rec['attendeeType'] ?? 'STUDENT').toString(),
-          });
-        }
-        if (checkInTimeStr != null &&
-            (actionFilter == null || actionFilter == 'CHECK_IN')) {
-          tempEvents.add({
-            'id': '${rec['id']}_in',
-            'name': name,
-            'time': checkInTimeStr,
-            'action': 'CHECK_IN',
-            'status': status,
-            'type': (rec['attendeeType'] ?? 'STUDENT').toString(),
-          });
-        }
-      }
-
-      // Sort chronological decomposed events (newest first)
-      tempEvents.sort((a, b) {
-        final tA = DateTime.tryParse(a['time'] ?? '') ?? DateTime.now();
-        final tB = DateTime.tryParse(b['time'] ?? '') ?? DateTime.now();
-        return tB.compareTo(tA);
-      });
-
-      if (mounted) {
-        setState(() {
-          _scanEvents = tempEvents;
-        });
+      final response = await ApiService.instance.get('scanners/${widget.scannerId}');
+      if (response != null && response['success'] == true && response['scanner'] != null) {
+        final records = List<Map<String, dynamic>>.from(response['scanner']['attendanceRecords'] ?? []);
+        _processLiveFeedRecords(records);
       }
     } catch (e) {
       debugPrint('Error loading scan feeds: $e');
+    }
+  }
+
+  void _processLiveFeedRecords(List<Map<String, dynamic>> records) {
+    final actionFilter = widget.sessionAction?.toUpperCase().replaceAll('-', '_');
+    final List<Map<String, dynamic>> tempEvents = [];
+    for (var rec in records) {
+      final name = _getAttendeeName(rec);
+      final status = (rec['status'] ?? 'PRESENT').toString();
+      final checkInTimeStr = rec['checkInTime'];
+      final checkOutTimeStr = rec['checkOutTime'];
+
+      if (checkOutTimeStr != null &&
+          (actionFilter == null || actionFilter == 'CHECK_OUT')) {
+        tempEvents.add({
+          'id': '${rec['id']}_out',
+          'name': name,
+          'time': checkOutTimeStr,
+          'action': 'CHECK_OUT',
+          'status': status,
+          'type': (rec['attendeeType'] ?? 'STUDENT').toString(),
+        });
+      }
+      if (checkInTimeStr != null &&
+          (actionFilter == null || actionFilter == 'CHECK_IN')) {
+        tempEvents.add({
+          'id': '${rec['id']}_in',
+          'name': name,
+          'time': checkInTimeStr,
+          'action': 'CHECK_IN',
+          'status': status,
+          'type': (rec['attendeeType'] ?? 'STUDENT').toString(),
+        });
+      }
+    }
+
+    tempEvents.sort((a, b) {
+      final tA = DateTime.tryParse(a['time'] ?? '') ?? DateTime.now();
+      final tB = DateTime.tryParse(b['time'] ?? '') ?? DateTime.now();
+      return tB.compareTo(tA);
+    });
+
+    if (mounted) {
+      setState(() {
+        _scanEvents = tempEvents;
+      });
     }
   }
 

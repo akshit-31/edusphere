@@ -190,7 +190,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
 const getMyPaymentHistory = asyncHandler(async (req, res) => {
     const userId = req.user.userId || req.user.id;
 
-    const student = await prisma.student.findFirst({ where: { userId } });
+    const student = await prisma.studentProfile.findFirst({ where: { userId } });
     if (!student) {
         return res.status(404).json({ 
             success: false,

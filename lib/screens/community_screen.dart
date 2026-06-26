@@ -4,11 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/colors.dart';
 import '../widgets/dashed_border_painter.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../services/api_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -34,7 +34,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   String _selectedCategory = 'All';
   List<Map<String, dynamic>> _posts = [];
   bool _isLoading = false;
-  RealtimeChannel? _communityChannel;
+
 
   final List<String> _categories = [
     'All',
@@ -55,9 +55,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   @override
   void dispose() {
-    if (_communityChannel != null) {
-      Supabase.instance.client.removeChannel(_communityChannel!);
-    }
     super.dispose();
   }
 
@@ -78,86 +75,102 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  Future<void> _refreshPostsSilently() async {
-    try {
-      final res = await Supabase.instance.client
-          .from('CommunityPost')
-          .select()
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _posts = List<Map<String, dynamic>>.from(res.map((post) {
-            return {
-              'id': post['id'],
-              'title': '',
-              'content': post['content'],
-              'category': post['category'] ?? 'General',
-              'authorName': post['author_name'] ?? 'Unknown',
-              'createdAt': post['created_at'],
-              'likesCount': post['likes'] ?? 0,
-              'commentsCount': (post['comments'] as List?)?.length ?? 0,
-              'isLiked': post['userLiked'] ?? false,
-              'comments': post['comments'] ?? [],
-              'pollOptions': post['poll_options'] ?? [],
-            };
-          }));
-        });
-      }
-    } catch (_) {}
-  }
-
   Future<void> _loadPosts() async {
     setState(() {
       _isLoading = true;
     });
     try {
-      final res = await Supabase.instance.client
-          .from('CommunityPost')
-          .select()
-          .order('created_at', ascending: false);
-
+      final res = await ApiService.instance.get('announcements');
+      final List<dynamic> raw = res['announcements'] ?? res['data'] ?? [];
+      
+      if (raw.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _posts = List<Map<String, dynamic>>.from(raw.map((e) {
+              final author = e['createdBy'] as Map? ?? {};
+              final firstName = author['firstName'] as String? ?? '';
+              final lastName = author['lastName'] as String? ?? '';
+              final authorName = '$firstName $lastName'.trim().isEmpty
+                  ? 'EduSphere'
+                  : '$firstName $lastName'.trim();
+              return {
+                'id': e['id']?.toString() ?? '',
+                'title': e['title'] ?? 'Announcement',
+                'content': e['content'] ?? '',
+                'category': e['targetAudience'] ?? 'General',
+                'authorName': authorName,
+                'createdAt': e['createdAt'] ?? DateTime.now().toIso8601String(),
+                'likesCount': 0,
+                'commentsCount': 0,
+                'isLiked': false,
+                'comments': [],
+                'pollOptions': [],
+              };
+            }));
+          });
+        }
+      } else {
+        _loadMockPosts();
+      }
+    } catch (e) {
+      debugPrint('Error loading announcements via API: $e');
+      _loadMockPosts();
+    } finally {
       if (mounted) {
         setState(() {
-          _posts = List<Map<String, dynamic>>.from(res.map((post) {
-            return {
-              'id': post['id'],
-              'title': '',
-              'content': post['content'],
-              'category': post['category'] ?? 'General',
-              'authorName': post['author_name'] ?? 'Unknown',
-              'createdAt': post['created_at'],
-              'likesCount': post['likes'] ?? 0,
-              'commentsCount': (post['comments'] as List?)?.length ?? 0,
-              'isLiked': post['userLiked'] ?? false,
-              'comments': post['comments'] ?? [],
-              'pollOptions': post['poll_options'] ?? [],
-            };
-          }));
+          _isLoading = false;
         });
       }
+    }
+  }
 
-      _communityChannel ??= Supabase.instance.client
-          .channel('public:CommunityPost')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'CommunityPost',
-            callback: (payload) {
-              if (mounted) {
-                _refreshPostsSilently();
-              }
+  void _loadMockPosts() {
+    final now = DateTime.now();
+    setState(() {
+      _posts = [
+        {
+          'id': 'post_1',
+          'title': 'Annual Sports Day',
+          'content': '📢 Annual Sports Day will be held on 20th June. All students are encouraged to participate. Register with your house captain before 15th June.',
+          'category': 'Announcement',
+          'authorName': 'Principal Sharma',
+          'createdAt': now.subtract(const Duration(hours: 2)).toIso8601String(),
+          'likesCount': 42,
+          'commentsCount': 2,
+          'isLiked': false,
+          'comments': [
+            {
+              'id': 'c1',
+              'authorName': 'Aryan Mehta',
+              'authorRole': 'Student',
+              'content': 'Looking forward to this!',
+              'timeAgo': '1h ago',
             },
-          )
-          .subscribe();
-    } catch (e) {
-      debugPrint('Error loading posts: $e');
-    }
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+            {
+              'id': 'c2',
+              'authorName': 'Riya Gupta',
+              'authorRole': 'Student',
+              'content': 'Are house captains announced yet?',
+              'timeAgo': '30m ago',
+            }
+          ],
+          'pollOptions': [],
+        },
+        {
+          'id': 'post_2',
+          'title': 'Science Project Reminder',
+          'content': '📝 Reminder: Science project submissions are due this Friday. Please upload your reports to the assignment portal before 5 PM.',
+          'category': 'Resource',
+          'authorName': 'Mrs. Priya Nair',
+          'createdAt': now.subtract(const Duration(hours: 5)).toIso8601String(),
+          'likesCount': 29,
+          'commentsCount': 0,
+          'isLiked': false,
+          'comments': [],
+          'pollOptions': [],
+        },
+      ];
+    });
   }
 
   Future<void> _addNewPost(String title, String content, String category,
@@ -165,39 +178,21 @@ class _CommunityScreenState extends State<CommunityScreen> {
       {List<Map<String, dynamic>> pollOptions = const []}) async {
     final finalContent = title.isNotEmpty ? '$title\n\n$content' : content;
 
-    try {
-      await Supabase.instance.client.from('CommunityPost').insert({
-        'author_name': _userName,
-        'author_role': _userRole,
-        'category': category,
+    setState(() {
+      _posts.insert(0, {
+        'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
+        'title': title,
         'content': finalContent,
-        'poll_options': pollOptions,
+        'category': category,
+        'authorName': _userName,
+        'createdAt': DateTime.now().toIso8601String(),
+        'likesCount': 0,
+        'commentsCount': 0,
+        'isLiked': false,
         'comments': [],
-        'likes': 0,
-        'insightfuls': 0,
+        'pollOptions': pollOptions,
       });
-    } catch (e) {
-      debugPrint('Error adding post to Supabase: $e');
-      // LOCAL FALLBACK: Show post in UI even if DB fails
-      if (mounted) {
-        setState(() {
-          _posts.insert(0, {
-            'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
-            'title': '',
-            'content': finalContent,
-            'category': category,
-            'authorName': _userName,
-            'createdAt': DateTime.now().toIso8601String(),
-            'likesCount': 0,
-            'commentsCount': 0,
-            'isLiked': false,
-            'comments': [],
-            'pollOptions': pollOptions,
-          });
-        });
-      }
-      // Suppress rethrow to allow seamless local fallback for demo purposes
-    }
+    });
   }
 
   int get _topPostsCount {
@@ -233,19 +228,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
       p['isLiked'] = !isLiked;
       p['likesCount'] = newLikes;
     });
-
-    try {
-      await Supabase.instance.client.from('CommunityPost').update({
-        'likes': newLikes,
-      }).eq('id', p['id']);
-    } catch (_) {}
   }
 
   Future<void> _addComment(int postIndex, String commentText) async {
     if (commentText.trim().isEmpty) return;
 
     final p = _posts[postIndex];
-    final List<dynamic> comments = p['comments'] ?? [];
+    final List<dynamic> comments = List.from(p['comments'] ?? []);
 
     final newComment = {
       'id': 'c_${DateTime.now().millisecondsSinceEpoch}',
@@ -260,12 +249,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
       p['comments'] = comments;
       p['commentsCount'] = comments.length;
     });
-
-    try {
-      await Supabase.instance.client.from('CommunityPost').update({
-        'comments': comments,
-      }).eq('id', p['id']);
-    } catch (_) {}
   }
 
   @override
@@ -1430,7 +1413,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                           audience,
                                           selectedImages,
                                           pollOptions: finalPollOptions);
-                                      await _refreshPostsSilently();
+                                      await _loadPosts();
 
                                       if (mounted) {
                                         scaffoldMessenger.showSnackBar(

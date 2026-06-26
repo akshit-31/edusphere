@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import 'dart:async';
 
 class FeeApprovalsScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -26,67 +27,65 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
   int _totalPending = 0;
   double _totalWaiverAmount = 0;
 
-  RealtimeChannel? _realtimeChannel;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadApprovals();
-    _connectRealTime();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _loadApprovals();
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
+    _pollingTimer?.cancel();
     super.dispose();
-  }
-
-  void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_realtimeChannel != null) {
-        client.removeChannel(_realtimeChannel!);
-      }
-      _realtimeChannel =
-          client.channel('public:fee_waiver_requests_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'fee_waiver_requests',
-                callback: (_) {
-                  if (mounted) {
-                    _loadApprovals();
-                  }
-                },
-              );
-      _realtimeChannel!.subscribe();
-    } catch (e) {
-      debugPrint('Error connecting realtime for fee approvals: $e');
-    }
   }
 
   Future<void> _loadApprovals() async {
     setState(() => _loading = true);
 
     try {
-      // Try Supabase first
-      final res = await Supabase.instance.client
-          .from('fee_waiver_requests')
-          .select()
-          .order('created_at', ascending: false);
+      final response = await ApiService.instance.get('fees/adjustments');
+      if (response != null && response['success'] == true) {
+        final List<dynamic> adjustments = response['adjustments'] as List<dynamic>? ?? [];
+        final List<Map<String, dynamic>> mappedData = adjustments.map((adj) {
+          final studentObj = adj['student'] as Map<String, dynamic>? ?? {};
+          final userObj = studentObj['user'] as Map<String, dynamic>? ?? {};
+          final classObj = studentObj['currentClass'] as Map<String, dynamic>? ?? {};
+          final ledgerObj = adj['ledger'] as Map<String, dynamic>? ?? {};
+          final feeStrObj = ledgerObj['feeStructure'] as Map<String, dynamic>? ?? {};
+          
+          final firstName = userObj['firstName'] as String? ?? '';
+          final lastName = userObj['lastName'] as String? ?? '';
+          final studentName = '$firstName $lastName'.trim().isNotEmpty ? '$firstName $lastName'.trim() : 'Student';
+          
+          return {
+            'id': adj['id'],
+            'type': adj['type'] ?? 'WAIVER',
+            'status': adj['status'] ?? 'PENDING',
+            'student_name': studentName,
+            'class': classObj['name'] ?? 'Class',
+            'fee_head': feeStrObj['name'] ?? 'Fee',
+            'original_amount': (ledgerObj['totalPayable'] as num?)?.toDouble() ?? 0.0,
+            'requested_amount': (adj['amount'] as num?)?.toDouble() ?? 0.0,
+            'reason': adj['reason'] ?? '',
+            'submitted_date': adj['createdAt'] ?? adj['created_at'] ?? '',
+            'documents': 0,
+            'comment': adj['comment'] ?? '',
+            'reviewed_by': adj['reviewedBy'] ?? adj['approvedBy'] ?? '',
+            'reviewed_at': adj['reviewedAt'] ?? adj['approvedAt'] ?? '',
+          };
+        }).toList();
 
-      final List<Map<String, dynamic>> data =
-          List<Map<String, dynamic>>.from(res);
-
-      if (data.isNotEmpty) {
-        _pendingRequests = data.where((r) => r['status'] == 'PENDING').toList();
-        _reviewedRequests =
-            data.where((r) => r['status'] != 'PENDING').toList();
+        _pendingRequests = mappedData.where((r) => r['status'] == 'PENDING').toList();
+        _reviewedRequests = mappedData.where((r) => r['status'] != 'PENDING').toList();
       } else {
         _pendingRequests = [];
         _reviewedRequests = [];
@@ -297,22 +296,13 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
 
     if (confirmed != true) return;
 
-    // Update Supabase if possible
+    // Update backend via REST API
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final currentUserId = prefs.getString('teacher_id') ??
-          Supabase.instance.client.auth.currentUser?.id ??
-          '';
-
       final requestId = request['id'] as String?;
-      if (requestId != null && !requestId.startsWith('REQ-')) {
-        await Supabase.instance.client.from('fee_waiver_requests').update({
+      if (requestId != null) {
+        await ApiService.instance.put('fees/adjustments/$requestId/approve', body: {
           'status': action,
-          'reviewed_by': currentUserId,
-          'reviewed_at': DateTime.now().toIso8601String(),
-          'comment':
-              commentController.text.isNotEmpty ? commentController.text : null,
-        }).eq('id', requestId);
+        });
       }
     } catch (e) {
       debugPrint('Error updating fee approval: $e');

@@ -22,7 +22,7 @@ class FeeRepository {
      */
     async getFeeStudentsList(where, skip, take) {
         try {
-            const students = await prisma.student.findMany({
+            const students = await prisma.studentProfile.findMany({
                 where,
                 include: {
                     user: {
@@ -40,7 +40,7 @@ class FeeRepository {
                 orderBy: { createdAt: 'desc' }
             });
 
-            const total = await prisma.student.count({ where });
+            const total = await prisma.studentProfile.count({ where });
 
             // Fetch ledgers safely for each student sequentially to respect connection limits
             const enrichedStudents = [];
@@ -84,7 +84,7 @@ class FeeRepository {
     async findActiveStudentsForSync(classId) {
         const where = { status: 'ACTIVE' };
         if (classId) where.currentClassId = classId;
-        return prisma.student.findMany({ where, select: { id: true, academicYearId: true } });
+        return prisma.studentProfile.findMany({ where, select: { id: true, academicYearId: true } });
     }
 
     /**
@@ -327,7 +327,7 @@ class FeeRepository {
      * Get student details for fee status
      */
     async findStudentForFeeStatus(id) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { id },
             include: {
                 user: true,

@@ -37,7 +37,7 @@ class AttendanceRepository {
     }
 
     async findActiveStudents(where) {
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             where: { ...where, status: 'ACTIVE' },
             include: {
                 user: { select: { id: true, firstName: true, lastName: true } },
@@ -137,7 +137,7 @@ class AttendanceRepository {
         const where = { currentClassId: classId, status: 'ACTIVE' };
         if (sectionId) where.sectionId = sectionId;
 
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             where,
             include: {
                 user: { select: { firstName: true, lastName: true } },

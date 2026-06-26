@@ -379,14 +379,10 @@ const getUserQR = asyncHandler(async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Lazily generate QR if missing (e.g. legacy users created before this feature)
-    if (!user.qrCode) {
-      const qrCode = await generateUserQR(id);
-      await prisma.user.update({ where: { id }, data: { qrCode } });
-      user.qrCode = qrCode;
-    }
+    // Always generate a fresh QR code with a new timestamp
+    const qrCode = await generateUserQR(id);
 
-    res.json({ success: true, qrCode: user.qrCode, user: { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role } });
+    res.json({ success: true, qrCode, user: { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role } });
 });
 
 /**
@@ -867,6 +863,78 @@ module.exports = {
     res.json({
       success: true,
       message: 'Password changed successfully',
+    });
+  }),
+  updateMeProfile: asyncHandler(async (req, res) => {
+    const id = req.user.userId;
+    const { 
+      firstName, lastName, phone, address, gender, dateOfBirth, bloodGroup,
+      emergencyContact, emergencyPhone, medicalConditions, allergies, // student-specific
+      specialization, qualification, experience // teacher-specific
+    } = req.body;
+
+    const userUpdate = {};
+    if (firstName !== undefined) userUpdate.firstName = firstName;
+    if (lastName !== undefined) userUpdate.lastName = lastName;
+    if (phone !== undefined) userUpdate.phone = phone;
+    if (address !== undefined) userUpdate.address = address;
+    if (gender !== undefined && gender) {
+      userUpdate.gender = gender.toUpperCase().startsWith('M') ? 'MALE' : 'FEMALE';
+    }
+    if (dateOfBirth !== undefined && dateOfBirth) {
+      userUpdate.dateOfBirth = new Date(dateOfBirth);
+    }
+    if (bloodGroup !== undefined) userUpdate.bloodGroup = bloodGroup;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update user
+      const updatedUser = await tx.user.update({
+        where: { id },
+        data: userUpdate,
+        select: { id: true, email: true, firstName: true, lastName: true, phone: true, address: true, gender: true, dateOfBirth: true, bloodGroup: true, role: true }
+      });
+
+      // 2. Update role specific table
+      if (updatedUser.role === 'STUDENT') {
+        const studentUpdate = {};
+        if (emergencyContact !== undefined) studentUpdate.emergencyContact = emergencyContact;
+        if (emergencyPhone !== undefined) studentUpdate.emergencyPhone = emergencyPhone;
+        if (medicalConditions !== undefined) studentUpdate.medicalConditions = medicalConditions;
+        if (allergies !== undefined) studentUpdate.allergies = allergies;
+
+        if (Object.keys(studentUpdate).length > 0) {
+          const student = await tx.student.findFirst({ where: { userId: id } });
+          if (student) {
+            await tx.student.update({
+              where: { id: student.id },
+              data: studentUpdate
+            });
+          }
+        }
+      } else if (updatedUser.role === 'TEACHER') {
+        const teacherUpdate = {};
+        if (specialization !== undefined) teacherUpdate.specialization = specialization;
+        if (qualification !== undefined) teacherUpdate.qualification = qualification;
+        if (experience !== undefined) teacherUpdate.experience = parseInt(experience) || 0;
+
+        if (Object.keys(teacherUpdate).length > 0) {
+          const teacher = await tx.teacher.findFirst({ where: { userId: id } });
+          if (teacher) {
+            await tx.teacher.update({
+              where: { id: teacher.id },
+              data: teacherUpdate
+            });
+          }
+        }
+      }
+
+      return updatedUser;
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: result
     });
   }),
 };

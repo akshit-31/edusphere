@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'old_student_profile_screen.dart';
+import '../profile_screen.dart';
 import '../../theme/colors.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
+import '../../services/student_service.dart';
+import '../../services/academic_service.dart';
 import '../../config/api_config.dart';
 import '../../widgets/teacher_app_bar.dart';
 import '../main_screen.dart';
@@ -70,8 +71,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   String _searchQuery = '';
   bool _isLoading = false;
   String? _errorMessage;
-  List<StudentRecord> _allStudents = [];
-  RealtimeChannel? _realtimeChannel;
+    List<StudentRecord> _allStudents = [];
   
   // ── Filters ──
   String? _selectedClass;
@@ -80,9 +80,6 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   final List<String> _sections = ['All Sections'];
   List<Map<String, dynamic>> _apiClasses = [];
   List<Map<String, dynamic>> _allSections = [];
-
-  // Supabase client
-  final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
@@ -94,12 +91,11 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
 
   Future<void> _loadApiClasses() async {
     try {
-      final classesRes =
-          await _supabase.from('Class').select('id, name').order('name');
-      final sectionsRes = await _supabase
-          .from('Section')
-          .select('id, name, classId')
-          .order('name');
+      final classesResMap = await AcademicService.instance.getClasses();
+      final sectionsResMap = await AcademicService.instance.getSections();
+
+      final List<dynamic> classesRes = classesResMap['classes'] ?? classesResMap['data'] ?? [];
+      final List<dynamic> sectionsRes = sectionsResMap['sections'] ?? sectionsResMap['data'] ?? [];
 
       if (mounted) {
         setState(() {
@@ -131,7 +127,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading classes from Supabase: $e');
+      debugPrint('Error loading classes: $e');
     }
   }
 
@@ -165,43 +161,16 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
 
   void _connectRealtime() {
     try {
-      final client = Supabase.instance.client;
-      _realtimeChannel = client
-          .channel('public:student_directory_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Student',
-            callback: (payload) {
-              if (mounted) _fetchStudents();
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'User',
-            callback: (payload) {
-              if (mounted) _fetchStudents();
-            },
-          );
-      _realtimeChannel!.subscribe();
-    } catch (e) {
-      debugPrint('Error subscribing to student directory realtime: $e');
-    }
-
-    try {
-      SocketService().on('STUDENT_UPDATED', (data) {
-        if (mounted) _fetchStudents();
-      });
-      SocketService().on('STUDENT_ADDED', (data) {
-        if (mounted) _fetchStudents();
-      });
-      SocketService().on('STUDENT_DELETED', (data) {
-        if (mounted) _fetchStudents();
-      });
+      SocketService().on('STUDENT_UPDATED', _handleStudentUpdated);
+      SocketService().on('STUDENT_ADDED', _handleStudentUpdated);
+      SocketService().on('STUDENT_DELETED', _handleStudentUpdated);
     } catch (e) {
       debugPrint('Error subscribing to Socket.IO student updates: $e');
     }
+  }
+
+  void _handleStudentUpdated(dynamic data) {
+    if (mounted) _fetchStudents();
   }
 
   Future<void> _fetchStudents() async {
@@ -210,52 +179,57 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
       _errorMessage = null;
     });
     try {
-      final response = await _supabase.from('Student').select('*, User(*), Class(*), Section(*)');
+      final res = await StudentService.instance.getStudents();
 
-      final List<StudentRecord> loadedStudents = [];
-      for (var item in response) {
-        final user = item['User'] as Map? ?? {};
-        final classData = item['Class'] as Map? ?? {};
-        final sectionData = item['Section'] as Map? ?? {};
+      if (res['success'] == true && res['students'] != null) {
+        final List<dynamic> response = res['students'];
+        final List<StudentRecord> loadedStudents = [];
+        for (var item in response) {
+          final user = (item['user'] ?? item['User']) as Map? ?? {};
+          final classData = (item['currentClass'] ?? item['Class']) as Map? ?? {};
+          final sectionData = (item['section'] ?? item['Section']) as Map? ?? {};
 
-        final firstName = user['firstName'] ?? '';
-        final lastName = user['lastName'] ?? '';
-        final fullName = '$firstName $lastName'.trim();
+          final firstName = user['firstName'] ?? '';
+          final lastName = user['lastName'] ?? '';
+          final fullName = '$firstName $lastName'.trim();
 
-        final rawClassName = classData['name']?.toString() ?? 'Class 8';
-        final sectionName = sectionData['name']?.toString() ?? 'A';
-        final displayClassName =
-            '${rawClassName.replaceAll('Class', 'Grade')} - $sectionName';
+          final rawClassName = classData['name']?.toString() ?? 'Class 8';
+          final sectionName = sectionData['name']?.toString() ?? 'A';
+          final displayClassName =
+              '${rawClassName.replaceAll('Class', 'Grade')} - $sectionName';
 
-        final rawAvatar = user['avatar'] ?? user['profileImage']?.toString() ?? '';
-        String? avatarUrl;
-        if (rawAvatar.isNotEmpty) {
-          avatarUrl = rawAvatar.startsWith('http')
-              ? rawAvatar
-              : '${ApiConfig.serverBaseUrl}$rawAvatar';
+          final rawAvatar = user['avatar'] ?? user['profileImage']?.toString() ?? '';
+          String? avatarUrl;
+          if (rawAvatar.isNotEmpty) {
+            avatarUrl = rawAvatar.startsWith('http')
+                ? rawAvatar
+                : '${ApiConfig.serverBaseUrl}$rawAvatar';
+          }
+
+          loadedStudents.add(StudentRecord(
+            id: item['id']?.toString() ?? '',
+            admissionNo: item['admissionNumber']?.toString() ?? '',
+            name: fullName.isNotEmpty ? fullName : 'Unknown',
+            className: displayClassName,
+            email: user['email']?.toString() ?? '',
+            status: item['status']?.toString() ?? 'ACTIVE',
+            avatarUrl: avatarUrl,
+          ));
         }
 
-        loadedStudents.add(StudentRecord(
-          id: item['id']?.toString() ?? '',
-          admissionNo: item['admissionNumber']?.toString() ?? '',
-          name: fullName.isNotEmpty ? fullName : 'Unknown',
-          className: displayClassName,
-          email: user['email']?.toString() ?? '',
-          status: item['status']?.toString() ?? 'ACTIVE',
-          avatarUrl: avatarUrl,
-        ));
-      }
+        loadedStudents.sort((a, b) => a.name.compareTo(b.name));
 
-      loadedStudents.sort((a, b) => a.name.compareTo(b.name));
-
-      if (mounted) {
-        setState(() {
-          _allStudents = loadedStudents;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _allStudents = loadedStudents;
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception(res['message'] ?? 'Failed to load students');
       }
     } catch (e) {
-      debugPrint('Error fetching students from Supabase: $e');
+      debugPrint('Error fetching students: $e');
       if (mounted) {
         setState(() {
           _errorMessage = 'Could not load students. Pull down to retry.';
@@ -268,15 +242,10 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
     try {
-      SocketService().off('STUDENT_UPDATED');
-      SocketService().off('STUDENT_ADDED');
-      SocketService().off('STUDENT_DELETED');
+      SocketService().off('STUDENT_UPDATED', _handleStudentUpdated);
+      SocketService().off('STUDENT_ADDED', _handleStudentUpdated);
+      SocketService().off('STUDENT_DELETED', _handleStudentUpdated);
     } catch (_) {}
     super.dispose();
   }
@@ -674,7 +643,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) =>
-                                        OldStudentProfileScreen(
+                                        ProfileScreen(
                                       role: 'student',
                                       theme: roleThemes['student']!,
                                       studentId: student.id,
@@ -825,7 +794,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                                                 context,
                                                 MaterialPageRoute(
                                                   builder: (context) =>
-                                                      OldStudentProfileScreen(
+                                                      ProfileScreen(
                                                     role: 'student',
                                                     theme:
                                                         roleThemes['student']!,

@@ -6,7 +6,7 @@ const prisma = require('../config/database');
 class DashboardRepository {
     // --- Student Stats ---
     async getStudentById(userId) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { userId },
             include: { currentClass: true, section: true }
         });
@@ -79,7 +79,7 @@ class DashboardRepository {
     }
 
     async getClassStudents(classId) {
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             where: { currentClassId: classId },
             select: { id: true }
         });
@@ -127,11 +127,11 @@ class DashboardRepository {
 
     // --- Admission Manager Stats ---
     async countStudentsByStatus(status) {
-        return prisma.student.count({ where: { status } });
+        return prisma.studentProfile.count({ where: { status } });
     }
 
     async countAdmissions(fromDate, toDate) {
-        return prisma.student.count({
+        return prisma.studentProfile.count({
             where: { createdAt: { gte: fromDate, lt: toDate } }
         });
     }
@@ -141,7 +141,7 @@ class DashboardRepository {
     }
 
     async getClassDistribution(limit = 5) {
-        const distribution = await prisma.student.groupBy({
+        const distribution = await prisma.studentProfile.groupBy({
             by: ['currentClassId'],
             where: { currentClassId: { not: null }, status: 'ACTIVE' },
             _count: { id: true },
@@ -259,7 +259,7 @@ class DashboardRepository {
     }
 
     async getRecentStudents(limit) {
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             take: limit,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -515,7 +515,7 @@ class DashboardRepository {
     }
     // --- Dashboard Sync Methods ---
     async countStudentsWithoutTransport() {
-        return prisma.student.count({
+        return prisma.studentProfile.count({
             where: {
                 status: 'ACTIVE',
                 transportAllocations: {

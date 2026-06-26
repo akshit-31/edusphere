@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
+import '../../services/student_service.dart';
+import '../../services/academic_service.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:developer' as dev;
-import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import 'package:edusphere/theme/typography.dart';
 
@@ -46,21 +47,24 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   // Store all sections from Supabase keyed by classId
   List<Map<String, dynamic>> _allSections = [];
 
-  /// Load classes & sections directly from Supabase — IDs match Student table
+  /// Load classes & sections directly from REST API — IDs match Student table
   Future<void> _loadApiClasses() async {
     if (!mounted) return;
     try {
-      final classesRes =
-          await _supabase.from('Class').select('id, name').order('name');
-      final sectionsRes = await _supabase
-          .from('Section')
-          .select('id, name, classId')
-          .order('name');
+      final classesMap = await AcademicService.instance.getClasses();
+      final sectionsMap = await AcademicService.instance.getSections();
+      final classesRes = classesMap['classes'] ?? classesMap['data'] ?? [];
+      final sectionsRes = sectionsMap['sections'] ?? sectionsMap['data'] ?? [];
 
       if (mounted) {
         setState(() {
           _allSections = List<Map<String, dynamic>>.from(sectionsRes);
-          _apiClasses = List<Map<String, dynamic>>.from(classesRes);
+          _apiClasses = List<Map<String, dynamic>>.from(classesRes)
+              .where((c) {
+                final name = c['name']?.toString() ?? '';
+                return name == 'Class 8' || name == 'Class 9' || name == 'Class 10';
+              })
+              .toList();
           _classes.clear();
           for (var c in _apiClasses) {
             final name = c['name']?.toString() ?? '';
@@ -82,7 +86,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading classes from Supabase: $e');
+      debugPrint('Error loading classes: $e');
     }
   }
 
@@ -125,9 +129,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   List<Map<String, dynamic>> _analyticsStudentData = [];
   final List<Map<String, dynamic>> _createdSlots = [];
 
-  final _supabase = Supabase.instance.client;
-  RealtimeChannel? _realtimeChannel;
-
   @override
   void initState() {
     super.initState();
@@ -138,31 +139,28 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
   void _connectRealtime() {
     try {
-      _realtimeChannel =
-          _supabase.channel('public:teacher_attendance_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'AttendanceRecord',
-                callback: (payload) {
-                  if (mounted) {
-                    _loadExistingSlotsForDate();
-                    _loadAnalytics();
-                  }
-                },
-              );
-      _realtimeChannel!.subscribe();
+      SocketService().on('attendanceMarked', _onRealtimeEvent);
+      SocketService().on('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().on('ATTENDANCE_UPDATED', _onRealtimeEvent);
     } catch (e) {
       dev.log('Error subscribing to teacher attendance realtime: $e');
     }
   }
 
+  void _onRealtimeEvent(dynamic payload) {
+    if (mounted) {
+      _loadExistingSlotsForDate();
+      _loadAnalytics();
+    }
+  }
+
   @override
   void dispose() {
-    if (_realtimeChannel != null) {
-      try {
-        _supabase.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
+    try {
+      SocketService().off('attendanceMarked', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_UPDATED', _onRealtimeEvent);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -181,22 +179,27 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-      // 1. Fetch classes, sections, and students
-      final classesRes = await _supabase.from('Class').select('id, name');
-      final sectionsRes =
-          await _supabase.from('Section').select('id, name, classId');
+      // 1. Fetch classes & sections if not already loaded
+      if (_apiClasses.isEmpty) {
+        final classesMap = await AcademicService.instance.getClasses();
+        final sectionsMap = await AcademicService.instance.getSections();
+        _allSections = List<Map<String, dynamic>>.from(sectionsMap['sections'] ?? sectionsMap['data'] ?? []);
+        _apiClasses = List<Map<String, dynamic>>.from(classesMap['classes'] ?? classesMap['data'] ?? [])
+            .where((c) {
+              final name = c['name']?.toString() ?? '';
+              return name == 'Class 8' || name == 'Class 9' || name == 'Class 10';
+            })
+            .toList();
+      }
 
       // 2. Fetch all attendance records for the selected date
-      final attendanceRecords = await _supabase
-          .from('AttendanceRecord')
-          .select(
-              'studentId, status, Student(id, currentClassId, sectionId, admissionNumber, User(firstName, lastName, email))')
-          .eq('date', dateStr);
+      final response = await ApiService.instance.get('attendance/date', queryParams: {'date': dateStr});
+      final List<dynamic> attendanceList = response['attendance'] ?? [];
 
       // Group attendance records by classId and sectionId
       Map<String, List<Map<String, dynamic>>> groupedRecords = {};
-      for (var record in attendanceRecords) {
-        final student = record['Student'] as Map?;
+      for (var record in attendanceList) {
+        final student = record['student'] as Map?;
         if (student == null) continue;
         final classId = student['currentClassId']?.toString();
         final sectionId = student['sectionId']?.toString() ?? 'null';
@@ -210,68 +213,75 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         final classId = parts[0];
         final sectionId = parts[1];
 
-        final cls = classesRes.firstWhere((c) => c['id']?.toString() == classId,
+        final cls = _apiClasses.firstWhere((c) => c['id']?.toString() == classId,
             orElse: () => {});
+        if (cls.isEmpty) continue;
+        final dbClassName = cls['name']?.toString() ?? '';
+
         final sec = sectionId != 'null'
-            ? sectionsRes.firstWhere((s) => s['id']?.toString() == sectionId,
+            ? _allSections.firstWhere((s) => s['id']?.toString() == sectionId,
                 orElse: () => {})
             : {};
 
-        final dbClassName = cls['name']?.toString() ?? 'Class';
         final displayClassName = _mapClassName(dbClassName);
         final sectionName =
             sec.isNotEmpty ? 'Section ${sec['name']}' : 'All Sections';
 
         final records = groupedRecords[key]!;
 
-        // Fetch students for this class and section
-        var studentQuery = _supabase
-            .from('Student')
-            .select(
-                'id, admissionNumber, currentClassId, sectionId, User(firstName, lastName, email)')
-            .eq('currentClassId', classId);
-
-        if (sectionId != 'null') {
-          studentQuery = studentQuery.eq('sectionId', sectionId);
-        }
-
-        final studentRes = await studentQuery;
-
+        // Build students list and status map for this slot
         final List<Map<String, dynamic>> studentList = [];
-        for (var s in studentRes) {
-          final user = s['User'] as Map? ?? {};
-          final name =
-              '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+        Map<String, String> statusMap = {};
+        Map<String, String> recordIdMap = {};
+        
+        bool isAnySubmitted = false;
+
+        for (var record in records) {
+          final student = record['student'] as Map? ?? {};
+          final user = student['user'] as Map? ?? {};
+          final firstName = user['firstName'] ?? '';
+          final lastName = user['lastName'] ?? '';
+          final fullName = '$firstName $lastName'.trim();
+          final email = user['email'] ?? '';
+          final admission = student['admissionNumber'] ?? '';
+
+          final sId = student['id']?.toString() ?? '';
+          if (sId.isEmpty) continue;
+
           studentList.add({
-            'id': s['id']?.toString() ?? '',
-            'name': name.isNotEmpty ? name : 'Unknown',
-            'email': user['email']?.toString() ?? '',
+            'id': sId,
+            'name': fullName.isNotEmpty ? fullName : 'Unknown',
+            'email': email,
             'class_name': displayClassName,
-            'admission_no': s['admissionNumber']?.toString() ?? '',
+            'admission_no': admission,
           });
+
+          final attRec = record['attendance'] as Map?;
+          if (attRec != null) {
+            isAnySubmitted = true;
+            final statusVal = attRec['status']?.toString() ?? '';
+            final rId = attRec['id']?.toString() ?? '';
+
+            String localStatus = 'P';
+            if (statusVal == 'ABSENT') localStatus = 'A';
+            if (statusVal == 'LATE') localStatus = 'L';
+
+            statusMap[sId] = localStatus;
+            if (rId.isNotEmpty) recordIdMap[sId] = rId;
+          }
         }
         studentList.sort((a, b) => a['name'].compareTo(b['name']));
 
-        // Map status for marked students
-        Map<String, String> statusMap = {};
-        for (var record in records) {
-          final sId = record['studentId']?.toString() ?? '';
-          final statusVal = record['status']?.toString() ?? '';
-
-          String localStatus = 'P';
-          if (statusVal == 'ABSENT') localStatus = 'A';
-          if (statusVal == 'LATE') localStatus = 'L';
-
-          if (sId.isNotEmpty) statusMap[sId] = localStatus;
-        }
-
         _createdSlots.add({
           'class': dbClassName,
+          'classId': classId,
           'section': sectionName,
+          'sectionId': sectionId != 'null' ? sectionId : null,
           'date': _selectedDate,
           'students': studentList,
           'attendanceStatus': statusMap,
-          'isSubmitted': true,
+          'recordIds': recordIdMap,
+          'isSubmitted': isAnySubmitted,
         });
       }
 
@@ -303,112 +313,58 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       _analyticsLoaded = false;
     });
     try {
-      var query = _supabase
-          .from('AttendanceRecord')
-          .select(
-              'id, studentId, date, status, Student(currentClassId, Class(name), User(firstName, lastName))')
-          .eq('attendeeType', 'STUDENT')
-          .gte('date', DateFormat('yyyy-MM-dd').format(_analyticsFromDate))
-          .lte('date', DateFormat('yyyy-MM-dd').format(_analyticsToDate))
-          .order('date', ascending: false)
-          .limit(500);
+      String? classId;
+      String? sectionId;
 
-      final res = await query;
-
-      // Group by date
-      Map<String, Map<String, dynamic>> grouped = {};
-      // Student-level: track per student attendance counts
-      Map<String, Map<String, dynamic>> studentMap = {};
-
-      for (var record in res) {
-        final date = record['date']?.toString() ?? '';
-        final student = record['Student'] as Map? ?? {};
-        final classData = student['Class'] as Map? ?? {};
-        final className = classData['name']?.toString() ?? 'Unknown';
-        final mappedClassName = _mapClassName(className);
-
-        // Class filter
-        if (_analyticsClass != 'All Classes' &&
-            mappedClassName != _analyticsClass) {
-          continue;
-        }
-
-        final userMap = student['User'] as Map? ?? {};
-        final firstName = userMap['firstName']?.toString() ?? '';
-        final lastName = userMap['lastName']?.toString() ?? '';
-        final studentName = '$firstName $lastName'.trim();
-        final studentId = record['studentId']?.toString() ?? '';
-
-        final status = record['status']?.toString() ?? 'PRESENT';
-        final isPresent =
-            status == 'PRESENT' || status == 'P' || status == 'Present';
-        final isAbsent =
-            status == 'ABSENT' || status == 'A' || status == 'Absent';
-        final isLate = status == 'LATE' || status == 'L' || status == 'Late';
-
-        // Date grouping
-        if (!grouped.containsKey(date)) {
-          grouped[date] = {
-            'date': date,
-            'className': mappedClassName,
-            'P': 0,
-            'A': 0,
-            'L': 0,
-            'total': 0
-          };
-        }
-        if (isPresent) grouped[date]!['P'] = (grouped[date]!['P'] as int) + 1;
-        if (isAbsent) grouped[date]!['A'] = (grouped[date]!['A'] as int) + 1;
-        if (isLate) grouped[date]!['L'] = (grouped[date]!['L'] as int) + 1;
-        grouped[date]!['total'] = (grouped[date]!['total'] as int) + 1;
-
-        // Student grouping
-        if (studentId.isNotEmpty) {
-          studentMap[studentId] ??= {
-            'name': studentName,
-            'class': mappedClassName,
-            'P': 0,
-            'A': 0,
-            'L': 0,
-            'total': 0
-          };
-          if (isPresent) {
-            studentMap[studentId]!['P'] =
-                (studentMap[studentId]!['P'] as int) + 1;
-          }
-          if (isAbsent) {
-            studentMap[studentId]!['A'] =
-                (studentMap[studentId]!['A'] as int) + 1;
-          }
-          if (isLate) {
-            studentMap[studentId]!['L'] =
-                (studentMap[studentId]!['L'] as int) + 1;
-          }
-          studentMap[studentId]!['total'] =
-              (studentMap[studentId]!['total'] as int) + 1;
-        }
+      if (_analyticsClass != 'All Classes') {
+        final cls = _apiClasses.firstWhere((c) => _mapClassName(c['name']?.toString() ?? '') == _analyticsClass, orElse: () => {});
+        classId = cls['id']?.toString();
       }
 
-      final list = grouped.values.toList();
-      list.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
+      final queryParams = {
+        if (classId != null) 'classId': classId,
+        'startDate': DateFormat('yyyy-MM-dd').format(_analyticsFromDate),
+        'endDate': DateFormat('yyyy-MM-dd').format(_analyticsToDate),
+      };
 
-      final studentList = studentMap.values.toList();
-      studentList.sort((a, b) {
-        final aP = a['total'] > 0 ? (a['P'] / a['total']) : 0;
-        final bP = b['total'] > 0 ? (b['P'] / b['total']) : 0;
-        return (bP as num).compareTo(aP as num);
-      });
+      final response = await ApiService.instance.get('attendance/analytics', queryParams: queryParams);
 
-      if (mounted) {
-        setState(() {
-          _analyticsData = list;
-          _isAnalyticsLoading = false;
-          _analyticsLoaded = true;
-          // store student list for matrix
-          _analyticsStudentData = studentList;
-        });
+      if (response['success'] == true) {
+        final List<dynamic> breakdown = response['dailyBreakdown'] ?? [];
+        final List<dynamic> matrix = response['studentMatrix'] ?? [];
+
+        final List<Map<String, dynamic>> list = breakdown.map((d) => {
+          'date': d['date']?.toString() ?? '',
+          'className': _analyticsClass,
+          'P': d['present'] ?? 0,
+          'A': d['absent'] ?? 0,
+          'L': d['late'] ?? 0,
+          'total': d['total'] ?? 0,
+        }).toList();
+
+        final List<Map<String, dynamic>> studentList = matrix.map((s) {
+          final stats = s['stats'] ?? {};
+          return {
+            'name': s['name']?.toString() ?? '',
+            'class': _analyticsClass,
+            'P': stats['presentDays'] ?? 0,
+            'A': stats['absentDays'] ?? 0,
+            'L': stats['lateDays'] ?? 0,
+            'total': stats['markedDates'] ?? 0,
+          };
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _analyticsData = list;
+            _isAnalyticsLoading = false;
+            _analyticsLoaded = true;
+            _analyticsStudentData = studentList;
+          });
+        }
       }
     } catch (e) {
+      dev.log('Error loading analytics: $e');
       if (mounted) {
         setState(() {
           _analyticsData = [];
@@ -890,14 +846,17 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                       MaterialPageRoute(
                         builder: (_) => MarkAttendanceScreen(
                           className: slot['class'] as String,
+                          classId: slot['classId'] as String?,
                           section: slot['section'] as String,
+                          sectionId: slot['sectionId'] as String?,
                           date: slot['date'] as DateTime,
                           students: List<Map<String, dynamic>>.from(
                               slot['students'] as Iterable),
                           initialAttendanceStatus: Map<String, String>.from(
                               slot['attendanceStatus'] as Map),
+                          initialRecordIds: Map<String, String>.from(
+                              (slot['recordIds'] ?? {}) as Map),
                           isAlreadySubmitted: isSub,
-                          supabase: _supabase,
                         ),
                       ),
                     );
@@ -911,6 +870,9 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         setState(() {
                           slot['isSubmitted'] = true;
                           slot['attendanceStatus'] = result['attendanceStatus'];
+                          if (result['recordIds'] != null) {
+                            slot['recordIds'] = result['recordIds'];
+                          }
                         });
                       }
                     }
@@ -1079,32 +1041,22 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         }
       }
 
-      // 1. Fetch students for the class/section via Supabase
-      var studentQuery = _supabase
-          .from('Student')
-          .select(
-              'id, admissionNumber, currentClassId, sectionId, User(firstName, lastName, email)')
-          .eq('currentClassId', classId);
+      // 1. Fetch students for the class/section via REST API
+      final studentsMap = await StudentService.instance.getStudents(classId: classId, sectionId: sectionId);
+      final List<dynamic> studentsRawList = studentsMap['students'] ?? studentsMap['data'] ?? [];
 
-      if (sectionId != null) {
-        studentQuery = studentQuery.eq('sectionId', sectionId);
-      }
-
-      final studentsRawList = await studentQuery;
-
-      // 2. Fetch all attendance records for this date via Supabase
+      // 2. Fetch all attendance records for this date via REST API
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      final attendanceRawList = await _supabase
-          .from('AttendanceRecord')
-          .select('studentId, status')
-          .eq('date', dateStr);
+      final response = await ApiService.instance.get('attendance/date', queryParams: {'date': dateStr});
+      final List<dynamic> attendanceRawList = response['attendance'] ?? [];
 
       final List<Map<String, dynamic>> studentList = [];
       final Map<String, String> statusMap = {};
+      final Map<String, String> recordIdMap = {};
       bool alreadySubmitted = false;
 
       for (var item in studentsRawList) {
-        final user = item['User'] as Map? ?? {};
+        final user = item['user'] as Map? ?? {};
         final firstName = user['firstName'] ?? '';
         final lastName = user['lastName'] ?? '';
         final fullName = '$firstName $lastName'.trim();
@@ -1129,26 +1081,35 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
       // Map attendance records to our students
       for (var att in attendanceRawList) {
-        final sId = att['studentId']?.toString() ?? '';
+        final attStudent = att['student'] as Map?;
+        final attRec = att['attendance'] as Map?;
+        if (attStudent == null || attRec == null) continue;
+
+        final sId = attStudent['id']?.toString() ?? '';
+        final rId = attRec['id']?.toString() ?? '';
         if (sId.isNotEmpty) {
           final isOurStudent = studentList.any((s) => s['id'] == sId);
           if (isOurStudent) {
             alreadySubmitted = true;
-            final statusVal = att['status']?.toString() ?? '';
+            final statusVal = attRec['status']?.toString() ?? '';
             String localStatus = 'P';
             if (statusVal == 'ABSENT' || statusVal == 'A') localStatus = 'A';
             if (statusVal == 'LATE' || statusVal == 'L') localStatus = 'L';
             statusMap[sId] = localStatus;
+            if (rId.isNotEmpty) recordIdMap[sId] = rId;
           }
         }
       }
 
       final newSlot = {
         'class': _selectedClass!,
+        'classId': classId,
         'section': _selectedSection,
+        'sectionId': sectionId,
         'date': _selectedDate,
         'students': studentList,
         'attendanceStatus': statusMap,
+        'recordIds': recordIdMap,
         'isSubmitted': alreadySubmitted,
       };
 
@@ -2220,22 +2181,26 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
 class MarkAttendanceScreen extends StatefulWidget {
   final String className;
+  final String? classId;
   final String section;
+  final String? sectionId;
   final DateTime date;
   final List<Map<String, dynamic>> students;
   final Map<String, String> initialAttendanceStatus;
+  final Map<String, String> initialRecordIds;
   final bool isAlreadySubmitted;
-  final SupabaseClient supabase;
 
   const MarkAttendanceScreen({
     super.key,
     required this.className,
+    this.classId,
     required this.section,
+    this.sectionId,
     required this.date,
     required this.students,
     required this.initialAttendanceStatus,
+    required this.initialRecordIds,
     required this.isAlreadySubmitted,
-    required this.supabase,
   });
 
   @override
@@ -2248,6 +2213,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   late Map<String, String> _attendanceStatus;
   bool _isSubmitting = false;
   late bool _isAlreadySubmitted;
+  late Map<String, String> _currentRecordIds;
 
   @override
   void initState() {
@@ -2255,6 +2221,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     _students = List.from(widget.students);
     _attendanceStatus = Map.from(widget.initialAttendanceStatus);
     _isAlreadySubmitted = widget.isAlreadySubmitted;
+    _currentRecordIds = Map.from(widget.initialRecordIds);
 
     // Auto-mark all unmarked students as Present to save teacher time
     if (!_isAlreadySubmitted) {
@@ -2352,7 +2319,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     final dbDateStr = DateFormat('yyyy-MM-dd').format(widget.date);
 
     try {
-      final attendanceData = <Map<String, dynamic>>[];
+      final List<Map<String, dynamic>> attendanceData = [];
       for (var student in _students) {
         final String studentId = student['id']?.toString() ?? '';
         if (studentId.isEmpty) continue;
@@ -2371,19 +2338,17 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       final payload = {
         'date': dbDateStr,
         'attendanceData': attendanceData,
+        if (widget.classId != null) 'classId': widget.classId,
+        if (widget.sectionId != null) 'sectionId': widget.sectionId,
       };
 
-      final response =
-          await ApiService.instance.post('attendance/bulk', body: payload);
-      if (response == null || response['success'] != true) {
-        throw response != null
-            ? (response['message'] ?? 'API response error')
-            : 'No response from API';
-      }
+      await ApiService.instance.post('attendance/bulk', body: payload);
 
       if (mounted) {
         try {
           SocketService().emit('ATTENDANCE_UPDATED', {'source': 'teacher_bulk_attendance'});
+          SocketService().emit('ATTENDANCE_MARKED', {'source': 'teacher_bulk_attendance'});
+          SocketService().emit('attendanceMarked', {'source': 'teacher_bulk_attendance'});
         } catch (e) {
           debugPrint('Socket emit error: $e');
         }
@@ -2395,7 +2360,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
         // Emit socket event to ensure students see the update in real-time
         try {
-          SocketService().emit('ATTENDANCE_UPDATED', payload);
+          final socketPayload = {
+            'date': dbDateStr,
+            'attendanceData': attendanceData,
+          };
+          SocketService().emit('ATTENDANCE_UPDATED', socketPayload);
+          SocketService().emit('ATTENDANCE_MARKED', socketPayload);
+          SocketService().emit('attendanceMarked', socketPayload);
         } catch (_) {}
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2420,14 +2391,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
         Navigator.pop(context, {
           'attendanceStatus': _attendanceStatus,
+          'recordIds': _currentRecordIds,
         });
       }
     } catch (e) {
-      // ── Offline / DB error fallback ──
-      // Save locally and navigate back so user doesn't lose their marking.
+      debugPrint('Error saving attendance: $e');
       if (mounted) {
         setState(() {
-          _isAlreadySubmitted = true;
           _isSubmitting = false;
         });
 
@@ -2435,29 +2405,24 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.wifi_off_rounded,
+                const Icon(Icons.error_outline_rounded,
                     color: Colors.white, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Saved locally. Sync will happen when online.',
+                    'Failed to submit: $e',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     maxLines: 2,
                   ),
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFFF59E0B),
+            backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 4),
           ),
         );
-
-        Navigator.pop(context, {
-          'attendanceStatus': _attendanceStatus,
-        });
       }
     }
   }

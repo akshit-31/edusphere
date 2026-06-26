@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../theme/colors.dart';
@@ -9,7 +8,6 @@ import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import 'package:edusphere/theme/typography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../scratch/fetch_allocations.dart';
 
 class TransportScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -32,7 +30,6 @@ class _TransportScreenState extends State<TransportScreen> {
   String _vehicleNumber = '—';
   String _driverName = '—';
 
-  RealtimeChannel? _transportChannel;
   String _studentIdDebug = 'Unknown';
 
   // Real-time map simulation state
@@ -61,7 +58,6 @@ class _TransportScreenState extends State<TransportScreen> {
   @override
   void initState() {
     super.initState();
-    dumpTransportAllocations();
     _loadTransportAllocation();
     _connectRealTime();
     _startBusSimulation();
@@ -81,35 +77,18 @@ class _TransportScreenState extends State<TransportScreen> {
   @override
   void dispose() {
     _simulationTimer?.cancel();
-    if (_transportChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_transportChannel!);
-      } catch (_) {}
-    }
+    SocketService().off('TRANSPORT_UPDATE', _handleTransportUpdate);
     super.dispose();
   }
 
+  void _handleTransportUpdate(dynamic data) {
+    if (mounted) {
+      _loadTransportAllocation();
+    }
+  }
+
   void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_transportChannel != null) {
-        client.removeChannel(_transportChannel!);
-      }
-
-      _transportChannel =
-          client.channel('public:transport_allocation_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'TransportAllocation',
-                callback: (payload) {
-                  if (mounted) {
-                    _loadTransportAllocation();
-                  }
-                },
-              );
-
-      _transportChannel!.subscribe();
-    } catch (_) {}
+    SocketService().on('TRANSPORT_UPDATE', _handleTransportUpdate);
   }
 
   Future<void> _loadTransportAllocation() async {

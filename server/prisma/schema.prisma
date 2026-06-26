@@ -41,14 +41,15 @@ model User {
   serviceRequests       ServiceRequest[]    @relation("RequesterRelation")
   reviewedRequests      ServiceRequest[]    @relation("ReviewerRelation")
   staff                 Staff?
-  student               Student?
+  student               StudentProfile?
   teacher               Teacher?
+  parent                ParentProfile?
 
   @@index([email])
   @@index([role])
 }
 
-model Student {
+model StudentProfile {
   id                    String                 @id @default(uuid())
   userId                String                 @unique
   admissionNumber       String                 @unique
@@ -98,7 +99,9 @@ model Student {
   feeLedgers            StudentFeeLedger[]
   parents               StudentParent[]
   transportAllocation   TransportAllocation?
+  quizzes               QuizSubmission[]
 
+  @@map("Student")
   @@index([admissionNumber])
   @@index([currentClassId])
   @@index([status])
@@ -109,16 +112,18 @@ model StudentParent {
   studentId    String
   parentId     String
   relationship ParentRelationship
-  parent       Parent             @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent       ParentProfile      @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student      StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, parentId])
   @@index([studentId])
   @@index([parentId])
 }
 
-model Parent {
+model ParentProfile {
   id            String          @id @default(uuid())
+  userId        String?         @unique
+  user          User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   firstName     String
   lastName      String
   email         String?
@@ -132,6 +137,7 @@ model Parent {
   updatedAt     DateTime        @updatedAt
   students      StudentParent[]
 
+  @@map("Parent")
   @@index([email])
 }
 
@@ -145,7 +151,7 @@ model StudentDocument {
   mimeType     String?
   uploadedAt   DateTime @default(now())
   uploadedBy   String?
-  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student      StudentProfile  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
 }
@@ -215,7 +221,7 @@ model AcademicYear {
   feePayments      FeePayment[]
   feeStructures    FeeStructure[]
   leaveBalances    LeaveBalance[]
-  students         Student[]
+  students         StudentProfile[]
   feeLedgers       StudentFeeLedger[]
   terms            Term[]
   timetableConfigs TimetableConfig[]
@@ -240,7 +246,7 @@ model Class {
   exams            Exam[]
   feeStructures    FeeStructure[]
   sections         Section[]
-  students         Student[]
+  students         StudentProfile[]
   subjects         Subject[]
   timetables       Timetable[]
   timetableConfigs TimetableConfig?
@@ -259,7 +265,7 @@ model Section {
   assignments     Assignment[]
   attendanceSlots AttendanceSlot[]
   class           Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  students        Student[]
+  students        StudentProfile[]
   timetableSlots  TimetableSlot[]
 
   @@unique([classId, name])
@@ -395,7 +401,7 @@ model RFIDCard {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   staff      Staff?         @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  student    Student?       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student    StudentProfile?       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher    Teacher?       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([cardNumber])
@@ -472,7 +478,7 @@ model AttendanceRecord {
   scanner       QRScanner?       @relation(fields: [scannerId], references: [id])
   slot          AttendanceSlot?  @relation(fields: [slotId], references: [id])
   staff         Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  student       Student?         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student       StudentProfile?         @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject       Subject?         @relation(fields: [subjectId], references: [id])
   teacher       Teacher?         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
@@ -606,7 +612,7 @@ model ExamResult {
   updatedAt     DateTime         @updatedAt
   marks         ExamMark[]
   exam          Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student       StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([examId, studentId])
   @@index([examId])
@@ -647,7 +653,7 @@ model ReportCard {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   exam            Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student         StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([examId, studentId])
   @@index([examId])
@@ -718,7 +724,7 @@ model StudentFeeLedger {
   payments       FeePayment[]
   academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id])
   feeStructure   FeeStructure    @relation(fields: [feeStructureId], references: [id])
-  student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student        StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, academicYearId, feeStructureId])
   @@index([studentId])
@@ -740,7 +746,7 @@ model FeeAdjustment {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   ledger      StudentFeeLedger  @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
-  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student     StudentProfile           @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([ledgerId])
@@ -777,7 +783,7 @@ model FeePayment {
   academicYear      AcademicYear     @relation(fields: [academicYearId], references: [id])
   feeStructure      FeeStructure     @relation(fields: [feeStructureId], references: [id])
   ledger            StudentFeeLedger @relation(fields: [ledgerId], references: [id])
-  student           Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student           StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([receiptNumber])
@@ -821,7 +827,7 @@ model AssignmentSubmission {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student      StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([assignmentId, studentId])
   @@index([studentId])
@@ -875,7 +881,7 @@ model LibraryIssue {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   book              Book        @relation(fields: [bookId], references: [id])
-  student           Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student           StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([bookId])
   @@index([studentId])
@@ -894,7 +900,7 @@ model LibraryReservation {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   book            Book              @relation(fields: [bookId], references: [id])
-  student         Student?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student         StudentProfile?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher         Teacher?          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([bookId])
@@ -1208,7 +1214,7 @@ model TransportAllocation {
   createdAt      DateTime         @default(now())
   route          TransportRoute   @relation(fields: [routeId], references: [id])
   stop           RouteStop        @relation(fields: [stopId], references: [id])
-  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student        StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([routeId])
   @@index([stopId])
@@ -1767,4 +1773,38 @@ enum CalendarAudience {
   STUDENTS
   PARENTS
   STAFF
+}
+
+model Quiz {
+  id              String           @id @default(uuid())
+  title           String
+  subject         String           @default("General")
+  durationMinutes Int              @default(20)
+  targetClass     String?
+  targetSections  String[]
+  questions       Json             // JSON list of questions
+  isPublished     Boolean          @default(true)
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  submissions     QuizSubmission[]
+
+  @@index([isPublished])
+  @@index([targetClass])
+}
+
+model QuizSubmission {
+  id             String         @id @default(uuid())
+  quizId         String
+  studentId      String
+  score          Int
+  totalQuestions Int
+  answers        Json           // JSON answers
+  submittedAt    DateTime       @default(now())
+  quiz           Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, studentId])
+  @@index([quizId])
+  @@index([studentId])
 }

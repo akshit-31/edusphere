@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/academic_service.dart';
 import '../theme/colors.dart';
-import '../models/user_model.dart';
+
 import '../services/socket_service.dart';
 import '../widgets/common_widgets.dart';
 import 'dashboards/student_dashboard.dart';
@@ -28,7 +28,8 @@ import 'features/transport_screen.dart';
 import 'features/services_screen.dart';
 import 'features/scanner_feature_wrapper.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/cache_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../widgets/ai_chatbot_overlay.dart';
@@ -198,6 +199,11 @@ class _MainScreenState extends State<MainScreen> {
       SocketService().off('NEW_NOTIFICATION');
       SocketService().off('attendance:qr-scan');
       SocketService().off('ATTENDANCE_MARKED');
+      SocketService().off('ATTENDANCE_UPDATED');
+      SocketService().off('attendanceMarked');
+      SocketService().off('ANNOUNCEMENT_CREATED');
+      SocketService().off('ANNOUNCEMENT_UPDATED');
+      SocketService().off('ANNOUNCEMENT_DELETED');
       SocketService().disconnect();
     } catch (_) {}
     super.dispose();
@@ -237,19 +243,52 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _initSocketConnection() {
+  void _initSocketConnection() async {
     try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser != null) {
+      final prefs = CacheService.instance.prefs;
+      String? userId = prefs.getString('user_id');
+      if (userId != null && userId.isNotEmpty) {
         SocketService().connect(
-          userId: currentUser.id,
+          userId: userId,
           role: widget.role,
         );
         _setupSocketListeners();
+        _loadAnnouncements();
+      } else {
+        dev.log('⚠️ Failed to initialize socket connection: no user identity found in SharedPreferences.',
+            name: 'MainScreen');
       }
     } catch (e) {
       dev.log('⚠️ Failed to initialize socket connection: $e',
           name: 'MainScreen');
+    }
+  }
+
+  List<Map<String, dynamic>> _latestAnnouncements = [];
+  // ignore: unused_field
+  bool _isLoadingAnnouncements = false;
+
+  void _loadAnnouncements() async {
+    if (!mounted) return;
+    setState(() => _isLoadingAnnouncements = true);
+    try {
+      final res = await AcademicService.instance.getActiveAnnouncements();
+      if (res['success'] == true) {
+        final raw = res['announcements'] as List? ?? [];
+        if (mounted) {
+          setState(() {
+            _latestAnnouncements = List<Map<String, dynamic>>.from(raw);
+            _latestAnnouncements.sort((a, b) =>
+                (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+          });
+        }
+      }
+    } catch (e) {
+      dev.log('Error loading announcements: $e', name: 'MainScreen');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingAnnouncements = false);
+      }
     }
   }
 
@@ -284,24 +323,61 @@ class _MainScreenState extends State<MainScreen> {
       );
     });
 
-    // 3. Listen for ATTENDANCE_MARKED
-    SocketService().on('ATTENDANCE_MARKED', (data) {
+    // 3. Listen for ATTENDANCE_MARKED / ATTENDANCE_UPDATED / attendanceMarked
+    final attendanceCallback = (data) {
       if (!mounted) return;
-      dev.log('🟢 Attendance Marked: $data', name: 'MainScreen');
+      dev.log('🟢 Real-time Attendance event received: $data', name: 'MainScreen');
 
-      final studentName = data['studentName'] as String? ?? 'User';
-      final status = data['status'] as String? ?? 'PRESENT';
-      final type = data['type'] as String? ?? 'System';
+      final studentName = data['studentName'] as String? ?? 'Student';
+      final status = data['status'] as String? ?? data['attendanceStatus']?.toString() ?? 'Marked';
 
       showToast(
         context,
-        '📅 Attendance: $studentName marked $status via $type',
+        '📅 Attendance: $studentName marked $status',
       );
+    };
+
+    SocketService().on('ATTENDANCE_MARKED', attendanceCallback);
+    SocketService().on('ATTENDANCE_UPDATED', attendanceCallback);
+    SocketService().on('attendanceMarked', attendanceCallback);
+
+    SocketService().on('ANNOUNCEMENT_CREATED', (data) {
+      if (!mounted) return;
+      dev.log('📣 Real-time Announcement: $data', name: 'MainScreen');
+      setState(() {
+        _latestAnnouncements.insert(0, Map<String, dynamic>.from(data));
+        _latestAnnouncements.sort((a, b) =>
+            (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+      });
+      showToast(context, '📣 New Announcement: ${data['title']}');
+    });
+
+    SocketService().on('ANNOUNCEMENT_UPDATED', (data) {
+      if (!mounted) return;
+      dev.log('📣 Real-time Announcement Updated: $data', name: 'MainScreen');
+      setState(() {
+        final id = data['id'];
+        final idx = _latestAnnouncements.indexWhere((element) => element['id'] == id);
+        if (idx != -1) {
+          _latestAnnouncements[idx] = Map<String, dynamic>.from(data);
+          _latestAnnouncements.sort((a, b) =>
+              (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
+        }
+      });
+    });
+
+    SocketService().on('ANNOUNCEMENT_DELETED', (data) {
+      if (!mounted) return;
+      dev.log('📣 Real-time Announcement Deleted: $data', name: 'MainScreen');
+      setState(() {
+        final id = data['id'];
+        _latestAnnouncements.removeWhere((element) => element['id'] == id);
+      });
     });
   }
 
   Future<void> _loadUserName() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = CacheService.instance.prefs;
     final timeStr = prefs.getString('last_seen_announcement_time');
     if (timeStr != null) {
       _lastSeenAnnouncementTime = DateTime.tryParse(timeStr);
@@ -560,23 +636,14 @@ class _MainScreenState extends State<MainScreen> {
                             );
                           },
                         ),
-                        StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: Supabase.instance.client
-                              .from('Announcement')
-                              .stream(primaryKey: ['id']),
-                          builder: (context, snapshot) {
+                        Builder(
+                          builder: (context) {
                             bool hasNew = false;
                             List<Map<String, dynamic>> latestAnnouncements = [];
-                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                              final announcements =
-                                  List<Map<String, dynamic>>.from(
-                                      snapshot.data!);
-                              announcements.sort((a, b) =>
-                                  (b['createdAt'] ?? '')
-                                      .compareTo(a['createdAt'] ?? ''));
-                              latestAnnouncements = announcements.take(3).toList();
+                            if (_latestAnnouncements.isNotEmpty) {
+                              latestAnnouncements = _latestAnnouncements.take(3).toList();
                               final newestStr =
-                                  announcements.first['createdAt'] as String?;
+                                  _latestAnnouncements.first['createdAt'] as String?;
                               if (newestStr != null) {
                                 final newestTime = DateTime.tryParse(newestStr);
                                 if (newestTime != null) {
@@ -603,8 +670,7 @@ class _MainScreenState extends State<MainScreen> {
                                           .overlay?.context
                                           .findRenderObject() as RenderBox?;
 
-                                      final prefs =
-                                          await SharedPreferences.getInstance();
+                                      final prefs = CacheService.instance.prefs;
                                       final now = DateTime.now();
                                       await prefs.setString(
                                           'last_seen_announcement_time',
@@ -1590,7 +1656,7 @@ class _TeacherBottomNavBarState extends State<TeacherBottomNavBar> {
   }
 
   Future<void> _loadPhoto() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = CacheService.instance.prefs;
     final url = prefs.getString('teacher_photo_url');
     if (mounted) setState(() => _localPhotoUrl = url);
   }
@@ -1825,7 +1891,7 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
   }
 
   Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = CacheService.instance.prefs;
     final name = prefs.getString('${widget.role}_name') ??
         (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
         (widget.role == 'student' ? prefs.getString('student_name') : null) ??

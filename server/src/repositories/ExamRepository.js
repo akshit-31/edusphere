@@ -111,7 +111,7 @@ class ExamRepository {
     }
 
     async findActiveStudentsByClass(classId) {
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             where: { classId, status: 'ACTIVE' },
             include: {
                 user: { select: { firstName: true, lastName: true } },
@@ -122,7 +122,7 @@ class ExamRepository {
     }
 
     async findActiveStudents(where) {
-        return prisma.student.findMany({
+        return prisma.studentProfile.findMany({
             where: { ...where, status: 'ACTIVE' },
             include: {
                 user: { select: { id: true, firstName: true, lastName: true } },

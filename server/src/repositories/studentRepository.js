@@ -5,7 +5,7 @@ class StudentRepository {
      * Find students with filtering and pagination
      */
     async findManyWithFilters(where, skip, take) {
-        const students = await prisma.student.findMany({
+        const students = await prisma.studentProfile.findMany({
             where,
             include: {
                 user: {
@@ -29,7 +29,7 @@ class StudentRepository {
             orderBy: { createdAt: 'desc' },
         });
 
-        const total = await prisma.student.count({ where });
+        const total = await prisma.studentProfile.count({ where });
 
         return [students, total];
     }
@@ -38,7 +38,7 @@ class StudentRepository {
      * Find a single student by ID
      */
     async findById(id) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { id },
             // FIXED N+1 QUERY: Fetching all relations in one query
             include: {
@@ -62,7 +62,7 @@ class StudentRepository {
      * Find a student by admission number
      */
     async findByAdmissionNumber(admissionNumber) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { admissionNumber },
         });
     }
@@ -71,7 +71,7 @@ class StudentRepository {
      * Find a student by User ID
      */
     async findByUserId(userId) {
-        return prisma.student.findFirst({
+        return prisma.studentProfile.findFirst({
             where: { userId },
             include: {
                 user: true,
@@ -94,7 +94,7 @@ class StudentRepository {
      * Create a basic student
      */
     async create(data) {
-        return prisma.student.create({
+        return prisma.studentProfile.create({
             data,
             include: {
                 user: true,
@@ -109,7 +109,7 @@ class StudentRepository {
      * Update student details
      */
     async update(id, data) {
-        return prisma.student.update({
+        return prisma.studentProfile.update({
             where: { id },
             data,
             include: {
@@ -135,7 +135,7 @@ class StudentRepository {
      * Get student count for a specific class and section
      */
     async countByClassAndSection(classId, sectionId) {
-        return prisma.student.count({
+        return prisma.studentProfile.count({
             where: { currentClassId: classId, sectionId },
         });
     }

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../services/socket_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
@@ -105,76 +104,64 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
       _studentName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Student';
       _studentEmail = prefs.getString('student_email') ?? prefs.getString('user_email') ?? '';
 
-      final client = Supabase.instance.client;
+      final response = await ApiService.instance.get('fees/students/$_studentId/status');
       
-      // 1. Fetch ledgers with fee structure
-      final ledgersRes = await client
-          .from('StudentFeeLedger')
-          .select('*, feeStructure:FeeStructure(id, name, totalAmount)')
-          .eq('studentId', _studentId);
+      if (response != null && response['success'] == true) {
+        final List<dynamic> ledgers = response['ledgers'] as List<dynamic>? ?? [];
+        final List<Map<String, dynamic>> heads = [];
+        double totalFee = 0;
+        double totalPaid = 0;
+
+        for (var entry in ledgers) {
+          final structure = entry['feeStructure'] as Map<String, dynamic>? ?? {};
+          _feeStructureId = structure['id']?.toString() ?? '';
+          _ledgerId = entry['id']?.toString() ?? '';
+          if (entry['academicYearId'] != null) {
+            _academicYearId = entry['academicYearId']?.toString() ?? '';
+          }
           
-      // 2. Fetch payments
-      final paymentsRes = await client
-          .from('FeePayment')
-          .select('*')
-          .eq('studentId', _studentId)
-          .order('createdAt', ascending: false)
-          .limit(3);
+          final headName = structure['name']?.toString() ?? 'Fee';
+          final amount = (entry['totalPayable'] ?? structure['totalAmount'] ?? 0).toDouble();
+          final paid = (entry['totalPaid'] ?? 0).toDouble();
+          final status = entry['status']?.toString() ?? 'PENDING';
+          
+          totalFee += amount;
+          totalPaid += paid;
 
-      final List<dynamic> ledgers = ledgersRes as List<dynamic>;
-      final List<Map<String, dynamic>> heads = [];
-      double totalFee = 0;
-      double totalPaid = 0;
-
-      for (var entry in ledgers) {
-        final structure = entry['feeStructure'] as Map<String, dynamic>? ?? {};
-        _feeStructureId = structure['id']?.toString() ?? '';
-        _ledgerId = entry['id']?.toString() ?? '';
-        if (entry['academicYearId'] != null) {
-          _academicYearId = entry['academicYearId']?.toString() ?? '';
+          heads.add({
+            'id': entry['id'],
+            'name': headName,
+            'amount': amount,
+            'paid': paid,
+            'status': status == 'PAID' ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'PENDING'),
+            'feeStructureId': _feeStructureId,
+            'academicYearId': _academicYearId,
+          });
         }
         
-        final headName = structure['name']?.toString() ?? 'Fee';
-        final amount = (entry['totalPayable'] ?? structure['totalAmount'] ?? 0).toDouble();
-        final paid = (entry['totalPaid'] ?? 0).toDouble();
-        final status = entry['status']?.toString() ?? 'PENDING';
-        
-        totalFee += amount;
-        totalPaid += paid;
+        _feeHeads = heads;
+        _totalFee = totalFee;
+        _totalPaid = totalPaid;
 
-        heads.add({
-          'id': entry['id'],
-          'name': headName,
-          'amount': amount,
-          'paid': paid,
-          'status': status == 'PAID' ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'PENDING'),
-          'feeStructureId': _feeStructureId,
-          'academicYearId': _academicYearId,
-        });
+        // Process recent payments
+        final List<dynamic> payments = response['recentPayments'] as List<dynamic>? ?? [];
+        _paymentHistory = payments.map((p) {
+          return {
+            'date': p['paymentDate']?.toString() ?? p['createdAt']?.toString() ?? '',
+            'amount': (p['amount'] as num? ?? 0).toDouble(),
+            'method': p['paymentMode']?.toString() ?? 'UPI',
+            'receipt': p['receiptNumber']?.toString() ?? 'RCT-00000000',
+            'status': p['status']?.toString() ?? 'SUCCESS',
+          };
+        }).toList();
       }
-      
-      _feeHeads = heads;
-      _totalFee = totalFee;
-      _totalPaid = totalPaid;
-
-      // Process recent payments
-      final List<dynamic> payments = paymentsRes as List<dynamic>;
-      _paymentHistory = payments.map((p) {
-        return {
-          'date': p['paymentDate']?.toString() ?? p['createdAt']?.toString() ?? '',
-          'amount': (p['amount'] as num? ?? 0).toDouble(),
-          'method': p['paymentMode']?.toString() ?? 'UPI',
-          'receipt': p['receiptNumber']?.toString() ?? 'RCT-00000000',
-          'status': p['status']?.toString() ?? 'SUCCESS',
-        };
-      }).toList();
 
     } catch (e) {
       _feeHeads = [];
       _totalFee = 0;
       _totalPaid = 0;
       _paymentHistory = [];
-      debugPrint('Error loading fee ledger via Supabase: $e');
+      debugPrint('Error loading fee ledger via REST API: $e');
     } finally {
       if (mounted) {
         setState(() {

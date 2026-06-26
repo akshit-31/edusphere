@@ -265,4 +265,52 @@ class ApiService {
     final decoded = jsonDecode(response.body);
     return decoded;
   }
+
+  // Perform multipart file upload
+  Future<dynamic> multipartRequest(
+    String method,
+    String endpoint, {
+    required String fileKey,
+    required List<int> fileBytes,
+    required String fileName,
+    Map<String, String>? fields,
+  }) async {
+    await init();
+    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint');
+    dev.log('📡 [API MULTIPART] Method: $method | URL: $uri', name: 'ApiService');
+
+    final request = http.MultipartRequest(method, uri);
+    request.headers.addAll(_getHeaders());
+
+    // Add fields
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+
+    // Add file
+    final multipartFile = http.MultipartFile.fromBytes(
+      fileKey,
+      fileBytes,
+      filename: fileName,
+    );
+    request.files.add(multipartFile);
+
+    try {
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 120));
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      dev.log('📥 [API MULTIPART RESPONSE] Status: ${response.statusCode} for $method ${uri.path}', name: 'ApiService');
+      dev.log('📥 [API MULTIPART RESPONSE] Body: ${response.body}', name: 'ApiService');
+
+      if (response.statusCode == 401) {
+        unawaited(AuthService.handleSessionExpired());
+      }
+
+      final decoded = jsonDecode(response.body);
+      return decoded;
+    } catch (e) {
+      dev.log('❌ [API MULTIPART ERROR] Network request failed: $e', name: 'ApiService');
+      rethrow;
+    }
+  }
 }

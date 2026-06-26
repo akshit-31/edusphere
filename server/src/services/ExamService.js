@@ -20,6 +20,7 @@ class ExamService {
         const include = {
             class: { select: { name: true } },
             academicYear: { select: { name: true } },
+            term: { select: { name: true } },
             examSubjects: {
                 include: {
                     subject: { select: { name: true, code: true } },
@@ -98,6 +99,7 @@ class ExamService {
                             user: { select: { firstName: true, lastName: true } },
                         },
                     },
+                    marks: true,
                 },
             },
         };
@@ -413,6 +415,7 @@ class ExamService {
             const dbResult = exam.examResults.find(er => er.studentId === student.id);
 
             return {
+                id: dbResult?.id,
                 studentId: student.id,
                 studentName: `${student.user.firstName} ${student.user.lastName}`,
                 admissionNo: student.admissionNumber || '-',
@@ -423,6 +426,7 @@ class ExamService {
                 grade: dbResult?.grade || '-',
                 rank: dbResult?.rank || '-',
                 result: dbResult?.result || 'PENDING',
+                isPublished: dbResult?.isPublished || false,
                 marks: dbResult?.marks || [],
             };
         });

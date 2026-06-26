@@ -213,7 +213,7 @@ class StudentService {
      */
     async getStudentAttendance(id, startDate, endDate) {
         // 1. Ensure student exists
-        await this.getStudentById(id);
+        const student = await this.getStudentById(id);
 
         // 2. Build date filters
         const dateFilters = {};
@@ -238,6 +238,11 @@ class StudentService {
 
         const enrichedAttendance = attendance.map(a => ({
             ...a,
+            attendanceId: a.id,
+            studentId: a.studentId,
+            classId: student.currentClassId,
+            sectionId: student.sectionId,
+            teacherId: a.markedBy,
             markedByName: a.markedBy ? markerMap.get(a.markedBy) || 'System' : 'System'
         }));
 

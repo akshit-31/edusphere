@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../theme/colors.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as dev;
 import 'package:edusphere/theme/typography.dart';
+import '../../services/academic_service.dart';
+import '../../services/socket_service.dart';
 
 class TimetableScreen extends StatefulWidget {
   final bool isStudent;
@@ -49,7 +50,6 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   List<List<dynamic>> _gridData = [];
   bool _isLoading = false;
-  RealtimeChannel? _timetableChannel;
 
   @override
   void initState() {
@@ -63,54 +63,25 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   @override
   void dispose() {
-    if (_timetableChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_timetableChannel!);
-      } catch (_) {}
-    }
+    SocketService().off('TIMETABLE_UPDATE', _handleTimetableUpdate);
     super.dispose();
   }
 
+  void _handleTimetableUpdate(dynamic data) {
+    if (mounted) _loadTimetableSlots();
+  }
+
   void _connectRealtime() {
-    try {
-      _timetableChannel = Supabase.instance.client
-          .channel('public:teacher_timetable_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'TimetableSlot',
-            callback: (_) {
-              if (mounted) _loadTimetableSlots();
-            },
-          );
-      _timetableChannel!.subscribe();
-    } catch (e) {
-      debugPrint('Error subscribing to timetable realtime: $e');
-    }
+    SocketService().on('TIMETABLE_UPDATE', _handleTimetableUpdate);
   }
 
   Future<void> _loadTimetableSlots() async {
     setState(() => _isLoading = true);
     try {
-      final client = Supabase.instance.client;
-      final currentUser = client.auth.currentUser;
-      if (currentUser == null) return;
+      final res = await AcademicService.instance.getTeacherTimetable('me');
 
-      final teacherRes = await client
-          .from('Teacher')
-          .select('id')
-          .eq('userId', currentUser.id)
-          .maybeSingle();
-
-      final teacherId =
-          teacherRes != null ? teacherRes['id'] as String : currentUser.id;
-
-      final slotsRes = await client
-          .from('TimetableSlot')
-          .select('*, Subject(name), Section(name, Class(name))')
-          .eq('teacherId', teacherId);
-
-      if (slotsRes.isNotEmpty) {
+      if (res['success'] == true && res['schedule'] != null) {
+        final List<dynamic> slotsRes = res['schedule'];
         final List<List<dynamic>> newGrid =
             List.generate(9, (r) => List.generate(6, (c) => null));
         for (int day = 0; day < 6; day++) {
@@ -154,9 +125,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
           final rowIndex = getRowIndex(period);
 
           if (colIndex >= 0 && colIndex < 6 && rowIndex >= 0 && rowIndex < 9) {
-            final subject = slot['Subject'] as Map?;
-            final section = slot['Section'] as Map?;
-            final classData = section != null ? section['Class'] as Map? : null;
+            final subject = (slot['subject'] ?? slot['Subject']) as Map?;
+            final section = (slot['section'] ?? slot['Section']) as Map?;
+            final classData = section != null ? (section['class'] ?? section['Class']) as Map? : null;
 
             final subName =
                 subject != null ? subject['name']?.toString() ?? '' : '';
@@ -168,7 +139,11 @@ class _TimetableScreenState extends State<TimetableScreen> {
             final displayClass = clsName.isNotEmpty
                 ? (secName.isNotEmpty ? '$clsName - $secName' : clsName)
                 : 'Class 8A';
-            final room = slot['roomId']?.toString() ?? 'Room 201';
+            
+            final roomObj = (slot['room'] ?? slot['Room']) as Map?;
+            final room = roomObj != null
+                ? roomObj['name']?.toString() ?? 'Room 201'
+                : (slot['roomId']?.toString() ?? 'Room 201');
 
             Color cardColor = const Color(0xFFDCFCE7);
             Color textColor = const Color(0xFF166534);

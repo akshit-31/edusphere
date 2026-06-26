@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'exam_report_card_screen.dart';
@@ -8,6 +7,7 @@ import 'exam_approval_screen.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
 
 class ExamTermsScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -41,30 +41,25 @@ class _ExamTermsScreenState extends State<ExamTermsScreen> {
     });
 
     try {
-      // 1. Fetch terms from Supabase Term table, ordered by startDate ascending
-      final termsResponse = await Supabase.instance.client
-          .from('Term')
-          .select()
-          .order('startDate', ascending: true);
+      // 1. Fetch terms from REST API
+      final termsResponse = await ApiService.instance.get('terms');
+      if (termsResponse != null && termsResponse['terms'] != null) {
+        _termsList = List<Map<String, dynamic>>.from(termsResponse['terms']);
+      } else {
+        _termsList = [];
+      }
 
-      final List<Map<String, dynamic>> termsData =
-          List<Map<String, dynamic>>.from(termsResponse);
-
-      _termsList = termsData;
-
-      // 2. Fetch exam counts to build mapping from Exam table
+      // 2. Fetch exam counts to build mapping from REST API
       try {
-        final examsResponse =
-            await Supabase.instance.client.from('Exam').select('id, termId');
-
-        final List<Map<String, dynamic>> examsData =
-            List<Map<String, dynamic>>.from(examsResponse);
-
-        _examsCountMap.clear();
-        for (var exam in examsData) {
-          final termId = exam['termId'] as String?;
-          if (termId != null) {
-            _examsCountMap[termId] = (_examsCountMap[termId] ?? 0) + 1;
+        final examsResponse = await ApiService.instance.get('exams?limit=100');
+        if (examsResponse != null && examsResponse['exams'] != null) {
+          final List<dynamic> examsData = examsResponse['exams'] as List<dynamic>;
+          _examsCountMap.clear();
+          for (var exam in examsData) {
+            final termId = exam['termId'] as String?;
+            if (termId != null) {
+              _examsCountMap[termId] = (_examsCountMap[termId] ?? 0) + 1;
+            }
           }
         }
       } catch (e) {

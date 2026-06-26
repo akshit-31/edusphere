@@ -1,6 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:file_picker/file_picker.dart';
@@ -614,15 +614,7 @@ class _AdvancedAssignmentModalState extends State<AdvancedAssignmentModal>
           throw Exception(res['message'] ?? 'Failed to submit assignment');
         }
       }
-      await Supabase.instance.client.from('AssignmentSubmission').upsert({
-        'assignmentId': widget.assignment['id'],
-        'studentId': widget.studentIdStr,
-        'filePath': selectedFile!.name,
-        'status': 'SUBMITTED',
-        'grade': 'Pending',
-        'feedback': null,
-        'submittedAt': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'assignmentId,studentId');
+
 
       if (mounted) {
         setState(() {

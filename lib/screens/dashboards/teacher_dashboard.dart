@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
 import '../features/academic_calendar_screen.dart';
@@ -31,7 +30,6 @@ class _TeacherDashboardState extends State<TeacherDashboard>
 
   List<dynamic> _upcomingEvents = [];
   bool _upcomingEventsLoaded = false;
-  RealtimeChannel? _teacherDashChannel;
   Timer? _teacherDashTimer;
   String _teacherName = 'Teacher';
 
@@ -64,11 +62,6 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   @override
   void dispose() {
     _teacherDashTimer?.cancel();
-    if (_teacherDashChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_teacherDashChannel!);
-      } catch (_) {}
-    }
 
     // Clean up Socket.IO listeners
     try {
@@ -120,82 +113,6 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   }
 
   Future<void> _connectRealTime() async {
-    try {
-      final client = Supabase.instance.client;
-      _teacherDashChannel = client
-          .channel('public:teacher_dash_events')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'SchoolCalendar',
-            callback: (_) {
-              dev.log('⚡ Realtime DB change on SchoolCalendar',
-                  name: 'TeacherDashboard');
-              if (mounted) {
-                _loadUpcomingEvents();
-                _fetchDashboardData('realtime_event',
-                    eventName: 'Supabase:SchoolCalendar');
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AttendanceRecord',
-            callback: (_) {
-              dev.log('⚡ Realtime DB change on AttendanceRecord',
-                  name: 'TeacherDashboard');
-              if (mounted) {
-                _fetchDashboardData('realtime_event',
-                    eventName: 'Supabase:AttendanceRecord');
-                _loadTeacherAttendance();
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Student',
-            callback: (_) {
-              dev.log('⚡ Realtime DB change on Student',
-                  name: 'TeacherDashboard');
-              if (mounted) {
-                _fetchDashboardData('realtime_event',
-                    eventName: 'Supabase:Student');
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Class',
-            callback: (_) {
-              dev.log('⚡ Realtime DB change on Class',
-                  name: 'TeacherDashboard');
-              if (mounted) {
-                _fetchDashboardData('realtime_event',
-                    eventName: 'Supabase:Class');
-              }
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'LibraryIssue',
-            callback: (_) {
-              dev.log('⚡ Realtime DB change on LibraryIssue',
-                  name: 'TeacherDashboard');
-              if (mounted) {
-                _fetchDashboardData('realtime_event',
-                    eventName: 'Supabase:LibraryIssue');
-              }
-            },
-          );
-      _teacherDashChannel!.subscribe();
-    } catch (e) {
-      dev.log('Teacher dash realtime error: $e');
-    }
-
     // Connect Socket.IO events
     try {
       final socketEvents = [
@@ -305,36 +222,20 @@ class _TeacherDashboardState extends State<TeacherDashboard>
 
   Future<void> _loadTeacherAttendance() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final teacherId = prefs.getString('teacher_id') ?? '';
-      if (teacherId.isEmpty) return;
+      final response = await ApiService.instance.get('attendance/my');
+      if (response != null && response['success'] == true && response['stats'] != null) {
+        final stats = response['stats'] as Map<String, dynamic>;
+        final int total = stats['total'] as int? ?? 0;
+        final int present = stats['present'] as int? ?? 0;
+        final int late = stats['late'] as int? ?? 0;
 
-      final res = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .select()
-          .eq('teacherId', teacherId);
-
-      final List<dynamic> list = res;
-      int present = 0;
-      int total = 0;
-      for (var record in list) {
-        final status = record['status']?.toString().toUpperCase() ?? '';
-        if (status == 'PRESENT' ||
-            status == 'P' ||
-            status == 'LATE' ||
-            status == 'Late' ||
-            status == 'HALF_DAY') {
-          present++;
-          total++;
-        } else if (status == 'ABSENT' || status == 'A') {
-          total++;
+        final double pct = total > 0 ? ((present + late) / total) * 100.0 : 100.0;
+        if (mounted) {
+          setState(() {
+            _teacherAttendanceRate = pct;
+            _teacherAttendanceLoaded = true;
+          });
         }
-      }
-      if (mounted) {
-        setState(() {
-          _teacherAttendanceRate = total > 0 ? (present / total) * 100 : 100.0;
-          _teacherAttendanceLoaded = true;
-        });
       }
     } catch (e) {
       dev.log('Error loading teacher attendance stats: $e',

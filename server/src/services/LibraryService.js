@@ -188,6 +188,8 @@ class LibraryService {
                     conditionOnReturn,
                     remarks,
                     returnedBy,
+                    fineAmount: fine,
+                    finePaid: fine > 0,
                 },
                 include: { book: true, student: { include: { user: true } } }
             });
@@ -200,6 +202,78 @@ class LibraryService {
                     condition: conditionOnReturn || issue.book.condition
                 },
             });
+
+            // Settle fine in the fee ledger/payments system if fine > 0
+            if (fine > 0) {
+                let ledger = await tx.studentFeeLedger.findFirst({
+                    where: { studentId: issue.studentId }
+                });
+
+                let ledgerId;
+                let academicYearId;
+                let feeStructureId;
+
+                if (ledger) {
+                    ledgerId = ledger.id;
+                    academicYearId = ledger.academicYearId;
+                    feeStructureId = ledger.feeStructureId;
+                } else {
+                    const ay = await tx.academicYear.findFirst({
+                        orderBy: { startDate: 'desc' }
+                    });
+                    const fs = await tx.feeStructure.findFirst();
+                    if (ay) academicYearId = ay.id;
+                    if (fs) feeStructureId = fs.id;
+
+                    if (academicYearId && feeStructureId) {
+                        const newLedger = await tx.studentFeeLedger.create({
+                            data: {
+                                studentId: issue.studentId,
+                                academicYearId,
+                                feeStructureId,
+                                totalPayable: 0.0,
+                                totalPaid: 0.0,
+                                totalPending: 0.0,
+                                totalDiscount: 0.0,
+                                status: 'PENDING'
+                            }
+                        });
+                        ledgerId = newLedger.id;
+                    }
+                }
+
+                if (ledgerId && academicYearId && feeStructureId) {
+                    const receiptNo = `RCPT-FINE-${Date.now()}`;
+                    const txnId = `TXN-FINE-${Date.now()}`;
+                    await tx.feePayment.create({
+                        data: {
+                            receiptNumber: receiptNo,
+                            studentId: issue.studentId,
+                            feeStructureId,
+                            ledgerId,
+                            academicYearId,
+                            amount: fine,
+                            discount: 0.0,
+                            penalty: 0.0,
+                            totalAmount: fine,
+                            paymentType: 'RECEIPT',
+                            paymentDate: returnDate,
+                            paymentMode: 'ONLINE',
+                            status: 'COMPLETED',
+                            transactionId: txnId
+                        }
+                    });
+
+                    // Update ledger amounts
+                    await tx.studentFeeLedger.update({
+                        where: { id: ledgerId },
+                        data: {
+                            totalPayable: { increment: fine },
+                            totalPaid: { increment: fine }
+                        }
+                    });
+                }
+            }
 
             return { updatedIssue, fine };
         });

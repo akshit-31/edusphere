@@ -12,7 +12,7 @@ const ContextFetchers = {
    */
   async getStudentContext(userId) {
     try {
-      const student = await prisma.student.findUnique({
+      const student = await prisma.studentProfile.findUnique({
         where: { userId },
         include: {
           currentClass: true,
@@ -213,7 +213,7 @@ const ContextFetchers = {
       });
 
       // 5. Deep Student Roster for Assigned Groups
-      const students = await prisma.student.findMany({
+      const students = await prisma.studentProfile.findMany({
         where: { 
           currentClassId: { in: teacher.subjects.map(s => s.subject.classId) }
         },

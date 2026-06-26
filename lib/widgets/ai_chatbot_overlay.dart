@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import '../services/api_service.dart';
 import 'package:edusphere/theme/typography.dart';
@@ -21,8 +20,6 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
   final List<Map<String, String>> _chatMessages = [];
   final _chatInputCtrl = TextEditingController();
   final ScrollController _chatScrollCtrl = ScrollController();
-  StreamSubscription<AuthState>? _authSub;
-  Timer? _refreshTimer;
 
   // Smart Prefetched Data
   String _firstName = 'User';
@@ -41,26 +38,6 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
     super.initState();
     _loadStudentDataAndPrefetch();
     AIChatbotOverlay.visible.addListener(_onVisibilityChanged);
-    try {
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-        final event = data.event;
-        if (event == AuthChangeEvent.signedIn) {
-          _loadStudentDataAndPrefetch();
-          _startRefreshTimer();
-        } else if (event == AuthChangeEvent.signedOut) {
-          _stopRefreshTimer();
-          setState(() {
-            _firstName = 'User';
-            _initChat();
-          });
-        }
-      });
-      if (Supabase.instance.client.auth.currentUser != null) {
-        _startRefreshTimer();
-      }
-    } catch (e) {
-      debugPrint('Supabase not initialized: $e');
-    }
   }
 
   void _onVisibilityChanged() {
@@ -73,24 +50,8 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
   void dispose() {
     _chatInputCtrl.dispose();
     _chatScrollCtrl.dispose();
-    _authSub?.cancel();
-    _stopRefreshTimer();
     AIChatbotOverlay.visible.removeListener(_onVisibilityChanged);
     super.dispose();
-  }
-
-  void _startRefreshTimer() {
-    _stopRefreshTimer();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_shouldShowChatbot) {
-        _loadStudentDataAndPrefetch();
-      }
-    });
-  }
-
-  void _stopRefreshTimer() {
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
   }
 
   Future<void> _loadStudentDataAndPrefetch() async {
@@ -279,12 +240,7 @@ class _AIChatbotOverlayState extends State<AIChatbotOverlay> {
   }
 
   bool get _shouldShowChatbot {
-    try {
-      return AIChatbotOverlay.visible.value &&
-          Supabase.instance.client.auth.currentUser != null;
-    } catch (_) {
-      return false;
-    }
+    return AIChatbotOverlay.visible.value;
   }
 
   @override

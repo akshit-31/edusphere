@@ -11,6 +11,7 @@ const {
     suggestNearestStops,
     allocateStudent,
     getAllocations,
+    deleteAllocation,
     getGlobalLogs,
     startTrip,
     stopTrip,
@@ -50,11 +51,12 @@ router.post('/routes', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'),
 router.put('/routes/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'), updateRoute);
 
 // --- Allocation ---
-router.get('/allocations', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'), getAllocations);
+router.get('/allocations', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'TEACHER'), getAllocations);
+router.delete('/allocations/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'TEACHER'), deleteAllocation);
 router.get('/logs', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER'), getGlobalLogs);
 router.get('/allocations/my', requireRole('STUDENT', 'PARENT'), getMyAllocation);
 router.get('/suggestions/nearest-stops', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ADMISSION_MANAGER'), suggestNearestStops);
-router.post('/allocate', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ADMISSION_MANAGER'), validate(allocationCreateSchema), allocateStudent);
+router.post('/allocate', requireRole('SUPER_ADMIN', 'ADMIN', 'TRANSPORT_MANAGER', 'ADMISSION_MANAGER', 'TEACHER'), validate(allocationCreateSchema), allocateStudent);
 
 // --- Trip & Tracking ---
 router.get('/trips/active', requireRole('DRIVER', 'STUDENT', 'PARENT', 'ADMIN', 'SUPER_ADMIN', 'TRANSPORT_MANAGER'), getActiveTrip);

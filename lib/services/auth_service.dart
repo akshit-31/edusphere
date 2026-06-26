@@ -1,7 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'cache_service.dart';
 import 'api_service.dart';
 import 'socket_service.dart';
 import '../screens/welcome_screen.dart';
@@ -30,12 +29,7 @@ class AuthService {
       dev.log('Auth: Error clearing API token: $e', name: 'AuthService');
     }
 
-    // 2. Sign out from Supabase
-    try {
-      await Supabase.instance.client.auth.signOut();
-    } catch (e) {
-      dev.log('Auth: Error signing out from Supabase: $e', name: 'AuthService');
-    }
+    // Supabase sign out dependency removed
 
     // 3. Disconnect socket
     try {
@@ -46,10 +40,9 @@ class AuthService {
 
     // 4. Clear all local preferences
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      await CacheService.instance.clear();
     } catch (e) {
-      dev.log('Auth: Error clearing SharedPreferences: $e', name: 'AuthService');
+      dev.log('Auth: Error clearing Cache: $e', name: 'AuthService');
     }
 
     dev.log('Auth: Logout complete. Navigating to WelcomeScreen.', name: 'AuthService');

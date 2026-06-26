@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
+import '../../services/student_service.dart';
 import '../../theme/colors.dart';
 import 'package:edusphere/theme/typography.dart';
 
@@ -43,20 +43,17 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
     });
 
     try {
-      final client = Supabase.instance.client;
+      // 1. Fetch Students via studentService
+      final studentsResMap = await StudentService.instance.getStudents();
+      if (studentsResMap['success'] == true && studentsResMap['students'] != null) {
+        _students = List<Map<String, dynamic>>.from(studentsResMap['students']);
+      }
 
-      // 1. Fetch Students
-      final studentsRes = await client
-          .from('Student')
-          .select('*, User(*), Class(*), Section(*)');
-
-      _students = List<Map<String, dynamic>>.from(studentsRes);
-
-      // 2. Fetch Allocations
-      final allocationsRes = await client.from('TransportAllocation').select(
-          '*, Student(*, User(*), Class(*)), TransportRoute(*), RouteStop(*)');
-
-      _allocations = List<Map<String, dynamic>>.from(allocationsRes);
+      // 2. Fetch Allocations via REST API
+      final allocationsResMap = await ApiService.instance.get('transport/allocations');
+      if (allocationsResMap['success'] == true && allocationsResMap['allocations'] != null) {
+        _allocations = List<Map<String, dynamic>>.from(allocationsResMap['allocations']);
+      }
 
       // 3. Fetch Routes
       final routesRes = await ApiService.instance.get('transport/routes');
@@ -64,11 +61,6 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
           routesRes['success'] == true &&
           routesRes['routes'] != null) {
         _routes = List<Map<String, dynamic>>.from(routesRes['routes']);
-      } else {
-        // Fallback directly to Supabase if API fails
-        final routesDb =
-            await client.from('TransportRoute').select('*, RouteStop(*)');
-        _routes = List<Map<String, dynamic>>.from(routesDb);
       }
 
       // Apply local fallback schema mapping if needed
@@ -130,8 +122,6 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
     });
 
     try {
-      final client = Supabase.instance.client;
-
       // Find students who do not have an allocation yet
       final allocatedStudentIds =
           _allocations.map((a) => a['studentId']?.toString()).toSet();
@@ -158,6 +148,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
       final String routeId = defaultRoute['id']?.toString() ?? 'r-1';
       final stopsList = defaultRoute['stops'] as List<dynamic>? ??
           defaultRoute['RouteStop'] as List<dynamic>? ??
+          defaultRoute['routeStops'] as List<dynamic>? ??
           [];
       final String stopId = stopsList.isNotEmpty
           ? stopsList.first['id']?.toString() ?? 's-1'
@@ -166,8 +157,8 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
       int successCount = 0;
       for (var student in pendingStudents) {
         final String sId = student['id'].toString();
-        // Insert record directly to Supabase to bypass any route/stop validations on Node server
-        await client.from('TransportAllocation').insert({
+        // Insert record via production Node.js API endpoint
+        await ApiService.instance.post('transport/allocate', body: {
           'studentId': sId,
           'routeId': routeId,
           'stopId': stopId,
@@ -214,8 +205,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
     });
 
     try {
-      final client = Supabase.instance.client;
-      await client.from('TransportAllocation').delete().eq('id', allocationId);
+      await ApiService.instance.delete('transport/allocations/$allocationId');
 
       await _loadData();
       if (mounted) {
@@ -275,6 +265,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
     // Get stops list of selected route
     List<dynamic> currentStops = _routes.first['stops'] as List<dynamic>? ??
         _routes.first['RouteStop'] as List<dynamic>? ??
+        _routes.first['routeStops'] as List<dynamic>? ??
         [];
     String? selectedStopId =
         currentStops.isNotEmpty ? currentStops.first['id']?.toString() : null;
@@ -288,6 +279,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
               orElse: () => _routes.first);
           final stops = activeRoute['stops'] as List<dynamic>? ??
               activeRoute['RouteStop'] as List<dynamic>? ??
+              activeRoute['routeStops'] as List<dynamic>? ??
               [];
 
           return AlertDialog(
@@ -322,7 +314,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
                       isExpanded: true,
                       value: selectedStudentId,
                       items: pendingStudents.map((s) {
-                        final u = s['User'] as Map<String, dynamic>? ?? {};
+                        final u = (s['User'] ?? s['user']) as Map<dynamic, dynamic>? ?? {};
                         final name =
                             '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'
                                 .trim();
@@ -374,6 +366,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
                           final newStops =
                               newRoute['stops'] as List<dynamic>? ??
                                   newRoute['RouteStop'] as List<dynamic>? ??
+                                  newRoute['routeStops'] as List<dynamic>? ??
                                   [];
                           selectedStopId = newStops.isNotEmpty
                               ? newStops.first['id']?.toString()
@@ -438,8 +431,7 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
                       _isLoading = true;
                     });
                     try {
-                      final client = Supabase.instance.client;
-                      await client.from('TransportAllocation').insert({
+                      await ApiService.instance.post('transport/allocate', body: {
                         'studentId': selectedStudentId,
                         'routeId': selectedRouteId,
                         'stopId': selectedStopId,

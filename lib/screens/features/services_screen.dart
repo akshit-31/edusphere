@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
+// Decoupled from direct Supabase access
 import '../../theme/colors.dart';
 import 'package:edusphere/theme/typography.dart';
 
@@ -61,37 +62,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
   bool _loading = false;
   List<ServiceTicketModel> _tickets = [];
 
-  RealtimeChannel? _realtimeChannel;
-
-  void _connectRealTime(String userId) {
-    try {
-      final client = Supabase.instance.client;
-      if (_realtimeChannel != null) {
-        client.removeChannel(_realtimeChannel!);
-      }
-
-      _realtimeChannel =
-          client.channel('public:services_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'ServiceRequest',
-                callback: (_) {
-                  if (mounted) {
-                    _loadTickets();
-                  }
-                },
-              );
-
-      _realtimeChannel!.subscribe((status, [error]) {
-        if (error != null) {
-          debugPrint('❌ Supabase Realtime ServiceRequest error: $error');
-        }
-      });
-    } catch (e) {
-      debugPrint('⚠️ Error connecting Supabase Realtime: $e');
-    }
-  }
-
   String _formatDate(String? createdAtStr) {
     if (createdAtStr == null) return '6/5/2026';
     try {
@@ -104,11 +74,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   String _mapCategoryToRequestType(String category) {
     final upper = category.toUpperCase();
-    if (upper == 'LEAVE' || upper == 'CERTIFICATE' || upper == 'COMPLAINT') {
+    if (upper == 'LEAVE' || upper == 'CERTIFICATE' || upper == 'COMPLAINT' || upper == 'HOSTEL' || upper == 'LIBRARY' || upper == 'ACADEMIC' || upper == 'TRANSPORT') {
       return upper;
-    }
-    if (upper == 'ID_CARD') {
-      return 'ID_CARD';
     }
     return 'OTHER';
   }
@@ -125,209 +92,59 @@ class _ServicesScreenState extends State<ServicesScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
     super.dispose();
   }
 
   Future<void> _loadTickets() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+      });
+    }
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final client = Supabase.instance.client;
-      final savedEmail = prefs.getString('student_email') ??
-          prefs.getString('user_email') ??
-          '';
-
-      var userRes = await client
-          .from('User')
-          .select('id')
-          .eq('email', savedEmail)
-          .maybeSingle();
-      userRes ??= await client.from('User').select('id').limit(1).single();
-      final userId = userRes['id'] as String;
-
-      if (userId.isEmpty) return;
-
-      // Connect real-time subscription
-      _connectRealTime(userId);
-
-      // Query from database
-      final List<dynamic> dbRequests = await client
-          .from('ServiceRequest')
-          .select()
-          .eq('requesterId', userId)
-          .order('createdAt', ascending: false);
-
-      if (dbRequests.isNotEmpty) {
-        setState(() {
-          _tickets = dbRequests.map((req) {
-            final statusStr = req['status'] as String? ?? 'PENDING';
-            String displayStatus = 'PENDING';
-            if (statusStr == 'APPROVED' || statusStr == 'RESOLVED') {
-              displayStatus = 'APPROVED';
-            } else if (statusStr == 'REJECTED') {
-              displayStatus = 'REJECTED';
-            }
-            return ServiceTicketModel(
-              id: req['requestNumber'] as String? ?? req['id'] as String,
-              title: req['subject'] as String? ?? 'Request',
-              category: req['type'] as String? ?? 'OTHER',
-              desc: req['description'] as String? ?? '',
-              status: displayStatus,
-              date: _formatDate(req['createdAt'] as String?),
-            );
-          }).toList();
-        });
+      final response = await ApiService.instance.get('services');
+      if (response != null && response['success'] == true) {
+        final List<dynamic> requests = response['requests'] ?? [];
+        if (mounted) {
+          setState(() {
+            _tickets = requests.map((req) {
+              final statusStr = req['status'] as String? ?? 'PENDING';
+              String displayStatus = 'PENDING';
+              if (statusStr == 'APPROVED' || statusStr == 'RESOLVED') {
+                displayStatus = 'APPROVED';
+              } else if (statusStr == 'REJECTED') {
+                displayStatus = 'REJECTED';
+              }
+              return ServiceTicketModel(
+                id: req['requestNumber'] as String? ?? req['id'] as String,
+                title: req['subject'] as String? ?? 'Request',
+                category: req['type'] as String? ?? 'OTHER',
+                desc: req['description'] as String? ?? '',
+                status: displayStatus,
+                date: _formatDate(req['createdAt'] as String?),
+              );
+            }).toList();
+            _loading = false;
+          });
+        }
       } else {
-        // Prepopulate database with default mock tickets
-        final defaultTickets = [
-          {
-            'requestNumber': 'SR-2026-1009',
-            'requesterId': userId,
-            'subject': 'Experience Certificate Request',
-            'description': 'Please issue my experience certificate.',
-            'type': 'CERTIFICATE',
-            'status': 'APPROVED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1008',
-            'requesterId': userId,
-            'subject': 'Casual leave application',
-            'description': 'I need 2 days leave for personal work.',
-            'type': 'LEAVE',
-            'status': 'APPROVED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1007',
-            'requesterId': userId,
-            'subject': 'Classroom AC not working',
-            'description':
-                'The AC in Room 201 has stopped working since last week.',
-            'type': 'COMPLAINT',
-            'status': 'REJECTED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1006',
-            'requesterId': userId,
-            'subject': 'Classroom AC not working',
-            'description':
-                'The AC in Room 201 has stopped working since last week.',
-            'type': 'COMPLAINT',
-            'status': 'PENDING',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1005',
-            'requesterId': userId,
-            'subject': 'Classroom AC not working',
-            'description':
-                'The AC in Room 201 has stopped working since last week.',
-            'type': 'COMPLAINT',
-            'status': 'APPROVED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1004',
-            'requesterId': userId,
-            'subject': 'Casual leave application',
-            'description': 'I need 3 days leave for personal work.',
-            'type': 'LEAVE',
-            'status': 'REJECTED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1003',
-            'requesterId': userId,
-            'subject': 'Hostel Wi-Fi down',
-            'description':
-                'Wi-Fi in Wing B third floor is not working since yesterday.',
-            'type': 'OTHER',
-            'status': 'APPROVED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1002',
-            'requesterId': userId,
-            'subject': 'Library card replacement',
-            'description':
-                'Lost library card during travel. Requesting replacement card.',
-            'type': 'OTHER',
-            'status': 'REJECTED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1001',
-            'requesterId': userId,
-            'subject': 'Grade sheet discrepancy',
-            'description': 'Math score showing incorrectly on portal.',
-            'type': 'OTHER',
-            'status': 'PENDING',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-          {
-            'requestNumber': 'SR-2026-1000',
-            'requesterId': userId,
-            'subject': 'Bus Route 12 Delay Issues',
-            'description':
-                'The bus regularly arrives 10-15 minutes late at Sector-B stop.',
-            'type': 'OTHER',
-            'status': 'REJECTED',
-            'priority': 'LOW',
-            'updatedAt': DateTime.now().toIso8601String(),
-          },
-        ];
-
-        await client.from('ServiceRequest').insert(defaultTickets);
-
-        // Re-load
-        final List<dynamic> reloaded = await client
-            .from('ServiceRequest')
-            .select()
-            .eq('requesterId', userId)
-            .order('createdAt', ascending: false);
-
-        setState(() {
-          _tickets = reloaded.map((req) {
-            final statusStr = req['status'] as String? ?? 'PENDING';
-            String displayStatus = 'PENDING';
-            if (statusStr == 'APPROVED' || statusStr == 'RESOLVED') {
-              displayStatus = 'APPROVED';
-            } else if (statusStr == 'REJECTED') {
-              displayStatus = 'REJECTED';
-            }
-            return ServiceTicketModel(
-              id: req['requestNumber'] as String? ?? req['id'] as String,
-              title: req['subject'] as String? ?? 'Request',
-              category: req['type'] as String? ?? 'OTHER',
-              desc: req['description'] as String? ?? '',
-              status: displayStatus,
-              date: _formatDate(req['createdAt'] as String?),
-            );
-          }).toList();
-        });
+        if (mounted) {
+          setState(() {
+            _loading = false;
+          });
+        }
       }
     } catch (e) {
-      debugPrint('Error loading tickets from database: $e');
+      debugPrint('Error loading tickets from REST API: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
   void _submitTicket(void Function(void Function()) setSheetState) {
-    // Removed validation to allow direct submission
     setSheetState(() {
       _loading = true;
     });
@@ -335,60 +152,45 @@ class _ServicesScreenState extends State<ServicesScreen> {
     Future.delayed(const Duration(milliseconds: 600), () async {
       if (!mounted) return;
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final client = Supabase.instance.client;
-        final savedEmail = prefs.getString('student_email') ??
-            prefs.getString('user_email') ??
-            '';
+        final subjectStr = _titleController.text.trim().isEmpty
+            ? 'New Service Request'
+            : _titleController.text.trim();
+        final descriptionStr = _descController.text.trim().isEmpty
+            ? 'Please look into this request.'
+            : _descController.text.trim();
+        
+        final Map<String, dynamic> body = {
+          'type': _mapCategoryToRequestType(_category),
+          'subject': subjectStr,
+          'description': descriptionStr,
+          'priority': _priority.toUpperCase(),
+        };
 
-        var userRes = await client
-            .from('User')
-            .select('id')
-            .eq('email', savedEmail)
-            .maybeSingle();
-        userRes ??= await client.from('User').select('id').limit(1).single();
-        final userId = userRes['id'] as String;
+        final response = await ApiService.instance.post('services', body: body);
 
-        if (userId.isNotEmpty) {
-          final reqNumber =
-              'SR-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
-          final newReq = {
-            'requestNumber': reqNumber,
-            'requesterId': userId,
-            'subject': _titleController.text.trim().isEmpty
-                ? 'New Service Request'
-                : _titleController.text.trim(),
-            'description': _descController.text.trim().isEmpty
-                ? 'Please look into this request.'
-                : _descController.text.trim(),
-            'type': _mapCategoryToRequestType(_category),
-            'status': 'PENDING',
-            'priority': _priority.toUpperCase() == 'NORMAL'
-                ? 'LOW'
-                : _priority.toUpperCase(),
-            'updatedAt': DateTime.now().toIso8601String(),
-          };
-
-          await client.from('ServiceRequest').insert(newReq);
+        if (response != null && response['success'] == true) {
+          final req = response['request'] ?? {};
+          final statusStr = req['status'] as String? ?? 'PENDING';
+          String displayStatus = 'PENDING';
+          if (statusStr == 'APPROVED' || statusStr == 'RESOLVED') {
+            displayStatus = 'APPROVED';
+          } else if (statusStr == 'REJECTED') {
+            displayStatus = 'REJECTED';
+          }
 
           if (mounted) {
             setState(() {
-              // If realtime is fast enough, this manual insert might duplicate.
-              // But since we use Stream/listen, we can just rely on realtime.
-              // Or manual insert with check. Let's keep manual insert for instant UI feedback.
-              if (!_tickets.any((t) => t.id == reqNumber)) {
-                _tickets.insert(
-                    0,
-                    ServiceTicketModel(
-                      id: reqNumber,
-                      title: newReq['subject'] as String,
-                      category: newReq['type'] as String,
-                      desc: newReq['description'] as String,
-                      status: 'PENDING',
-                      date: _formatDate(DateTime.now().toIso8601String()),
-                    ));
-              }
+              _tickets.insert(
+                0,
+                ServiceTicketModel(
+                  id: req['requestNumber'] as String? ?? req['id'] as String? ?? 'SR-NEW',
+                  title: req['subject'] as String? ?? subjectStr,
+                  category: req['type'] as String? ?? body['type'] as String,
+                  desc: req['description'] as String? ?? descriptionStr,
+                  status: displayStatus,
+                  date: _formatDate(req['createdAt'] as String?),
+                ),
+              );
             });
             setSheetState(() {
               _loading = false;
@@ -406,8 +208,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
             );
           }
         } else {
-          throw Exception(
-              'User not found in database. Please log out and log in again.');
+          throw Exception(response['message'] ?? 'Failed to submit request');
         }
       } catch (e) {
         debugPrint('Error submitting ticket to database: $e');

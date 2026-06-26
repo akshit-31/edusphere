@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' as intl;
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import 'dart:async';
 
 class ExamApprovalScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -43,40 +44,37 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen>
     });
 
     try {
-      // Fetch exams from Supabase where status IN ('PENDING', 'REVIEW', 'APPROVED', 'REJECTED')
-      final response = await Supabase.instance.client
-          .from('Exam')
-          .select('*, Class(*)')
-          .order('name', ascending: true);
+      final response = await ApiService.instance.get('exams?limit=100');
+      if (response != null && response['exams'] != null) {
+        final List<dynamic> rawData = response['exams'];
+        final List<Map<String, dynamic>> mappedData = [];
+        for (var exam in rawData) {
+          final classData = exam['class'] ?? exam['Class'];
+          final name = exam['name'] as String? ?? 'Exam';
+          final cls = classData?['name']?.toString() ?? 'Grade 8';
+          const subject = 'All Subjects';
+          final dateStr = exam['startDate']?.toString();
+          String date = '—';
+          if (dateStr != null) {
+            try {
+              date = intl.DateFormat('MMM d, yyyy')
+                  .format(DateTime.parse(dateStr).toLocal());
+            } catch (_) {}
+          }
 
-      final List<Map<String, dynamic>> rawData =
-          List<Map<String, dynamic>>.from(response);
-      final List<Map<String, dynamic>> mappedData = [];
-      for (var exam in rawData) {
-        final name = exam['name'] as String? ?? 'Exam';
-        final cls = exam['Class']?['name']?.toString() ?? 'Grade 8';
-        const subject = 'All Subjects';
-        final dateStr = exam['startDate']?.toString();
-        String date = '—';
-        if (dateStr != null) {
-          try {
-            date = intl.DateFormat('MMM d, yyyy')
-                .format(DateTime.parse(dateStr).toLocal());
-          } catch (_) {}
+          mappedData.add({
+            ...exam,
+            'name': name,
+            'class_name': cls,
+            'subject': subject,
+            'date': date,
+          });
         }
 
-        mappedData.add({
-          ...exam,
-          'name': name,
-          'class_name': cls,
-          'subject': subject,
-          'date': date,
+        setState(() {
+          _examsList = mappedData;
         });
       }
-
-      setState(() {
-        _examsList = mappedData;
-      });
     } catch (e) {
       setState(() {
         _examsList = [];
@@ -107,18 +105,12 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen>
 
   Future<void> _updateExamStatus(
       String examId, String newStatus, String comment) async {
-    final currentUser = Supabase.instance.client.auth.currentUser;
-    final currentUserId =
-        currentUser?.id ?? 'b2f4c6d8-2345-6789-bcde-f23456789012';
     final nowStr = DateTime.now().toIso8601String();
 
     try {
-      await Supabase.instance.client.from('Exam').update({
+      await ApiService.instance.put('exams/$examId', body: {
         'status': newStatus,
-        'comments': comment,
-        'reviewed_by': currentUserId,
-        'reviewed_at': nowStr,
-      }).eq('id', examId);
+      });
 
       // Local State Update on success
       setState(() {
@@ -126,7 +118,7 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen>
         if (index != -1) {
           _examsList[index]['status'] = newStatus;
           _examsList[index]['comments'] = comment;
-          _examsList[index]['reviewed_by'] = currentUserId;
+          _examsList[index]['reviewed_by'] = 'You';
           _examsList[index]['reviewed_at'] = nowStr;
         }
       });

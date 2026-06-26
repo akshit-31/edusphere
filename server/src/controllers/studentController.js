@@ -84,6 +84,16 @@ const deleteStudent = asyncHandler(async (req, res) => {
  * Route: GET /api/students/:id/attendance
  */
 const getStudentAttendance = asyncHandler(async (req, res) => {
+  // Enforce resource-level authorization for STUDENT/PARENT roles
+  const userRoles = req.user.roles || [req.user.role];
+  const isStudentOrParent = userRoles.includes('STUDENT') || userRoles.includes('PARENT');
+  if (isStudentOrParent && req.user.studentId !== req.params.id) {
+    return res.status(403).json({
+      success: false,
+      error: 'Access Denied: You are not authorized to view another student\'s attendance.'
+    });
+  }
+
   const { startDate, endDate } = req.query;
   const result = await studentService.getStudentAttendance(req.params.id, startDate, endDate);
 
@@ -173,6 +183,17 @@ const updateMeStudent = asyncHandler(async (req, res) => {
  */
 const getAttendanceReport = asyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  // Enforce resource-level authorization for STUDENT/PARENT roles
+  const userRoles = req.user.roles || [req.user.role];
+  const isStudentOrParent = userRoles.includes('STUDENT') || userRoles.includes('PARENT');
+  if (isStudentOrParent && req.user.studentId !== id) {
+    return res.status(403).json({
+      success: false,
+      error: 'Access Denied: You are not authorized to access another student\'s report.'
+    });
+  }
+
   const { startDate, endDate } = req.query;
 
   // 1. Get student details and attendance data

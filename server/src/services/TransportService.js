@@ -247,7 +247,7 @@ class TransportService {
 
     // --- Allocation & Nearest Stop logic ---
     async suggestNearestStops(studentId, routeId) {
-        const student = await prisma.student.findUnique({
+        const student = await prisma.studentProfile.findUnique({
             where: { id: studentId },
             select: { latitude: true, longitude: true }
         });
@@ -274,7 +274,7 @@ class TransportService {
     async allocateStudent(data) {
         const { studentId, routeId, stopId, academicYearId } = data;
         
-        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        const student = await prisma.studentProfile.findUnique({ where: { id: studentId } });
         if (!student) throw new NotFoundError('Student not found');
 
         const stop = await prisma.routeStop.findUnique({
@@ -317,6 +317,14 @@ class TransportService {
             academicYearId,
             status: 'ACTIVE'
         });
+    }
+
+    async deleteAllocation(id) {
+        const existing = await prisma.transportAllocation.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundError('Allocation not found');
+        
+        const deleted = await prisma.transportAllocation.delete({ where: { id } });
+        return deleted;
     }
 
     async getAllocations(filters = {}) {
@@ -430,7 +438,7 @@ class TransportService {
 
     async getMyAllocation(userId, role) {
         if (role === 'STUDENT' || role === 'PARENT') {
-            const student = await prisma.student.findFirst({
+            const student = await prisma.studentProfile.findFirst({
                 where: { userId },
                 include: { 
                     transportAllocation: { 
@@ -472,7 +480,7 @@ class TransportService {
         }
 
         if (['STUDENT', 'PARENT'].includes(role)) {
-            const student = await prisma.student.findFirst({
+            const student = await prisma.studentProfile.findFirst({
                 where: { userId },
                 include: { transportAllocation: true }
             });

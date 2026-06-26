@@ -10,14 +10,26 @@ const markAttendanceSchema = z.object({
     status: z.enum(['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY']),
     remarks: z.string().optional(),
     deviceId: z.string().optional(),
+    teacherId: z.string().optional(),
+    classId: z.string().optional(),
+    sectionId: z.string().optional(),
 });
 
 const bulkMarkSchema = z.object({
     date: z.string().min(1, 'Date is required'),
+    classId: z.string().optional(),
+    sectionId: z.string().optional(),
     attendanceData: z.array(z.object({
         studentId: z.string().min(1, 'Student ID is required'),
         status: z.enum(['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY']),
-    })).min(1, 'Attendance data cannot be empty'),
+    })).optional(),
+    students: z.array(z.object({
+        studentId: z.string().min(1, 'Student ID is required'),
+        status: z.enum(['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY']),
+    })).optional(),
+}).refine(data => data.attendanceData || data.students, {
+    message: "Either attendanceData or students list must be provided",
+    path: ["students"]
 });
 
 const submitSlotSchema = z.object({

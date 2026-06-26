@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../welcome_screen.dart';
@@ -95,34 +95,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final isStudent = widget.role == 'student';
       final isTeacher = widget.role == 'teacher';
 
-      // 1. Sync database values to students/teachers Supabase tables
-      final String tableName = isStudent ? 'students' : 'teachers';
-
-      await Supabase.instance.client.from(tableName).update({
-        'name': newName,
+      // 1. Sync database values to users/me endpoint
+      final firstName = newName.split(' ')[0];
+      final lastName = newName.contains(' ') ? newName.split(' ').sublist(1).join(' ') : '';
+      
+      final res = await ApiService.instance.put('users/me', body: {
+        'firstName': firstName,
+        'lastName': lastName,
         'phone': newPhone,
-      }).eq('email', _email);
+        'address': newAddress,
+      });
 
-      // 2. Sync values locally in SharedPreferences
-      if (isStudent) {
-        await prefs.setString('student_name', newName);
-        await prefs.setString('student_phone', newPhone);
-        await prefs.setString('student_address', newAddress);
-      } else if (isTeacher) {
-        await prefs.setString('teacher_name', newName);
-        await prefs.setString('teacher_mobile', newPhone);
-        await prefs.setString('teacher_address', newAddress);
+      if (res != null && res['success'] == true) {
+        // 2. Sync values locally in SharedPreferences
+        if (isStudent) {
+          await prefs.setString('student_name', newName);
+          await prefs.setString('student_phone', newPhone);
+          await prefs.setString('student_address', newAddress);
+        } else if (isTeacher) {
+          await prefs.setString('teacher_name', newName);
+          await prefs.setString('teacher_mobile', newPhone);
+          await prefs.setString('teacher_address', newAddress);
+        } else {
+          await prefs.setString('${widget.role}_name', newName);
+          await prefs.setString('${widget.role}_phone', newPhone);
+          await prefs.setString('${widget.role}_address', newAddress);
+        }
+
+        // Reload
+        await _loadSettingsData();
+
+        if (mounted) {
+          showToast(context, 'Profile updated successfully! 🎉');
+        }
       } else {
-        await prefs.setString('${widget.role}_name', newName);
-        await prefs.setString('${widget.role}_phone', newPhone);
-        await prefs.setString('${widget.role}_address', newAddress);
-      }
-
-      // Reload
-      await _loadSettingsData();
-
-      if (mounted) {
-        showToast(context, 'Profile updated successfully! 🎉');
+        final errMsg = res != null ? res['message'] ?? res['error'] ?? 'Failed' : 'Failed';
+        if (mounted) {
+          showToast(context, 'Error updating profile: $errMsg', isError: true);
+        }
       }
     } catch (e) {
       debugPrint('Error updating profile in settings: $e');
@@ -367,15 +377,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
 
                       try {
-                        // Update authentication record on Supabase
-                        await Supabase.instance.client.auth.updateUser(
-                          UserAttributes(password: p1),
-                        );
+                        final res = await ApiService.instance.post('users/me/change-password', body: {
+                          'oldPassword': curr,
+                          'newPassword': p1,
+                          'confirmPassword': p2,
+                        });
 
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          showToast(
-                              context, 'Password updated successfully! 🔐');
+                        if (res != null && res['success'] == true) {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            showToast(
+                                context, 'Password updated successfully! 🔐');
+                          }
+                        } else {
+                          final errMsg = res != null ? res['message'] ?? res['error'] ?? 'Failed' : 'Failed';
+                          if (context.mounted) {
+                            showToast(context, 'Error: $errMsg', isError: true);
+                          }
                         }
                       } catch (e) {
                         if (context.mounted) {
@@ -640,7 +658,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             'Review active user privacy guidelines',
                             onTap: () => _showDocumentDialog(
                               'Privacy Policy',
-                              'Welcome to EduSphere! Your privacy is of paramount importance to us. We securely store configuration preferences and profile elements (including name, email, phone, and geofence coordinates) solely to supply robust school administration capabilities. Your credentials and auth states are securely processed using Supabase servers. We do not sell or lease user metadata to any third parties.',
+                              'Welcome to EduSphere! Your privacy is of paramount importance to us. We securely store configuration preferences and profile elements (including name, email, phone, and geofence coordinates) solely to supply robust school administration capabilities. Your credentials and auth states are securely processed using our production REST API. We do not sell or lease user metadata to any third parties.',
                             ),
                           ),
                           _buildDivider(),

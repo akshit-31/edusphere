@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'prepare_scan_screen.dart';
@@ -38,32 +38,18 @@ class _ScannerListScreenState extends State<ScannerListScreen> {
   Future<void> _loadScannersData() async {
     setState(() => _isLoading = true);
     try {
-      // 1. Fetch scanners
-      final scannersRes = await Supabase.instance.client
-          .from('QRScanner')
-          .select('*')
-          .order('name', ascending: true);
-
-      _scanners = List<Map<String, dynamic>>.from(scannersRes);
-
-      // 2. Fetch today's scans count in a single aggregate query to optimize efficiency
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
-      final recordsRes = await Supabase.instance.client
-          .from('AttendanceRecord')
-          .select('id, scannerId')
-          .eq('date', todayStr);
-
-      final records = List<Map<String, dynamic>>.from(recordsRes);
-
-      final Map<String, int> countsMap = {};
-      for (var rec in records) {
-        final sId = rec['scannerId'] as String?;
-        if (sId != null) {
-          countsMap[sId] = (countsMap[sId] ?? 0) + 1;
-        }
+      final response = await ApiService.instance.get('scanners');
+      if (response != null && response['success'] == true && response['scanners'] != null) {
+        setState(() {
+          _scanners = List<Map<String, dynamic>>.from(response['scanners']);
+          _todayScanCounts = {};
+          for (var scanner in _scanners) {
+            final id = scanner['id'] as String;
+            final count = scanner['_count'] != null ? (scanner['_count']['attendanceRecords'] as int? ?? 0) : 0;
+            _todayScanCounts[id] = count;
+          }
+        });
       }
-
-      _todayScanCounts = countsMap;
     } catch (e) {
       debugPrint('Error loading scanners data: $e');
       if (mounted) {
@@ -317,7 +303,7 @@ class _ScannerListScreenState extends State<ScannerListScreen> {
                             .copyWith(color: widget.theme.primary),
                       ),
                       Text(
-                        'scans today',
+                        'total scans',
                         style: AppTypography.caption
                             .copyWith(color: AppColors.textLight),
                       ),

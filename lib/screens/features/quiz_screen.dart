@@ -7,6 +7,8 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/quiz_service.dart';
+import '../../models/quiz_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quiz list — reads published quizzes, filters by student class, polls every 3s
@@ -18,21 +20,16 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
-  List<Map<String, dynamic>> _quizzes = [];
-  Map<String, Map<String, dynamic>> _attempts = {}; // quizId → result
+  List<QuizModel> _quizzes = [];
   bool _loading = true;
   Timer? _pollTimer;
-
-  // Student's own class info (read from SharedPreferences)
-  String _studentClass = '';
-  String _studentSection = '';
 
   @override
   void initState() {
     super.initState();
     _loadAll();
     _pollTimer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(seconds: 5),
       (_) {
         if (mounted) _loadAll();
       },
@@ -47,50 +44,10 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<void> _loadAll() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // ── Student class info ──────────────────────────────────────────
-      _studentClass = prefs.getString('student_class') ?? '';
-      _studentSection = prefs.getString('student_section') ?? '';
-
-      // ── All published quizzes ───────────────────────────────────────
-      final raw = prefs.getStringList('published_quizzes') ?? [];
-      final all = raw
-          .map((s) => Map<String, dynamic>.from(jsonDecode(s) as Map))
-          .toList()
-          .reversed
-          .toList();
-
-      // ── Filter: show quiz if student class matches OR no class set ──
-      final filtered = all.where((q) {
-        if (_studentClass.isEmpty) return true; // no class set → show all
-        final targetClass = q['target_class'] as String? ?? '';
-        final targetSections = (q['target_sections'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
-        if (targetClass.isEmpty) return true;
-        final classMatch = targetClass == _studentClass ||
-            targetClass.replaceAll(RegExp(r'[^0-9]'), '') ==
-                _studentClass.replaceAll(RegExp(r'[^0-9]'), '');
-        final sectionMatch = _studentSection.isEmpty ||
-            targetSections.isEmpty ||
-            targetSections.contains(_studentSection);
-        return classMatch && sectionMatch;
-      }).toList();
-
-      // ── Previous attempts ───────────────────────────────────────────
-      final attemptsRaw = prefs.getString('quiz_attempts') ?? '{}';
-      final attemptsMap =
-          Map<String, dynamic>.from(jsonDecode(attemptsRaw) as Map);
-      final attempts = attemptsMap.map(
-        (k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)),
-      );
-
+      final list = await QuizService.instance.fetchQuizzes();
       if (mounted) {
         setState(() {
-          _quizzes = filtered;
-          _attempts = attempts;
+          _quizzes = list;
           _loading = false;
         });
       }
@@ -125,11 +82,8 @@ class _QuizScreenState extends State<QuizScreen> {
                             itemCount: _quizzes.length,
                             itemBuilder: (_, i) {
                               final quiz = _quizzes[i];
-                              final id = quiz['id'] as String? ?? '';
-                              final attempt = _attempts[id];
                               return _QuizCard(
                                 quiz: quiz,
-                                attempt: attempt,
                                 onAttemptSaved: _loadAll,
                               );
                             },
@@ -162,26 +116,26 @@ class _QuizScreenState extends State<QuizScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Quiz card — shows attempt result if already done
 // ─────────────────────────────────────────────────────────────────────────────
+// Quiz card — shows attempt result if already done
+// ─────────────────────────────────────────────────────────────────────────────
 class _QuizCard extends StatelessWidget {
-  final Map<String, dynamic> quiz;
-  final Map<String, dynamic>? attempt; // null = not attempted yet
+  final QuizModel quiz;
   final VoidCallback onAttemptSaved;
 
   const _QuizCard({
     required this.quiz,
-    required this.attempt,
     required this.onAttemptSaved,
   });
 
   @override
   Widget build(BuildContext context) {
-    final title = quiz['title'] as String? ?? 'Quiz';
-    final subject = quiz['subject'] as String? ?? 'General';
-    final duration = quiz['duration_minutes'] as int? ?? 20;
-    final qCount = (quiz['questions'] as List?)?.length ?? 0;
-    final cls = quiz['target_class'] as String? ?? '';
-    final sections = (quiz['target_sections'] as List?)?.join(', ') ?? '';
-    final isDone = attempt != null;
+    final title = quiz.title;
+    final subject = quiz.subject;
+    final duration = quiz.durationMinutes;
+    final qCount = quiz.questions.length;
+    final cls = quiz.targetClass ?? '';
+    final sections = quiz.targetSections.join(', ');
+    final isDone = quiz.isAttempted;
 
     return Container(
       margin: EdgeInsets.only(bottom: 14.h),
@@ -242,7 +196,7 @@ class _QuizCard extends StatelessWidget {
                   color: const Color(0xFF10B981), size: 20.sp),
               SizedBox(width: 8.w),
               Text(
-                'Your Score: ${attempt!['score']}/${attempt!['total']}  •  ${attempt!['pct']}%',
+                'Your Score: ${quiz.score}/${quiz.totalQuestions}  •  ${quiz.totalQuestions != null && quiz.totalQuestions! > 0 ? (quiz.score! / quiz.totalQuestions! * 100).round() : 0}%',
                 style: AppTypography.caption
                     .copyWith(color: const Color(0xFF10B981)),
               ),
@@ -261,7 +215,6 @@ class _QuizCard extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => _QuizAttemptScreen(
                   quiz: quiz,
-                  previousAttempt: attempt,
                   onAttemptSaved: onAttemptSaved,
                 ),
               ),
@@ -298,13 +251,11 @@ class _QuizCard extends StatelessWidget {
 // Quiz attempt screen
 // ─────────────────────────────────────────────────────────────────────────────
 class _QuizAttemptScreen extends StatefulWidget {
-  final Map<String, dynamic> quiz;
-  final Map<String, dynamic>? previousAttempt;
+  final QuizModel quiz;
   final VoidCallback onAttemptSaved;
 
   const _QuizAttemptScreen({
     required this.quiz,
-    required this.previousAttempt,
     required this.onAttemptSaved,
   });
 
@@ -318,27 +269,29 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
   late int _timeLeft;
   Timer? _timer;
   bool _submitted = false;
-  late final List<Map<String, dynamic>> _questions;
+  late final List<QuizQuestionModel> _questions;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
-    final raw = widget.quiz['questions'] as List? ?? [];
-    _questions = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    _questions = widget.quiz.questions;
 
     // If already attempted, jump straight to result view
-    if (widget.previousAttempt != null) {
+    if (widget.quiz.isAttempted) {
       _submitted = true;
       _timeLeft = 0;
-      // Restore previous selections from saved attempt
-      final saved = widget.previousAttempt!['selections'] as Map? ?? {};
-      saved.forEach((k, v) {
-        _selected[int.tryParse(k.toString()) ?? 0] = v as int;
-      });
+      // Restore previous selections from saved attempt if they exist
+      final saved = widget.quiz.studentAnswers;
+      if (saved != null) {
+        for (int i = 0; i < saved.length; i++) {
+          _selected[i] = saved[i];
+        }
+      }
       return;
     }
 
-    _timeLeft = ((widget.quiz['duration_minutes'] as int? ?? 20) * 60);
+    _timeLeft = (widget.quiz.durationMinutes * 60);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_timeLeft > 0) {
         setState(() => _timeLeft--);
@@ -360,67 +313,36 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
     _saveAttempt();
   }
 
-  int get _score => _selected.entries
-      .where((e) =>
-          e.key < _questions.length &&
-          (_questions[e.key]['ans'] as int) == e.value)
-      .length;
+  int get _score {
+    int score = 0;
+    for (int i = 0; i < _questions.length; i++) {
+      if (_selected[i] != null && _selected[i] == _questions[i].ans) {
+        score++;
+      }
+    }
+    return score;
+  }
 
   Future<void> _saveAttempt() async {
+    if (widget.quiz.isAttempted) return;
+    
+    setState(() => _isSubmitting = true);
     try {
-      final quizId = widget.quiz['id'] as String? ?? '';
-      if (quizId.isEmpty) return;
+      final quizId = widget.quiz.id;
+      final List<int> answers = List.generate(_questions.length, (i) => _selected[i] ?? -1);
 
-      final total = _questions.length;
-      final pct = total > 0 ? (_score / total * 100).round() : 0;
+      final res = await QuizService.instance.submitQuizAttempt(quizId, answers);
 
-      // Convert int keys to string for JSON
-      final selectionsJson = <String, int>{};
-      _selected.forEach((k, v) => selectionsJson[k.toString()] = v);
-
-      final result = {
-        'quizId': quizId,
-        'score': _score,
-        'total': total,
-        'pct': pct,
-        'selections': selectionsJson,
-        'submittedAt': DateTime.now().toIso8601String(),
-      };
-
-      final prefs = await SharedPreferences.getInstance();
-
-      // Save for student
-      final raw = prefs.getString('quiz_attempts') ?? '{}';
-      final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      map[quizId] = result;
-      await prefs.setString('quiz_attempts', jsonEncode(map));
-
-      // Save global submission for teacher
-      final studentName = prefs.getString('student_name') ??
-          prefs.getString('user_name') ??
-          '';
-      final studentClass = prefs.getString('student_class') ?? 'Grade 12';
-      final studentSection = prefs.getString('student_section') ?? 'A';
-
-      final submission = {
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'quizId': quizId,
-        'quizTitle': widget.quiz['title'] ?? 'Quiz',
-        'studentName': studentName,
-        'studentClass': studentClass,
-        'studentSection': studentSection,
-        'score': _score,
-        'total': total,
-        'pct': pct,
-        'submittedAt': DateTime.now().toIso8601String(),
-      };
-
-      final submissionsRaw = prefs.getStringList('quiz_submissions') ?? [];
-      submissionsRaw.add(jsonEncode(submission));
-      await prefs.setStringList('quiz_submissions', submissionsRaw);
-
-      widget.onAttemptSaved();
-    } catch (_) {}
+      if (res != null && res['success'] == true) {
+        widget.onAttemptSaved();
+      }
+    } catch (_) {
+      // Handled silently or custom toast
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -441,10 +363,10 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
   // ── Quiz UI ───────────────────────────────────────────────────────────────
   Widget _buildQuiz(BuildContext context) {
     final q = _questions[_current];
-    final opts = (q['opts'] as List).cast<String>();
+    final opts = q.options;
     final mins = _timeLeft ~/ 60;
     final secs = _timeLeft % 60;
-    final title = widget.quiz['title'] as String? ?? 'Quiz';
+    final title = widget.quiz.title;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
@@ -518,7 +440,7 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(24.r),
                   ),
-                  child: Text(q['q'] as String,
+                  child: Text(q.question,
                       style: AppTypography.tableHeader
                           .copyWith(color: Colors.white, height: 1.5)),
                 ),
@@ -606,25 +528,29 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_current < _questions.length - 1) {
-                      setState(() => _current++);
-                    } else {
-                      _submitAndSave();
-                    }
-                  },
+                  onPressed: _isSubmitting
+                      ? null
+                      : () {
+                          if (_current < _questions.length - 1) {
+                            setState(() => _current++);
+                          } else {
+                            _submitAndSave();
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.studentPrimary,
                     padding: EdgeInsets.symmetric(vertical: 14.h),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14.r)),
                   ),
-                  child: Text(
-                      _current == _questions.length - 1
-                          ? 'Submit Quiz'
-                          : 'Next →',
-                      style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w900, color: Colors.white)),
+                  child: _isSubmitting
+                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                      : Text(
+                          _current == _questions.length - 1
+                              ? 'Submit Quiz'
+                              : 'Next →',
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w900, color: Colors.white)),
                 ),
               ),
             ]),
@@ -637,8 +563,9 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
   // ── Result screen ─────────────────────────────────────────────────────────
   Widget _buildResult(BuildContext context) {
     final total = _questions.length;
-    final pct = total > 0 ? (_score / total * 100).round() : 0;
-    final title = widget.quiz['title'] as String? ?? 'Quiz';
+    final score = widget.quiz.isAttempted ? (widget.quiz.score ?? 0) : _score;
+    final pct = total > 0 ? (score / total * 100).round() : 0;
+    final title = widget.quiz.title;
 
     final String emoji;
     final String message;
@@ -683,7 +610,7 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('$_score/$total',
+                    Text('$score/$total',
                         style: AppTypography.h3.copyWith(color: Colors.white)),
                     Text('$pct%',
                         style: AppTypography.small.copyWith(
@@ -710,8 +637,8 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
             ..._questions.asMap().entries.map((e) {
               final qi = e.key;
               final q = e.value;
-              final opts = (q['opts'] as List).cast<String>();
-              final correctIdx = q['ans'] as int;
+              final opts = q.options;
+              final correctIdx = q.ans;
               final studentIdx = _selected[qi];
               final wasSkipped = studentIdx == null;
               final isCorrect = !wasSkipped && studentIdx == correctIdx;
@@ -756,7 +683,7 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
                       ),
                       SizedBox(width: 8.w),
                       Expanded(
-                        child: Text(q['q'] as String,
+                        child: Text(q.question,
                             style: AppTypography.caption
                                 .copyWith(color: AppColors.textDark)),
                       ),
@@ -771,7 +698,7 @@ class _QuizAttemptScreenState extends State<_QuizAttemptScreen> {
                           style: AppTypography.caption
                               .copyWith(color: const Color(0xFF10B981)))
                     else ...[
-                      Text('❌ Your answer: ${opts[studentIdx]}',
+                      Text('❌ Your answer: ${studentIdx < opts.length && studentIdx >= 0 ? opts[studentIdx] : 'Invalid Selection'}',
                           style: AppTypography.caption
                               .copyWith(color: Colors.red)),
                       Text('✅ Correct: ${opts[correctIdx]}',

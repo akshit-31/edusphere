@@ -26,8 +26,45 @@ const markAllRead = asyncHandler(async (req, res) => {
     });
 });
 
+const sendNotification = asyncHandler(async (req, res) => {
+    const { role, userIds, title, message, type, entityType, entityId } = req.body;
+    
+    if (!title || !message) {
+        return res.status(400).json({ success: false, error: 'Title and message are required.' });
+    }
+
+    if (role) {
+        // Send to all users matching role(s)
+        await notificationService.notifyRoles(Array.isArray(role) ? role : [role], {
+            title,
+            message,
+            type: type || 'SYSTEM',
+            entityType,
+            entityId
+        });
+    } else if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+        // Send to specific users
+        await notificationService.notify({
+            userIds,
+            title,
+            message,
+            type: type || 'SYSTEM',
+            entityType,
+            entityId
+        });
+    } else {
+        return res.status(400).json({ success: false, error: 'Either target role or userIds list is required.' });
+    }
+
+    res.status(201).json({
+        success: true,
+        message: 'Notification sent successfully'
+    });
+});
+
 module.exports = {
     getNotifications,
     markAsRead,
-    markAllRead
+    markAllRead,
+    sendNotification
 };

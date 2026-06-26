@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:edusphere/services/api_service.dart';
 import 'dart:developer' as dev;
 import 'package:edusphere/theme/typography.dart';
 
@@ -45,20 +46,13 @@ class _ClassReviewScreenState extends State<ClassReviewScreen> {
 
   Future<void> _loadTeacherName() async {
     try {
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (user != null) {
-        final res = await client
-            .from('User')
-            .select('firstName')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (res != null && mounted) {
-          setState(() {
-            _teacherFirstName =
-                (res['firstName'] as String? ?? 'KARAN').toUpperCase();
-          });
-        }
+      final prefs = await SharedPreferences.getInstance();
+      final savedName = prefs.getString('teacher_name') ?? prefs.getString('user_name') ?? 'KARAN';
+      final firstWord = savedName.trim().split(' ').first;
+      if (mounted) {
+        setState(() {
+          _teacherFirstName = firstWord.toUpperCase();
+        });
       }
     } catch (_) {}
   }
@@ -68,66 +62,75 @@ class _ClassReviewScreenState extends State<ClassReviewScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final client = Supabase.instance.client;
+      final res = await ApiService.instance.get('exams/${widget.examId}/consolidated');
+      if (res != null && res['success'] == true) {
+        final examObj = res['exam'] as Map<String, dynamic>;
+        _examData = {
+          'id': examObj['id'],
+          'name': examObj['name'],
+          'status': examObj['status'],
+          'isFrozen': examObj['isFrozen'],
+          'Class': {
+            'name': examObj['className'],
+          },
+          'AcademicYear': {
+            'name': examObj['academicYear'],
+          }
+        };
 
-      // 1. Fetch Exam details
-      final examRes = await client
-          .from('Exam')
-          .select('*, Class(*), AcademicYear(*)')
-          .eq('id', widget.examId)
-          .single();
+        final subjectProgressList = res['subjectProgress'] as List? ?? [];
+        _subjects = subjectProgressList.map<Map<String, dynamic>>((sp) {
+          return {
+            'id': sp['subjectId'],
+            'name': sp['subjectName'],
+            'code': sp['subjectCode'],
+          };
+        }).toList();
 
-      _examData = examRes;
-      final classId = examRes['classId'];
+        final resultsList = res['results'] as List? ?? [];
+        _students = resultsList.map<Map<String, dynamic>>((r) {
+          final name = r['studentName']?.toString() ?? '';
+          return {
+            'id': r['studentId'],
+            'name': name,
+            'User': {
+              'firstName': name,
+              'lastName': '',
+            }
+          };
+        }).toList();
 
-      // 2. Fetch Subjects for the class
-      final subjectsRes =
-          await client.from('Subject').select('*').eq('classId', classId);
+        _students.sort((a, b) {
+          final nameA = (a['name'] as String? ?? '').toLowerCase();
+          final nameB = (b['name'] as String? ?? '').toLowerCase();
+          return nameA.compareTo(nameB);
+        });
 
-      _subjects = List<Map<String, dynamic>>.from(subjectsRes);
-
-      // 3. Fetch Students for the class
-      final studentsRes = await client
-          .from('Student')
-          .select('*, User(*)')
-          .eq('currentClassId', classId)
-          .eq('status', 'ACTIVE');
-
-      _students = List<Map<String, dynamic>>.from(studentsRes);
-
-      // Sort alphabetically by Student Name
-      _students.sort((a, b) {
-        final userA = a['User'] as Map?;
-        final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
-
-        final userB = b['User'] as Map?;
-        final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
-
-        return nameA.compareTo(nameB);
-      });
-
-      // 4. Fetch ExamResults for the exam
-      final resultsRes = await client
-          .from('ExamResult')
-          .select('*, Student(*, User(*))')
-          .eq('examId', widget.examId);
-
-      _examResults = List<Map<String, dynamic>>.from(resultsRes);
-
-      // 5. Fetch ExamMarks for the exam (via ExamResult inner join)
-      if (_examResults.isNotEmpty) {
-        final marksRes = await client
-            .from('ExamMark')
-            .select('*, ExamResult!inner(id, examId)')
-            .eq('ExamResult.examId', widget.examId);
-
-        _examMarks = List<Map<String, dynamic>>.from(marksRes);
-      } else {
+        _examResults = [];
         _examMarks = [];
+        for (var r in resultsList) {
+          if (r['id'] != null) {
+            _examResults.add({
+              'id': r['id'],
+              'studentId': r['studentId'],
+              'percentage': r['percentage'],
+              'obtainedMarks': r['obtainedMarks'],
+              'result': r['result'],
+              'isPublished': r['isPublished'] ?? false,
+            });
+            if (r['marks'] != null) {
+              for (var mk in r['marks']) {
+                _examMarks.add({
+                  'id': mk['id'],
+                  'examResultId': r['id'],
+                  'subjectName': mk['subjectName'],
+                  'obtainedMarks': mk['obtainedMarks'],
+                  'isAbsent': mk['isAbsent'] ?? false,
+                });
+              }
+            }
+          }
+        }
       }
 
       if (mounted) {
@@ -143,17 +146,20 @@ class _ClassReviewScreenState extends State<ClassReviewScreen> {
 
   Future<void> _submitForApproval() async {
     try {
-      final client = Supabase.instance.client;
-      await client
-          .from('Exam')
-          .update({'status': 'PENDING'}).eq('id', widget.examId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Exam submitted for approval successfully!'),
-          backgroundColor: Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ));
+      final response = await ApiService.instance.put(
+        'exams/${widget.examId}',
+        body: {'status': 'PENDING'},
+      );
+      if (response != null && response['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Exam submitted for approval successfully!'),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      } else {
+        throw Exception(response?['message'] ?? 'Failed to submit exam');
       }
     } catch (e) {
       if (mounted) {

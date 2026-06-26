@@ -14,7 +14,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // List all scanners
-router.get('/', requireRole('SUPER_ADMIN', 'ADMIN', 'HR_MANAGER'), getScanners);
+router.get('/', requireRole('SUPER_ADMIN', 'ADMIN', 'HR_MANAGER', 'TEACHER'), getScanners);
 // Create scanner
 router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), createScanner);
 // Get scanner (also used by the live scan page to load scanner meta)

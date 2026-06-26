@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' as intl;
 import 'dart:developer' as dev;
 import 'dart:io';
@@ -12,6 +11,8 @@ import 'package:file_saver/file_saver.dart';
 import '../main_screen.dart';
 import 'class_review_screen.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import 'dart:async';
 
 class ExamDetailScreen extends StatefulWidget {
   final String examName;
@@ -56,22 +57,22 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
   String _uploadedFileName = 'No file chosen';
   bool _isUploading = false;
 
-  RealtimeChannel? _detailChannel;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _setupRealtime();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _loadData();
+      }
+    });
   }
 
   @override
   void dispose() {
-    if (_detailChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_detailChannel!);
-      } catch (_) {}
-    }
+    _pollingTimer?.cancel();
     for (var c in _theoryControllers.values) {
       c.dispose();
     }
@@ -84,139 +85,100 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
     super.dispose();
   }
 
-  void _setupRealtime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_detailChannel != null) {
-        client.removeChannel(_detailChannel!);
-      }
-
-      _detailChannel = client
-          .channel('public:exam_detail_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'ExamMark',
-            callback: (_) {
-              dev.log('⚡ Realtime database change detected on ExamMark table!',
-                  name: 'ExamDetailScreen');
-              if (mounted) _loadData();
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'ExamResult',
-            callback: (_) {
-              dev.log(
-                  '⚡ Realtime database change detected on ExamResult table!',
-                  name: 'ExamDetailScreen');
-              if (mounted) _loadData();
-            },
-          );
-      _detailChannel!.subscribe();
-    } catch (e) {
-      dev.log('Failed to connect to Supabase Realtime in Detail: $e');
-    }
-  }
-
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      final client = Supabase.instance.client;
+      final response = await ApiService.instance.get('exams/${widget.examId}');
+      
+      if (response != null && response['exam'] != null) {
+        _examData = response['exam'];
+        final classId = _examData!['classId'];
 
-      // 1. Fetch Exam details
-      final examRes = await client
-          .from('Exam')
-          .select('*, Class(*), AcademicYear(*)')
-          .eq('id', widget.examId)
-          .single();
+        final examSubjects = _examData!['examSubjects'] as List<dynamic>? ?? [];
+        _subjects = examSubjects.map<Map<String, dynamic>>((es) {
+          final sub = es['subject'] as Map<String, dynamic>? ?? {};
+          return {
+            'id': es['subjectId'] ?? sub['id'],
+            'name': sub['name'] ?? 'Subject',
+            'code': sub['code'] ?? '',
+            'totalMarks': es['totalMarks'] ?? 100,
+            'passMarks': es['passMarks'] ?? 33,
+            'theoryMaxMarks': es['theoryMaxMarks'] ?? 100,
+            'practicalMaxMarks': es['practicalMaxMarks'] ?? 0,
+            'internalMaxMarks': es['internalMaxMarks'] ?? 0,
+          };
+        }).toList();
 
-      _examData = examRes;
-      final classId = examRes['classId'];
+        final studentsResponse = await ApiService.instance.get('students', queryParams: {
+          'classId': classId,
+          'status': 'ACTIVE',
+          'limit': '100',
+        });
+        
+        if (studentsResponse != null && studentsResponse['students'] != null) {
+          _students = List<Map<String, dynamic>>.from(studentsResponse['students']);
+          
+          _students.sort((a, b) {
+            final userA = a['user'] ?? a['User'] as Map?;
+            final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'
+                .trim()
+                .toLowerCase();
 
-      // 2. Fetch Subjects for the class
-      final subjectsRes =
-          await client.from('Subject').select('*').eq('classId', classId);
+            final userB = b['user'] ?? b['User'] as Map?;
+            final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'
+                .trim()
+                .toLowerCase();
 
-      _subjects = List<Map<String, dynamic>>.from(subjectsRes);
+            return nameA.compareTo(nameB);
+          });
+        }
 
-      // 3. Fetch Students for the class
-      final studentsRes = await client
-          .from('Student')
-          .select('*, User(*)')
-          .eq('currentClassId', classId)
-          .eq('status', 'ACTIVE');
+        if (_subjects.isNotEmpty && _selectedSubjectId == null) {
+          _selectedSubjectId = _subjects[0]['id'] as String;
+        }
 
-      _students = List<Map<String, dynamic>>.from(studentsRes);
+        final List<dynamic> results = _examData!['examResults'] as List<dynamic>? ?? [];
+        _examResults = List<Map<String, dynamic>>.from(results);
 
-      // Sort alphabetically by Student Name (Matches mockup exactly!)
-      _students.sort((a, b) {
-        final userA = a['User'] as Map?;
-        final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
+        _examResults.sort((a, b) {
+          final studentA = a['student'] ?? a['Student'] as Map?;
+          final userA = studentA != null ? (studentA['user'] ?? studentA['User']) as Map? : null;
+          final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'
+              .trim()
+              .toLowerCase();
 
-        final userB = b['User'] as Map?;
-        final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
+          final studentB = b['student'] ?? b['Student'] as Map?;
+          final userB = studentB != null ? (studentB['user'] ?? studentB['User']) as Map? : null;
+          final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'
+              .trim()
+              .toLowerCase();
 
-        return nameA.compareTo(nameB);
-      });
+          return nameA.compareTo(nameB);
+        });
 
-      // Initialize Marks Entry lists
-      if (_subjects.isNotEmpty && _selectedSubjectId == null) {
-        _selectedSubjectId = _subjects[0]['id'] as String;
+        final List<Map<String, dynamic>> consolidatedMarks = [];
+        for (var res in _examResults) {
+          final resId = res['id'];
+          final marksList = res['marks'] as List<dynamic>? ?? [];
+          for (var m in marksList) {
+            consolidatedMarks.add({
+              ...m as Map<String, dynamic>,
+              'examResultId': resId,
+            });
+          }
+        }
+        _examMarks = consolidatedMarks;
+
+        _initializeMarksControllers();
       }
-
-      // 4. Fetch ExamResults for the exam
-      final resultsRes = await client
-          .from('ExamResult')
-          .select('*, Student(*, User(*))')
-          .eq('examId', widget.examId);
-
-      _examResults = List<Map<String, dynamic>>.from(resultsRes);
-
-      // Sort alphabetically by Student Name (Matches mockup exactly!)
-      _examResults.sort((a, b) {
-        final studentA = a['Student'] as Map?;
-        final userA = studentA != null ? studentA['User'] as Map? : null;
-        final nameA = '${userA?['firstName'] ?? ''} ${userA?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
-
-        final studentB = b['Student'] as Map?;
-        final userB = studentB != null ? studentB['User'] as Map? : null;
-        final nameB = '${userB?['firstName'] ?? ''} ${userB?['lastName'] ?? ''}'
-            .trim()
-            .toLowerCase();
-
-        return nameA.compareTo(nameB);
-      });
-
-      // 5. Fetch ExamMarks for the exam (via ExamResult inner join)
-      if (_examResults.isNotEmpty) {
-        final marksRes = await client
-            .from('ExamMark')
-            .select('*, ExamResult!inner(id, examId)')
-            .eq('ExamResult.examId', widget.examId);
-
-        _examMarks = List<Map<String, dynamic>>.from(marksRes);
-      } else {
-        _examMarks = [];
-      }
-
-      // Initialize controllers for Marks Entry
-      _initializeMarksControllers();
 
       if (mounted) {
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      dev.log('Error loading exam details data: $e', name: 'ExamDetailScreen');
+      dev.log('Error loading exam details data via REST: $e', name: 'ExamDetailScreen');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -296,21 +258,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
     setState(() => _isSavingMarks = true);
 
     try {
-      final client = Supabase.instance.client;
-      final selectedSubject =
-          _subjects.firstWhere((s) => s['id'] == _selectedSubjectId);
-      final subjectName = selectedSubject['name'] as String;
-      final subjectCode = selectedSubject['code'] as String? ?? '';
-      final subjectTotal =
-          (selectedSubject['totalMarks'] as num? ?? 100).toInt();
-
-      final resultsRes = await client
-          .from('ExamResult')
-          .select('*')
-          .eq('examId', widget.examId);
-      final currentResults = List<Map<String, dynamic>>.from(resultsRes);
-
-      final List<Map<String, dynamic>> marksToUpsert = [];
+      final List<Map<String, dynamic>> marksList = [];
 
       for (var student in _students) {
         final studentId = student['id'] as String;
@@ -325,138 +273,43 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
         final internal = isAbsent
             ? 0
             : (int.tryParse(_intControllers[studentId]?.text ?? '0') ?? 0);
-        final obtained = theory + practical + internal;
 
-        var resultRow = currentResults.firstWhere(
-          (r) => r['studentId'] == studentId,
-          orElse: () => <String, dynamic>{},
-        );
-
-        String resultId;
-        if (resultRow.isEmpty) {
-          final newResult = {
-            'examId': widget.examId,
-            'studentId': studentId,
-            'totalMarks': _subjects.length * 100,
-            'obtainedMarks': obtained,
-            'percentage': (obtained / (_subjects.length * 100)) * 100,
-            'grade': _computeGrade((obtained / (_subjects.length * 100)) * 100),
-            'rank': 1,
-            'result': obtained >= (_subjects.length * 33) ? 'PASS' : 'FAIL',
-            'isPublished': true,
-          };
-
-          final insertRes = await client
-              .from('ExamResult')
-              .insert(newResult)
-              .select('id')
-              .single();
-          resultId = insertRes['id'] as String;
-          currentResults.add({
-            'id': resultId,
-            'examId': widget.examId,
-            'studentId': studentId,
-          });
-        } else {
-          resultId = resultRow['id'] as String;
-        }
-
-        final existingMark = _examMarks.firstWhere(
-          (m) =>
-              m['examResultId'] == resultId &&
-              m['subjectName'].toString().toLowerCase() ==
-                  subjectName.toLowerCase(),
-          orElse: () => <String, dynamic>{},
-        );
-
-        final markData = {
-          if (existingMark.isNotEmpty) 'id': existingMark['id'],
-          'examResultId': resultId,
-          'subjectName': subjectName,
-          'subjectCode': subjectCode,
-          'totalMarks': subjectTotal,
-          'obtainedMarks': obtained,
-          'grade': _computeGrade((obtained / subjectTotal) * 100),
+        marksList.add({
+          'studentId': studentId,
           'theoryObtained': theory,
           'practicalObtained': practical,
           'internalObtained': internal,
           'isAbsent': isAbsent,
-        };
-
-        marksToUpsert.add(markData);
-      }
-
-      if (marksToUpsert.isNotEmpty) {
-        await client.from('ExamMark').upsert(marksToUpsert);
-      }
-
-      final allMarks = await client
-          .from('ExamMark')
-          .select('*, ExamResult!inner(id, examId)')
-          .eq('ExamResult.examId', widget.examId);
-
-      final groupedMarks = <String, List<dynamic>>{};
-      for (var m in allMarks) {
-        final resId = m['examResultId'] as String;
-        groupedMarks.putIfAbsent(resId, () => []).add(m);
-      }
-
-      final List<Map<String, dynamic>> resultsUpdates = [];
-      final List<MapEntry<String, double>> studentPcts = [];
-
-      for (var res in currentResults) {
-        final resId = res['id'] as String;
-        final studentMarks = groupedMarks[resId] ?? [];
-
-        int totalMax = 0;
-        int totalObt = 0;
-        for (var m in studentMarks) {
-          totalMax += (m['totalMarks'] as num? ?? 100).toInt();
-          totalObt += (m['obtainedMarks'] as num? ?? 0).toInt();
-        }
-
-        if (totalMax == 0) totalMax = _subjects.length * 100;
-        final pct = totalMax > 0 ? (totalObt / totalMax * 100) : 0.0;
-        studentPcts.add(MapEntry(resId, pct));
-
-        resultsUpdates.add({
-          'id': resId,
-          'examId': widget.examId,
-          'studentId': res['studentId'],
-          'totalMarks': totalMax,
-          'obtainedMarks': totalObt,
-          'percentage': pct,
-          'grade': _computeGrade(pct),
-          'result': pct >= 33 ? 'PASS' : 'FAIL',
         });
       }
 
-      studentPcts.sort((a, b) => b.value.compareTo(a.value));
-      final Map<String, int> ranks = {};
-      for (int rankIdx = 0; rankIdx < studentPcts.length; rankIdx++) {
-        ranks[studentPcts[rankIdx].key] = rankIdx + 1;
-      }
+      final body = {
+        'subjectId': _selectedSubjectId,
+        'marks': marksList,
+      };
 
-      for (var update in resultsUpdates) {
-        update['rank'] = ranks[update['id']] ?? 1;
-      }
+      final response = await ApiService.instance.post('exams/${widget.examId}/marks', body: body);
 
-      if (resultsUpdates.isNotEmpty) {
-        await client.from('ExamResult').upsert(resultsUpdates);
-      }
-
-      await _loadData();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text('Marks saved successfully!', style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ));
+      if (response != null && response['success'] == true) {
+        await _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Marks saved successfully!', style: GoogleFonts.inter()),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(response?['message'] ?? 'Failed to save marks', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
       }
     } catch (e) {
-      dev.log('Error saving marks: $e', name: 'ExamDetailScreen');
+      dev.log('Error saving marks via REST API: $e', name: 'ExamDetailScreen');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error saving marks: $e', style: GoogleFonts.inter()),
@@ -636,7 +489,6 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
 
   Future<void> _parseAndSaveCSV(String content) async {
     try {
-      final client = Supabase.instance.client;
       final lines = content
           .split('\n')
           .map((l) => l.trim())
@@ -668,78 +520,31 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
             (h) => h.toLowerCase() == '$sName absent(y/n)'.toLowerCase());
       }
 
-      final resultsRes = await client
-          .from('ExamResult')
-          .select('*')
-          .eq('examId', widget.examId);
-      final currentResults = List<Map<String, dynamic>>.from(resultsRes);
+      for (var s in _subjects) {
+        final sName = s['name'] as String;
+        final sId = s['id'] as String;
 
-      final List<Map<String, dynamic>> marksToUpsert = [];
+        final tIdx = subjectTheoryIdx[sName] ?? -1;
+        final pIdx = subjectPracIdx[sName] ?? -1;
+        final iIdx = subjectIntIdx[sName] ?? -1;
+        final abIdx = subjectAbsentIdx[sName] ?? -1;
 
-      for (int i = 1; i < lines.length; i++) {
-        final rowParts = lines[i].split(',');
-        if (rowParts.length < 3) continue;
+        final List<Map<String, dynamic>> subjectMarksToSubmit = [];
 
-        final admissionNumber = rowParts[0].trim();
-        final student = _students.firstWhere(
-          (s) =>
-              s['admissionNumber']?.toString().trim().toLowerCase() ==
-              admissionNumber.toLowerCase(),
-          orElse: () => <String, dynamic>{},
-        );
+        for (int i = 1; i < lines.length; i++) {
+          final rowParts = lines[i].split(',');
+          if (rowParts.length < 3) continue;
 
-        if (student.isEmpty) {
-          dev.log(
-              '⚠️ Student with Admission ID $admissionNumber not found in class.',
-              name: 'ExamDetailScreen');
-          continue;
-        }
+          final admissionNumber = rowParts[0].trim();
+          final student = _students.firstWhere(
+            (s) =>
+                s['admissionNumber']?.toString().trim().toLowerCase() ==
+                admissionNumber.toLowerCase(),
+            orElse: () => <String, dynamic>{},
+          );
 
-        final studentId = student['id'] as String;
-
-        var resultRow = currentResults.firstWhere(
-          (r) => r['studentId'] == studentId,
-          orElse: () => <String, dynamic>{},
-        );
-
-        String resultId;
-        if (resultRow.isEmpty) {
-          final newResult = {
-            'examId': widget.examId,
-            'studentId': studentId,
-            'totalMarks': _subjects.length * 100,
-            'obtainedMarks': 0,
-            'percentage': 0.0,
-            'grade': 'F',
-            'rank': 1,
-            'result': 'FAIL',
-            'isPublished': true,
-          };
-
-          final insertRes = await client
-              .from('ExamResult')
-              .insert(newResult)
-              .select('id')
-              .single();
-          resultId = insertRes['id'] as String;
-          currentResults.add({
-            'id': resultId,
-            'examId': widget.examId,
-            'studentId': studentId,
-          });
-        } else {
-          resultId = resultRow['id'] as String;
-        }
-
-        for (var s in _subjects) {
-          final sName = s['name'] as String;
-          final sCode = s['code'] as String? ?? '';
-          final sTotal = (s['totalMarks'] as num? ?? 100).toInt();
-
-          final tIdx = subjectTheoryIdx[sName] ?? -1;
-          final pIdx = subjectPracIdx[sName] ?? -1;
-          final iIdx = subjectIntIdx[sName] ?? -1;
-          final abIdx = subjectAbsentIdx[sName] ?? -1;
+          if (student.isEmpty) continue;
+          final studentId = student['id'] as String;
 
           final isAbsent = abIdx != -1 &&
               abIdx < rowParts.length &&
@@ -754,89 +559,23 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
           final internal = (!isAbsent && iIdx != -1 && iIdx < rowParts.length)
               ? (int.tryParse(rowParts[iIdx].trim()) ?? 0)
               : 0;
-          final obtained = theory + practical + internal;
 
-          final existingMark = _examMarks.firstWhere(
-            (m) =>
-                m['examResultId'] == resultId &&
-                m['subjectName'].toString().toLowerCase() ==
-                    sName.toLowerCase(),
-            orElse: () => <String, dynamic>{},
-          );
-
-          marksToUpsert.add({
-            if (existingMark.isNotEmpty) 'id': existingMark['id'],
-            'examResultId': resultId,
-            'subjectName': sName,
-            'subjectCode': sCode,
-            'totalMarks': sTotal,
-            'obtainedMarks': obtained,
-            'grade': _computeGrade((obtained / sTotal) * 100),
+          subjectMarksToSubmit.add({
+            'studentId': studentId,
             'theoryObtained': theory,
             'practicalObtained': practical,
             'internalObtained': internal,
             'isAbsent': isAbsent,
           });
         }
-      }
 
-      if (marksToUpsert.isNotEmpty) {
-        await client.from('ExamMark').upsert(marksToUpsert);
-      }
-
-      final allMarks = await client
-          .from('ExamMark')
-          .select('*, ExamResult!inner(id, examId)')
-          .eq('ExamResult.examId', widget.examId);
-
-      final groupedMarks = <String, List<dynamic>>{};
-      for (var m in allMarks) {
-        final resId = m['examResultId'] as String;
-        groupedMarks.putIfAbsent(resId, () => []).add(m);
-      }
-
-      final List<Map<String, dynamic>> resultsUpdates = [];
-      final List<MapEntry<String, double>> studentPcts = [];
-
-      for (var res in currentResults) {
-        final resId = res['id'] as String;
-        final studentMarks = groupedMarks[resId] ?? [];
-
-        int totalMax = 0;
-        int totalObt = 0;
-        for (var m in studentMarks) {
-          totalMax += (m['totalMarks'] as num? ?? 100).toInt();
-          totalObt += (m['obtainedMarks'] as num? ?? 0).toInt();
+        if (subjectMarksToSubmit.isNotEmpty) {
+          final body = {
+            'subjectId': sId,
+            'marks': subjectMarksToSubmit,
+          };
+          await ApiService.instance.post('exams/${widget.examId}/marks', body: body);
         }
-
-        if (totalMax == 0) totalMax = _subjects.length * 100;
-        final pct = totalMax > 0 ? (totalObt / totalMax * 100) : 0.0;
-        studentPcts.add(MapEntry(resId, pct));
-
-        resultsUpdates.add({
-          'id': resId,
-          'examId': widget.examId,
-          'studentId': res['studentId'],
-          'totalMarks': totalMax,
-          'obtainedMarks': totalObt,
-          'percentage': pct,
-          'grade': _computeGrade(pct),
-          'result': pct >= 33 ? 'PASS' : 'FAIL',
-        });
-      }
-
-      studentPcts.sort((a, b) => b.value.compareTo(a.value));
-      final Map<String, int> ranks = {};
-      for (int rankIdx = 0; rankIdx < studentPcts.length; rankIdx++) {
-        ranks[studentPcts[rankIdx].key] = rankIdx + 1;
-      }
-
-      for (var update in resultsUpdates) {
-        update['rank'] = ranks[update['id']] ?? 1;
-      }
-
-      if (resultsUpdates.isNotEmpty) {
-        await client.from('ExamResult').upsert(resultsUpdates);
       }
 
       await _loadData();
@@ -892,10 +631,12 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
   Widget build(BuildContext context) {
     String subtitle = 'Class Schedule';
     if (_examData != null) {
-      final className = (_examData!['Class']?['name']?.toString() ?? 'Class')
+      final classData = _examData!['class'] ?? _examData!['Class'];
+      final ayData = _examData!['academicYear'] ?? _examData!['AcademicYear'];
+      final className = (classData?['name']?.toString() ?? 'Class')
           .replaceAll('Class', 'Grade');
       final ayName =
-          _examData!['AcademicYear']?['name']?.toString() ?? '2024-2025';
+          ayData?['name']?.toString() ?? '2024-2025';
       subtitle = '$className • $ayName';
     }
 

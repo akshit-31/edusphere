@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart' as intl;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/api_service.dart';
+import '../../services/socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
@@ -35,7 +36,6 @@ class _TeacherPersonalAttendanceScreenState
   int _absentCount = 0;
   double? _attendanceRate;
 
-  RealtimeChannel? _realtimeChannel;
   Timer? _pollTimer;
 
   @override
@@ -48,11 +48,11 @@ class _TeacherPersonalAttendanceScreenState
   @override
   void dispose() {
     _pollTimer?.cancel();
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
+    try {
+      SocketService().off('attendanceMarked', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_UPDATED', _onRealtimeEvent);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -71,8 +71,6 @@ class _TeacherPersonalAttendanceScreenState
   }
 
   Future<void> _loadAttendance({bool showLoading = false}) async {
-    if (_teacherIdStr.isEmpty) return;
-
     if (showLoading) {
       setState(() {
         _isLoading = true;
@@ -80,14 +78,8 @@ class _TeacherPersonalAttendanceScreenState
     }
 
     try {
-      final client = Supabase.instance.client;
-      final res = await client
-          .from('AttendanceRecord')
-          .select()
-          .eq('teacherId', _teacherIdStr)
-          .order('date', ascending: false);
-
-      final List<dynamic> list = res;
+      final response = await ApiService.instance.get('attendance/my');
+      final List<dynamic> list = response['records'] ?? [];
       _allRecords = list.map((x) => Map<String, dynamic>.from(x)).toList();
       _applyFiltersAndCalculate();
     } catch (e) {
@@ -102,27 +94,19 @@ class _TeacherPersonalAttendanceScreenState
     }
   }
 
+  void _onRealtimeEvent(dynamic payload) {
+    if (mounted) {
+      _loadAttendance(showLoading: false);
+    }
+  }
+
   void _connectRealTime() {
     try {
-      final client = Supabase.instance.client;
-      _realtimeChannel = client
-          .channel('public:teacher_self_attendance_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'AttendanceRecord',
-            callback: (payload) {
-              dev.log(
-                  '⚡ Real-time database update in personal attendance: $payload',
-                  name: 'TeacherPersonalAttendance');
-              if (mounted) {
-                _loadAttendance(showLoading: false);
-              }
-            },
-          );
-      _realtimeChannel!.subscribe();
+      SocketService().on('attendanceMarked', _onRealtimeEvent);
+      SocketService().on('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().on('ATTENDANCE_UPDATED', _onRealtimeEvent);
     } catch (e) {
-      dev.log('Error connecting realtime channel: $e',
+      dev.log('Error connecting Socket.IO: $e',
           name: 'TeacherPersonalAttendance');
     }
 

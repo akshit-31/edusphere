@@ -34,7 +34,7 @@ router.get('/students/:studentId/results', getStudentExamResults);
 // Single exam — wildcard /:id must come LAST in this group
 router.get('/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'), getExam);
 router.post('/', requireRole('SUPER_ADMIN', 'ADMIN'), validate(examCreateSchema), createExam);
-router.put('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), updateExam);
+router.put('/:id', requireRole('SUPER_ADMIN', 'ADMIN', 'TEACHER'), updateExam);
 router.delete('/:id', requireRole('SUPER_ADMIN', 'ADMIN'), deleteExam);
 
 // Exam subjects

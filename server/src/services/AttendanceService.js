@@ -395,7 +395,7 @@ class AttendanceService {
         const { qrPayload, scannerId, scanLat, scanLng, action, classId, sectionId } = data;
 
         const scanUserId = parseQRPayload(qrPayload);
-        if (!scanUserId) throw new AppError('Invalid or unreadable QR code', 400);
+        if (!scanUserId) throw new AppError('Invalid, expired or tampered QR code', 400);
 
         const scanner = await AttendanceRepository.findScannerById(scannerId);
         if (!scanner) throw new AppError('Scanner not found', 404);
@@ -424,8 +424,8 @@ class AttendanceService {
 
         if (scanner.geofenceEnabled && scanner.latitude && scanner.longitude) {
             if (!scanLat || !scanLng) throw new AppError('Location access required for this scanner', 403);
-            const isInside = checkGeofence(scanLat, scanLng, scanner.latitude, scanner.longitude, scanner.geofenceRadius || 100);
-            if (!isInside) throw new AppError('You are outside the allowed scanning area', 403);
+            const geoResult = checkGeofence(scanner, scanLat, scanLng);
+            if (!geoResult.valid) throw new AppError(geoResult.reason || 'You are outside the allowed scanning area', 403);
         }
 
         const today = getStartOfDay();

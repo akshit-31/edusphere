@@ -16,6 +16,7 @@ const {
   regenerateUserQR,
   toggleQRIssued,
   changePassword,
+  updateMeProfile,
 } = require('../controllers/userController');
 
 // All user management routes require authentication
@@ -23,6 +24,7 @@ router.use(authMiddleware);
 
 // ── Self-service routes ──
 router.post('/me/change-password', changePassword);
+router.put('/me', updateMeProfile);
 
 // Get all users (paginated with filters) - Admin only
 router.get('/', requireRole('SUPER_ADMIN', 'ADMIN'), getAllUsers);

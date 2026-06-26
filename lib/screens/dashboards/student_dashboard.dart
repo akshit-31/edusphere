@@ -3,13 +3,12 @@ import '../../theme/colors.dart';
 import '../features/attendance_screen.dart';
 import '../features/results_screen.dart';
 import '../features/fee_ledger_screen.dart';
-import '../features/library_overdue_screen.dart';
 import '../features/academic_calendar_screen.dart';
+import '../features/library_overdue_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import 'package:edusphere/theme/typography.dart';
@@ -55,7 +54,6 @@ class _StudentDashboardState extends State<StudentDashboard>
   bool _upcomingEventsLoaded = false;
 
   Timer? _dashboardPollTimer;
-  RealtimeChannel? _dashboardChannel;
 
   @override
   void initState() {
@@ -72,17 +70,14 @@ class _StudentDashboardState extends State<StudentDashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _dashboardPollTimer?.cancel();
-    if (_dashboardChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_dashboardChannel!);
-      } catch (_) {}
-    }
 
     // Clean up Socket.IO listeners
     try {
       final socketEvents = [
         'STUDENT_UPDATED',
         'ATTENDANCE_UPDATED',
+        'ATTENDANCE_MARKED',
+        'attendanceMarked',
         'FEE_UPDATED',
         'RESULT_UPDATED',
         'CALENDAR_UPDATED',
@@ -108,12 +103,13 @@ class _StudentDashboardState extends State<StudentDashboard>
   }
 
   void _connectRealTime() {
-
     // Connect Socket.IO events
     try {
       final socketEvents = [
         'STUDENT_UPDATED',
         'ATTENDANCE_UPDATED',
+        'ATTENDANCE_MARKED',
+        'attendanceMarked',
         'FEE_UPDATED',
         'RESULT_UPDATED',
         'CALENDAR_UPDATED',
@@ -133,28 +129,6 @@ class _StudentDashboardState extends State<StudentDashboard>
     } catch (e) {
       dev.log('Error registering Socket.IO events: $e',
           name: 'StudentDashboard');
-    }
-
-    try {
-      final client = Supabase.instance.client;
-      if (_dashboardChannel != null) {
-        client.removeChannel(_dashboardChannel!);
-      }
-      _dashboardChannel = client.channel('public:student_dashboard_sync')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'AttendanceRecord',
-          callback: (payload) {
-            dev.log('🔥 Real-time attendance event payload in dashboard: $payload', name: 'StudentDashboard');
-            if (mounted) {
-              _loadStudentData(showLoading: false);
-            }
-          },
-        );
-      _dashboardChannel!.subscribe();
-    } catch (e) {
-      dev.log('⚠️ Error connecting Supabase Realtime channel: $e', name: 'StudentDashboard');
     }
 
     // Polling fallback every 30 seconds
@@ -186,10 +160,8 @@ class _StudentDashboardState extends State<StudentDashboard>
     String studentId = prefs.getString('student_id') ?? '';
 
     try {
-
-
-    // ── 1. Fetch full student profile from REST API ──
-    try {
+      // ── 1. Fetch full student profile from REST API ──
+      try {
         final res = await ApiService.instance.get('students/me');
         if (res != null && res['success'] == true && res['student'] != null) {
           final s = res['student'] as Map<String, dynamic>;
@@ -230,63 +202,41 @@ class _StudentDashboardState extends State<StudentDashboard>
               address = u['address'] as String? ?? '—';
             });
           }
-          dev.log('✅ Loaded student dashboard profile from REST API fallback.');
+          dev.log('✅ Loaded student dashboard profile from REST API.');
         } else {
           throw 'API failed';
         }
-    } catch (e) {
-      if (studentEmail.isNotEmpty) {
-        try {
-          // Fallback to Supabase
-          final userRes = await Supabase.instance.client
-              .from('User')
-              .select('id, firstName, lastName, email')
-              .eq('email', studentEmail)
-              .maybeSingle();
-          if (userRes != null) {
-            final userId = userRes['id'];
-            final studentRes = await Supabase.instance.client
-                .from('Student')
-                .select('id')
-                .eq('userId', userId)
-                .maybeSingle();
-            if (studentRes != null) {
-              studentId = studentRes['id'];
-              await prefs.setString('student_id', studentId);
-            }
-          }
-        } catch (_) {}
+      } catch (e) {
+        dev.log('Error loading student profile from REST API: $e');
       }
-    }
+
       if (studentId.isNotEmpty) {
         // ── 2. Attendance % ──
         try {
-          final res = await Supabase.instance.client
-              .from('AttendanceRecord')
-              .select('status')
-              .eq('studentId', studentId);
-          
-          final List<dynamic> list = res;
-          int presentCount = 0;
-          int absentCount = 0;
-          for (final record in list) {
-            final status = (record['status'] as String? ?? '').toUpperCase();
-            if (status == 'PRESENT' || status == 'P' || status == 'LATE' || status == 'HALF_DAY') {
-              presentCount++;
-            } else if (status == 'ABSENT' || status == 'A') {
-              absentCount++;
+          final attendanceRes = await ApiService.instance.get('students/$studentId/attendance');
+          if (attendanceRes != null && attendanceRes['success'] == true) {
+            final List<dynamic> list = attendanceRes['attendance'] ?? [];
+            int presentCount = 0;
+            int absentCount = 0;
+            for (final record in list) {
+              final status = (record['status'] as String? ?? '').toUpperCase();
+              if (status == 'PRESENT' || status == 'P' || status == 'LATE' || status == 'HALF_DAY') {
+                presentCount++;
+              } else if (status == 'ABSENT' || status == 'A') {
+                absentCount++;
+              }
+            }
+            final totalClasses = presentCount + absentCount;
+            final double pct = totalClasses > 0 ? (presentCount / totalClasses) * 100.0 : 100.0;
+            if (mounted) {
+              setState(() {
+                attendanceRate = pct;
+                _attendanceLoaded = true;
+              });
             }
           }
-          final totalClasses = presentCount + absentCount;
-          final double pct = totalClasses > 0 ? (presentCount / totalClasses) * 100.0 : 100.0;
-          if (mounted) {
-            setState(() {
-              attendanceRate = pct;
-              _attendanceLoaded = true;
-            });
-          }
         } catch (e) {
-          dev.log('Error loading attendance from Supabase: $e');
+          dev.log('Error loading attendance from REST API: $e');
           if (mounted) {
             setState(() {
               attendanceRate = 0.0;

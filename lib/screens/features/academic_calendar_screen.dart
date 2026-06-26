@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
 import '../../services/api_service.dart';
@@ -101,7 +100,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
 
   // Events keyed by "year-month-day"
   final Map<String, List<CalendarEvent>> _events = {};
-  RealtimeChannel? _realtimeChannel;
+
 
   @override
   void initState() {
@@ -110,16 +109,10 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     _focusedMonth = DateTime(now.year, now.month, 1);
     _selectedDay = now;
     _loadEvents();
-    _connectRealTime();
   }
 
   @override
   void dispose() {
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
     super.dispose();
   }
 
@@ -180,39 +173,7 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
   }
 
 
-  void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_realtimeChannel != null) {
-        client.removeChannel(_realtimeChannel!);
-      }
 
-      _realtimeChannel =
-          client.channel('public:school_calendar_sync').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'SchoolCalendar',
-                callback: (_) {
-                  if (mounted) {
-                    _loadEvents();
-                  }
-                },
-              );
-
-      _realtimeChannel!.subscribe((status, [error]) {
-        dev.log(
-            '📡 Supabase Realtime Academic Calendar channel status: $status',
-            name: 'AcademicCalendarScreen');
-        if (error != null) {
-          dev.log(
-              '❌ Supabase Realtime Academic Calendar subscription error: $error',
-              name: 'AcademicCalendarScreen');
-        }
-      });
-    } catch (e) {
-      dev.log('Error connecting realtime in calendar: $e');
-    }
-  }
 
   void _addEvent(int year, int month, int day, CalendarEvent event) {
     final key = '$year-$month-$day';

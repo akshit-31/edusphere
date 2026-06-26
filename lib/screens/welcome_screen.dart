@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/cache_service.dart';
 import '../widgets/ai_chatbot_overlay.dart';
 import '../services/api_service.dart';
 import 'dart:developer' as dev;
@@ -85,19 +84,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
       final userObj = backendRes['user'] as Map<String, dynamic>;
       final role = (userObj['role'] as String? ?? '').toLowerCase();
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = CacheService.instance;
       await prefs.setString('user_role', role);
       await prefs.setString('user_id', userObj['id'] as String? ?? '');
 
-      // 2. Perform Supabase Login (as a secondary check for realtime subscriptions)
-      try {
-        await Supabase.instance.client.auth.signInWithPassword(
-          email: email,
-          password: pass,
-        );
-      } catch (e) {
-        dev.log('⚠️ Supabase login failed/skipped: $e', name: 'WelcomeScreen');
-      }
+      // Supabase Login dependency removed for production REST API JWT authentication
 
       // 3. Save details to SharedPreferences based on role
       final firstName = userObj['firstName'] ?? '';

@@ -6,6 +6,9 @@ import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/quiz_service.dart';
+import '../../services/academic_service.dart';
+import '../../models/quiz_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model for a single MCQ question
@@ -61,28 +64,93 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   List<Map<String, dynamic>> _submissions = [];
   bool _loadingSubmissions = true;
 
+  List<Map<String, dynamic>> _availableClasses = [];
+  List<Map<String, dynamic>> _availableSections = [];
+  bool _loadingTargetData = true;
+
   @override
   void initState() {
     super.initState();
+    _loadTargetData();
     _loadSubmissions();
+  }
+
+  Future<void> _loadTargetData() async {
+    try {
+      final classesRes = await AcademicService.instance.getClasses();
+      final sectionsRes = await AcademicService.instance.getSections();
+
+      if (classesRes != null && classesRes['classes'] != null) {
+        _availableClasses = List<Map<String, dynamic>>.from(classesRes['classes']);
+      }
+      if (sectionsRes != null && sectionsRes['sections'] != null) {
+        _availableSections = List<Map<String, dynamic>>.from(sectionsRes['sections']);
+      }
+    } catch (e) {
+      debugPrint('Error loading target data: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingTargetData = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadSubmissions() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getStringList('quiz_submissions') ?? [];
-      final list = raw
-          .map((s) => Map<String, dynamic>.from(jsonDecode(s) as Map))
-          .toList()
-          .reversed
-          .toList();
+      final quizzes = await QuizService.instance.fetchQuizzes();
+      final List<Map<String, dynamic>> allSubmissions = [];
+
+      for (final quiz in quizzes) {
+        final subs = await QuizService.instance.fetchQuizSubmissions(quiz.id);
+        for (final sub in subs) {
+          final studentObj = sub['student'] as Map<String, dynamic>?;
+          final userObj = studentObj != null ? studentObj['user'] as Map<String, dynamic>? : null;
+          final firstName = userObj != null ? userObj['firstName'] as String? ?? '' : '';
+          final lastName = userObj != null ? userObj['lastName'] as String? ?? '' : '';
+          final studentName = '$firstName $lastName'.trim();
+          
+          final score = sub['score'] as int? ?? 0;
+          final total = sub['totalQuestions'] as int? ?? 1;
+          final pct = (score / total * 100).round();
+
+          final classId = studentObj != null ? studentObj['currentClassId'] as String? ?? '' : '';
+          final sectionId = studentObj != null ? studentObj['sectionId'] as String? ?? '' : '';
+          final classMatch = _availableClasses.firstWhere((c) => c['id'] == classId, orElse: () => <String, dynamic>{});
+          final sectionMatch = _availableSections.firstWhere((s) => s['id'] == sectionId, orElse: () => <String, dynamic>{});
+          
+          final className = classMatch.isNotEmpty ? classMatch['name']?.toString() ?? 'Class' : 'Class';
+          final sectionName = sectionMatch.isNotEmpty ? sectionMatch['name']?.toString() ?? '' : '';
+
+          allSubmissions.add({
+            'quizId': quiz.id,
+            'quizTitle': quiz.title,
+            'studentName': studentName.isEmpty ? 'Student' : studentName,
+            'studentClass': className,
+            'studentSection': sectionName,
+            'score': score,
+            'total': total,
+            'pct': pct,
+            'submittedAt': sub['submittedAt'] ?? '',
+          });
+        }
+      }
+
+      // Sort by submittedAt descending
+      allSubmissions.sort((a, b) {
+        final dateA = DateTime.tryParse(a['submittedAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final dateB = DateTime.tryParse(b['submittedAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return dateB.compareTo(dateA);
+      });
+
       if (mounted) {
         setState(() {
-          _submissions = list;
+          _submissions = allSubmissions;
           _loadingSubmissions = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _loadingSubmissions = false;
@@ -116,7 +184,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     setState(() => _questions.removeAt(index));
   }
 
-  // ── Publish quiz to SharedPreferences (local real-time bridge) ───────────
+  // ── Publish quiz to database ──────────────────────────────────────────────
   Future<void> _publishQuiz() async {
     // Validate title
     if (_titleCtrl.text.trim().isEmpty) {
@@ -137,31 +205,33 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     }
 
     try {
-      final questionsJson = _questions.map((q) => q.toJson()).toList();
       final durationMins = int.tryParse(_durationCtrl.text.trim()) ?? 20;
+      final questionsList = _questions.map((q) {
+        return QuizQuestionModel(
+          question: q.questionCtrl.text.trim(),
+          options: q.optionCtrls.map((c) => c.text.trim()).toList(),
+          ans: q.correctIndex,
+        );
+      }).toList();
 
-      final newQuiz = {
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'title': _titleCtrl.text.trim(),
-        'subject': 'General',
-        'duration_minutes': durationMins,
-        'target_class': _selectedClass,
-        'target_sections': _selectedSections,
-        'questions': questionsJson,
-        'is_published': true,
-        'created_at': DateTime.now().toIso8601String(),
-      };
+      final res = await QuizService.instance.createQuiz(
+        title: _titleCtrl.text.trim(),
+        subject: 'General',
+        durationMinutes: durationMins,
+        targetClass: _selectedClass,
+        targetSections: _selectedSections,
+        questions: questionsList,
+      );
 
-      // Save to SharedPreferences so student screen can read it
-      final prefs = await SharedPreferences.getInstance();
-      final existing = prefs.getStringList('published_quizzes') ?? [];
-      existing.add(jsonEncode(newQuiz));
-      await prefs.setStringList('published_quizzes', existing);
-
-      if (mounted) {
-        showToast(context,
-            'Quiz published to Class $_selectedClass (${_selectedSections.join(', ')})!');
-        Navigator.pop(context);
+      if (res != null && res['success'] == true) {
+        if (mounted) {
+          showToast(context, 'Quiz published successfully!');
+          Navigator.pop(context);
+        }
+      } else {
+        if (mounted) {
+          showToast(context, 'Failed to publish: ${res['error'] ?? 'Unknown error'}', isError: true);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -583,81 +653,92 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                   style: AppTypography.caption
                       .copyWith(color: AppColors.textLight, letterSpacing: 1)),
               SizedBox(height: 12.h),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: List.generate(12, (i) {
-                  final name =
-                      '${i + 1}${i == 0 ? 'st' : i == 1 ? 'nd' : i == 2 ? 'rd' : 'th'}';
-                  final sel = _selectedClass == name;
-                  return GestureDetector(
-                    onTap: () =>
-                        setSheet(() => setState(() => _selectedClass = name)),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 16.w, vertical: 10.h),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? AppColors.teacherPrimary
-                            : AppColors.background,
-                        borderRadius: BorderRadius.circular(10.r),
-                        border: Border.all(
-                            color: sel
-                                ? AppColors.teacherPrimary
-                                : AppColors.border),
-                      ),
-                      child: Text(name,
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              color:
-                                  sel ? Colors.white : AppColors.textMedium)),
+              _loadingTargetData
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.teacherPrimary))
+                  : Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: _availableClasses.map((c) {
+                        final name = c['name']?.toString() ?? 'Class';
+                        final id = c['id']?.toString() ?? '';
+                        final sel = _selectedClass == id;
+                        return GestureDetector(
+                          onTap: () =>
+                              setSheet(() => setState(() {
+                                _selectedClass = id;
+                                _selectedSections.clear(); // Reset sections when class changes
+                              })),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16.w, vertical: 10.h),
+                            decoration: BoxDecoration(
+                              color: sel
+                                  ? AppColors.teacherPrimary
+                                  : AppColors.background,
+                              borderRadius: BorderRadius.circular(10.r),
+                              border: Border.all(
+                                  color: sel
+                                      ? AppColors.teacherPrimary
+                                      : AppColors.border),
+                            ),
+                            child: Text(name,
+                                style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w700,
+                                    color:
+                                        sel ? Colors.white : AppColors.textMedium)),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }),
-              ),
               SizedBox(height: 24.h),
               Text('CHOOSE SECTION',
                   style: AppTypography.caption
                       .copyWith(color: AppColors.textLight, letterSpacing: 1)),
               SizedBox(height: 12.h),
-              Row(
-                children: ['A', 'B', 'C', 'D'].map((s) {
-                  final sel = _selectedSections.contains(s);
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setSheet(() => setState(() {
-                            if (sel) {
-                              _selectedSections.remove(s);
-                            } else {
-                              _selectedSections.add(s);
-                            }
-                          })),
-                      child: Container(
-                        margin: EdgeInsets.only(right: s != 'D' ? 10.w : 0),
-                        height: 45.h,
-                        decoration: BoxDecoration(
-                          color: sel
-                              ? AppColors.teacherPrimary
-                              : AppColors.background,
-                          borderRadius: BorderRadius.circular(10.r),
-                          border: Border.all(
-                              color: sel
-                                  ? AppColors.teacherPrimary
-                                  : AppColors.border),
-                        ),
-                        child: Center(
-                          child: Text(s,
-                              style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w700,
+              _loadingTargetData
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.teacherPrimary))
+                  : _selectedClass == null
+                      ? Text('Please select a class first',
+                          style: AppTypography.caption.copyWith(color: AppColors.textLight))
+                      : Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: _availableSections
+                              .where((s) => s['classId'] == _selectedClass)
+                              .map((s) {
+                            final name = s['name']?.toString() ?? '';
+                            final sel = _selectedSections.contains(name);
+                            return GestureDetector(
+                              onTap: () => setSheet(() => setState(() {
+                                    if (sel) {
+                                      _selectedSections.remove(name);
+                                    } else {
+                                      _selectedSections.add(name);
+                                    }
+                                  })),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16.w, vertical: 10.h),
+                                decoration: BoxDecoration(
                                   color: sel
-                                      ? Colors.white
-                                      : AppColors.textMedium)),
+                                      ? AppColors.teacherPrimary
+                                      : AppColors.background,
+                                  borderRadius: BorderRadius.circular(10.r),
+                                  border: Border.all(
+                                      color: sel
+                                          ? AppColors.teacherPrimary
+                                          : AppColors.border),
+                                ),
+                                child: Text(name,
+                                    style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w700,
+                                        color: sel
+                                            ? Colors.white
+                                            : AppColors.textMedium)),
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
               SizedBox(height: 32.h),
               LoadingButton(
                 label: 'Confirm & Publish Quiz',

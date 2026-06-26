@@ -3,11 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../theme/colors.dart';
 import '../main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../config/supabase_config.dart';
+
 import 'announcement_details_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
@@ -89,7 +89,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  RealtimeChannel? _announcementsChannel;
+
 
   String _studentId = '';
   String _teacherId = '';
@@ -110,20 +110,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
   Future<void> _loadTeacherName() async {
     try {
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      if (user != null) {
-        final res = await client
-            .from('User')
-            .select('firstName')
-            .eq('id', user.id)
-            .maybeSingle();
-        if (res != null && mounted) {
-          setState(() {
-            _teacherFirstName =
-                (res['firstName'] as String? ?? 'KARAN').toUpperCase();
-          });
-        }
+      final prefs = await SharedPreferences.getInstance();
+      final savedName = prefs.getString('teacher_name') ?? prefs.getString('user_name') ?? 'KARAN';
+      final firstWord = savedName.trim().split(' ').first;
+      if (mounted) {
+        setState(() {
+          _teacherFirstName = firstWord.toUpperCase();
+        });
       }
     } catch (_) {}
   }

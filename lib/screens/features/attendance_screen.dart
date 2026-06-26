@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/colors.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:typed_data';
@@ -34,7 +34,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   int _absentCount = 0;
   double _attendanceRate = 100.0;
 
-  RealtimeChannel? _attendanceChannel;
+
   late DateTime _startDate;
   late DateTime _endDate;
   
@@ -54,54 +54,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   void dispose() {
-    if (_attendanceChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_attendanceChannel!);
-      } catch (_) {}
-    }
     try {
       SocketService().off('ATTENDANCE_UPDATED');
+      SocketService().off('ATTENDANCE_MARKED');
+      SocketService().off('attendanceMarked');
     } catch (_) {}
     super.dispose();
   }
 
   void _connectRealTime() {
-    try {
-      final client = Supabase.instance.client;
-      if (_attendanceChannel != null) {
-        client.removeChannel(_attendanceChannel!);
-      }
-      
-      dev.log('📡 Subscribing to Supabase Realtime changes for Attendance Screen...', name: 'AttendanceScreen');
-      _attendanceChannel = client.channel('public:attendance_screen_sync')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'AttendanceRecord',
-          callback: (payload) {
-            dev.log('🔥 Real-time attendance event payload: $payload', name: 'AttendanceScreen');
-            if (mounted) {
-              _loadAttendanceData(showLoading: false);
-            }
-          },
-        );
-      
-      _attendanceChannel!.subscribe((status, [error]) {
-        if (error != null) {
-          dev.log('❌ Supabase Realtime Attendance subscription error: $error', name: 'AttendanceScreen');
-        }
-      });
-    } catch (e) {
-      dev.log('⚠️ Error connecting Supabase Realtime Attendance channel: $e', name: 'AttendanceScreen');
-    }
     // Connect Socket.IO events for real-time updates
     try {
-      SocketService().on('ATTENDANCE_UPDATED', (data) {
-        dev.log('⚡ [SOCKET.IO EVENT] Attendance updated: $data', name: 'AttendanceScreen');
+      final attendanceCallback = (data) {
+        dev.log('⚡ [SOCKET.IO EVENT] Attendance event received: $data', name: 'AttendanceScreen');
         if (mounted) {
           _loadAttendanceData(showLoading: false);
         }
-      });
+      };
+
+      SocketService().on('ATTENDANCE_UPDATED', attendanceCallback);
+      SocketService().on('ATTENDANCE_MARKED', attendanceCallback);
+      SocketService().on('attendanceMarked', attendanceCallback);
     } catch (e) {
       dev.log('Error registering Socket.IO events: $e', name: 'AttendanceScreen');
     }
@@ -116,106 +89,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _studentIdStr = prefs.getString('student_id') ?? '';
       _studentNameStr = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Test Student';
 
-        // ALWAYS ensure we have a valid studentId from Supabase directly to prevent bad cached data
-        final email = prefs.getString('student_email') ?? prefs.getString('user_email') ?? '';
-        if (email.isNotEmpty) {
-          try {
-            final userRes = await Supabase.instance.client
-                .from('User')
-                .select('id, firstName, lastName')
-                .eq('email', email)
-                .maybeSingle();
-            if (userRes != null) {
-              final userId = userRes['id'];
-              _studentNameStr = '${userRes['firstName'] ?? ''} ${userRes['lastName'] ?? ''}'.trim();
-              await prefs.setString('student_name', _studentNameStr);
-              final studentRes = await Supabase.instance.client
-                  .from('Student')
-                  .select('id')
-                  .eq('userId', userId)
-                  .maybeSingle();
-              if (studentRes != null) {
-                _studentIdStr = studentRes['id'];
-                await prefs.setString('student_id', _studentIdStr);
-              }
-            }
-          } catch (_) {}
+      // Ensure we have a valid studentId, otherwise query it from REST API students/me
+      if (_studentIdStr.isEmpty) {
+        try {
+          final studentMeRes = await ApiService.instance.get('students/me');
+          if (studentMeRes != null && studentMeRes['success'] == true && studentMeRes['student'] != null) {
+            final s = studentMeRes['student'] as Map<String, dynamic>;
+            _studentIdStr = s['id'] as String? ?? '';
+            await prefs.setString('student_id', _studentIdStr);
+            
+            final u = s['user'] as Map? ?? {};
+            _studentNameStr = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
+            await prefs.setString('student_name', _studentNameStr);
+          }
+        } catch (e) {
+          dev.log('Error fetching student/me in attendance screen: $e', name: 'AttendanceScreen');
         }
+      }
+
 
 
       if (_studentIdStr.isNotEmpty) {
-        bool supabaseSuccess = false;
+        bool apiSuccess = false;
         try {
-          final res = await Supabase.instance.client
-              .from('AttendanceRecord')
-              .select()
-              .eq('studentId', _studentIdStr);
-          
-          final List<dynamic> list = res;
-          final Map<int, Map<String, dynamic>> dbDailyRecords = {};
-          int dbPresent = 0;
-          int dbAbsent = 0;
-          
-          _datesInRange.clear();
-          DateTime curr = DateTime(_startDate.year, _startDate.month, _startDate.day);
-          final end = DateTime(_endDate.year, _endDate.month, _endDate.day);
-          while (!curr.isAfter(end)) {
-            _datesInRange.add(curr);
-            curr = curr.add(const Duration(days: 1));
-          }
-          _datesInRange = _datesInRange.reversed.toList();
-
-          for (var record in list) {
-            final dateStr = record['date'] as String;
-            final status = record['status'] as String;
-            
-            try {
-              final date = DateTime.parse(dateStr);
-              final normalizedDate = DateTime(date.year, date.month, date.day);
-              final normalizedStart = DateTime(_startDate.year, _startDate.month, _startDate.day);
-              final normalizedEnd = DateTime(_endDate.year, _endDate.month, _endDate.day);
-
-              if ((normalizedDate.isAfter(normalizedStart) || normalizedDate.isAtSameMomentAs(normalizedStart)) &&
-                  (normalizedDate.isBefore(normalizedEnd) || normalizedDate.isAtSameMomentAs(normalizedEnd))) {
-                
-                final key = normalizedDate.millisecondsSinceEpoch;
-                
-                dbDailyRecords[key] = {
-                  'status': status,
-                  'checkInTime': record['checkInTime'],
-                  'createdAt': record['createdAt'],
-                  'markedBy': record['markedBy'],
-                  'scannedByQR': record['scannedByQR'],
-                  'scannedByRFID': record['scannedByRFID'],
-                };
-                
-                if (status == 'PRESENT' || status == 'P' || status == 'LATE' || status == 'Late' || status == 'HALF_DAY') {
-                  dbPresent++;
-                } else if (status == 'ABSENT' || status == 'A') {
-                  dbAbsent++;
-                }
-              }
-            } catch (_) {}
-          }
-
-          final totalClasses = dbPresent + dbAbsent;
-          
-          if (mounted) {
-            setState(() {
-              _dailyRecords = dbDailyRecords;
-              _presentCount = dbPresent;
-              _absentCount = dbAbsent;
-              _attendanceRate = totalClasses > 0 ? (dbPresent / totalClasses) * 100 : 100.0;
-            });
-          }
-          supabaseSuccess = true;
-          dev.log('✅ Loaded attendance screen records from Supabase in real-time.', name: 'AttendanceScreen');
-        } catch (e) {
-          dev.log('Error loading attendance from Supabase: $e', name: 'AttendanceScreen');
-        }
-
-        if (!supabaseSuccess) {
-          // Fallback to REST API
           final attendanceRes = await ApiService.instance.get('students/$_studentIdStr/attendance');
           if (attendanceRes != null && attendanceRes['success'] == true) {
             final List<dynamic> list = attendanceRes['attendance'] ?? [];
@@ -225,8 +121,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             int dbAbsent = 0;
             
             _datesInRange.clear();
-            DateTime curr = _startDate;
-            while (!curr.isAfter(_endDate)) {
+            DateTime curr = DateTime(_startDate.year, _startDate.month, _startDate.day);
+            final end = DateTime(_endDate.year, _endDate.month, _endDate.day);
+            while (!curr.isAfter(end)) {
               _datesInRange.add(curr);
               curr = curr.add(const Duration(days: 1));
             }
@@ -275,8 +172,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 _attendanceRate = totalClasses > 0 ? (dbPresent / totalClasses) * 100 : 100.0;
               });
             }
+            apiSuccess = true;
+            dev.log('✅ Loaded attendance screen records from REST API.', name: 'AttendanceScreen');
           }
+        } catch (e) {
+          dev.log('Error loading attendance from REST API: $e', name: 'AttendanceScreen');
         }
+
+
       }
     } catch (e) {
       dev.log('⚠️ Error loading attendance: $e', name: 'AttendanceScreen');

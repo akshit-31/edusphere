@@ -6,7 +6,7 @@ const ValidationError = require('../errors/ValidationError');
 // Submit an assignment (Student only)
 const submitAssignment = asyncHandler(async (req, res) => {
   const { assignmentId } = req.body;
-  const student = await prisma.student.findFirst({
+  const student = await prisma.studentProfile.findFirst({
     where: { userId: req.user.id }
   });
 

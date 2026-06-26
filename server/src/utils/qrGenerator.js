@@ -7,25 +7,27 @@ const { getConfigValue } = require('./configHelper');
  * Generates a stable cryptographic signature for the QR payload.
  * High-security HMAC ensure no spoofing is possible.
  */
-const getSignature = (userId) => {
+const getSignature = (data) => {
   return crypto
     .createHmac('sha256', process.env.JWT_SECRET || 'edusphere_fallback_secret_777')
-    .update(userId)
+    .update(data)
     .digest('hex')
     .substring(0, 16); // 16 chars is enough for school-level security while keeping QR density low
 };
 
 /**
  * Generates a base64 PNG QR code encoding the userId with verification signature.
- * Payload: { uid: userId, s: signature, v: 2 }
+ * Payload: { uid: userId, ts: timestamp, s: signature, v: 2 }
  * Returns a data URL: "data:image/png;base64,..."
  */
 const generateUserQR = async (userId) => {
   const brandColor = await getConfigValue('brand_color', '#1a1a2e');
+  const ts = Date.now();
   
   const payload = JSON.stringify({ 
     uid: userId, 
-    s: getSignature(userId),
+    ts: ts,
+    s: getSignature(`${userId}:${ts}`),
     v: 2 
   });
 
@@ -43,17 +45,22 @@ const generateUserQR = async (userId) => {
 
 /**
  * Parses and verifies a QR payload. 
- * Returns userId ONLY IF the cryptographic signature is authentic.
+ * Returns userId ONLY IF the cryptographic signature is authentic and fresh.
  */
 const parseQRPayload = (qrPayload) => {
   try {
     const parsed = JSON.parse(qrPayload);
-    if (!parsed || !parsed.uid || !parsed.s) return null;
+    if (!parsed || !parsed.uid || !parsed.s || !parsed.ts) return null;
+
+    // Enforce 30 seconds expiration check
+    const ageMs = Date.now() - parsed.ts;
+    if (ageMs < 0 || ageMs > 30000) {
+        return null; // Expired or future timestamp
+    }
 
     // Cryptographic verification
-    const expectedSignature = getSignature(parsed.uid);
+    const expectedSignature = getSignature(`${parsed.uid}:${parsed.ts}`);
     if (parsed.s !== expectedSignature) {
-        // logger.error(`[SECURITY] Invalid QR Signature detected for user ${parsed.uid}`, { userId: parsed.uid });
         return null;
     }
 

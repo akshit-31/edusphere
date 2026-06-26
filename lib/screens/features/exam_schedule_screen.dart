@@ -3,12 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:math' as math;
 import 'package:intl/intl.dart' as intl;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as dev;
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'exam_detail_screen.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import 'dart:async';
 
 class ExamScheduleScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -51,77 +52,54 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
   // Trend Points for Line Chart (defaults matching Screenshot 2)
   List<double> _trendPoints = [50.0, 66.0, 70.0];
 
-  RealtimeChannel? _examChannel;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadFilterData();
     _loadExams();
-    _setupRealtime();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _loadExams();
+      }
+    });
   }
 
   @override
   void dispose() {
-    if (_examChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_examChannel!);
-      } catch (_) {}
-    }
+    _pollingTimer?.cancel();
     super.dispose();
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // REAL-TIME & DATABASE FETCH
-  // ─────────────────────────────────────────────────────────
-
-  void _setupRealtime() {
-    try {
-      _examChannel =
-          Supabase.instance.client.channel('public:Exam').onPostgresChanges(
-                event: PostgresChangeEvent.all,
-                schema: 'public',
-                table: 'Exam',
-                callback: (payload) {
-                  dev.log('⚡ Realtime database change detected on Exam table!',
-                      name: 'ExamScheduleScreen');
-                  _loadExams();
-                },
-              );
-      _examChannel!.subscribe();
-    } catch (e) {
-      dev.log('Failed to connect to Supabase Realtime: $e');
-    }
   }
 
   Future<void> _loadFilterData() async {
     try {
-      final yearsRes = await Supabase.instance.client
-          .from('AcademicYear')
-          .select('id, name');
-      final classesRes =
-          await Supabase.instance.client.from('Class').select('id, name');
-      final termsRes =
-          await Supabase.instance.client.from('Term').select('id, name');
+      final yearsRes = await ApiService.instance.get('academic/years');
+      final classesRes = await ApiService.instance.get('academic/classes');
+      final termsRes = await ApiService.instance.get('terms');
 
       if (mounted) {
         setState(() {
-          _dbClasses = List<Map<String, dynamic>>.from(classesRes);
-          _dbTerms = List<Map<String, dynamic>>.from(termsRes);
+          final List<dynamic> yearsList = yearsRes['academicYears'] ?? yearsRes['years'] ?? [];
+          final List<dynamic> classesList = classesRes['classes'] ?? [];
+          final List<dynamic> termsList = termsRes['terms'] ?? [];
+
+          _dbClasses = List<Map<String, dynamic>>.from(classesList);
+          _dbTerms = List<Map<String, dynamic>>.from(termsList);
 
           _academicYears = ['All Years'] +
               List<String>.from(
-                  (yearsRes as List).map((e) => e['name'] as String));
+                  yearsList.map((e) => e['name'] as String));
           _classes = ['All Classes'] +
-              List<String>.from((classesRes as List).map(
+              List<String>.from(classesList.map(
                   (e) => (e['name'] as String).replaceAll('Class', 'Grade')));
           _terms = ['All Terms'] +
               List<String>.from(
-                  (termsRes as List).map((e) => e['name'] as String));
+                  termsList.map((e) => e['name'] as String));
         });
       }
     } catch (e) {
-      dev.log('Error loading filters from Supabase: $e');
+      dev.log('Error loading filters from REST API: $e');
     }
   }
 
@@ -129,47 +107,58 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await Supabase.instance.client
-          .from('Exam')
-          .select('*, Class(id, name), Term(id, name), AcademicYear(id, name)')
-          .order('startDate', ascending: false);
+      final response = await ApiService.instance.get('exams?limit=100');
 
-      final List<dynamic> rawList = response;
-      final List<Map<String, dynamic>> list = rawList.map((e) {
-        final className =
-            e['Class'] != null ? e['Class']['name']?.toString() : 'All Classes';
-        final termName =
-            e['Term'] != null ? e['Term']['name']?.toString() : '-';
-        final ayName = e['AcademicYear'] != null
-            ? e['AcademicYear']['name']?.toString()
-            : 'All Years';
+      if (response != null && response['exams'] != null) {
+        final List<dynamic> rawList = response['exams'];
+        final List<Map<String, dynamic>> list = rawList.map((e) {
+          final classData = e['class'] ?? e['Class'];
+          final termData = e['term'] ?? e['Term'];
+          final ayData = e['academicYear'] ?? e['AcademicYear'];
 
-        return {
-          'id': e['id'],
-          'name': e['name'] as String? ?? 'Exam',
-          'class': className,
-          'term': termName,
-          'start_date': e['startDate'] != null
-              ? e['startDate'].toString().split('T')[0]
-              : '15/09/2024',
-          'status': e['status']?.toString() ?? 'Active',
-          'examType': e['examType']?.toString() ?? 'MID_TERM',
-          'academic_year': ayName,
-        };
-      }).toList();
+          final className =
+              classData != null ? classData['name']?.toString() : 'All Classes';
+          final termName =
+              termData != null ? termData['name']?.toString() : '-';
+          final ayName = ayData != null
+              ? ayData['name']?.toString()
+              : 'All Years';
 
-      if (mounted) {
-        setState(() {
-          _exams = list;
-          _isLoading = false;
-        });
+          return {
+            'id': e['id'],
+            'name': e['name'] as String? ?? 'Exam',
+            'class': className,
+            'term': termName,
+            'academicYear': ayName,
+            'type': e['examType']?.toString() ?? 'REGULAR',
+            'status': e['status']?.toString() ?? 'DRAFT',
+            'startDate': e['startDate']?.toString() ?? '',
+            'endDate': e['endDate']?.toString() ?? '',
+            'weightage': (e['weightage'] as num?)?.toDouble() ?? 0.0,
+            'description': e['description']?.toString() ?? '',
+            'termId': e['termId']?.toString() ?? '',
+            'classId': e['classId']?.toString() ?? '',
+            'academicYearId': e['academicYearId']?.toString() ?? '',
+          };
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _exams = list;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
 
       // Load supporting chart averages from results
       _loadSubjectAverages();
       _loadScoreTrend();
     } catch (e) {
-      dev.log('Error loading exams from Supabase: $e');
+      dev.log('Error loading exams from REST API: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -178,12 +167,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 
   Future<void> _loadSubjectAverages() async {
     try {
-      final response = await Supabase.instance.client
-          .from('ExamMark')
-          .select('subjectName, obtainedMarks, totalMarks');
-
-      final List<dynamic> list = response;
-      if (list.isNotEmpty) {
+      final response = await ApiService.instance.get('dashboard/exam-stats');
+      if (response != null && response['subjectAverages'] != null) {
+        final List<dynamic> list = response['subjectAverages'];
         double mathSum = 0;
         int mathCount = 0;
         double sciSum = 0;
@@ -192,19 +178,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         int engCount = 0;
 
         for (var mark in list) {
-          final sub = mark['subjectName']?.toString().toLowerCase() ?? '';
-          final obt = (mark['obtainedMarks'] as num?)?.toDouble() ?? 0.0;
-          final tot = (mark['totalMarks'] as num?)?.toDouble() ?? 100.0;
-          final score = tot > 0 ? (obt / tot) * 100.0 : 0.0;
+          final sub = mark['subject']?.toString().toLowerCase() ?? '';
+          final avg = double.tryParse(mark['average']?.toString() ?? '') ?? 0.0;
 
           if (sub.contains('math')) {
-            mathSum += score;
+            mathSum += avg;
             mathCount++;
           } else if (sub.contains('science') || sub.contains('sci')) {
-            sciSum += score;
+            sciSum += avg;
             sciCount++;
           } else if (sub.contains('english') || sub.contains('eng')) {
-            engSum += score;
+            engSum += avg;
             engCount++;
           }
         }
@@ -218,52 +202,19 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         }
       }
     } catch (e) {
-      dev.log('Error loading ExamMark averages: $e');
+      dev.log('Error loading subject averages via REST API: $e');
     }
   }
 
   Future<void> _loadScoreTrend() async {
     try {
-      final response = await Supabase.instance.client
-          .from('ExamResult')
-          .select('percentage, examId, Exam(name, startDate)')
-          .order('createdAt', ascending: true);
+      final response = await ApiService.instance.get('dashboard/exam-stats');
+      if (response != null && response['recentPerformance'] != null) {
+        final List<dynamic> list = response['recentPerformance'];
+        final List<double> pts = list.map((res) {
+          return (res['percentage'] as num?)?.toDouble() ?? 0.0;
+        }).toList();
 
-      final List<dynamic> list = response;
-      if (list.isNotEmpty) {
-        final Map<String, List<double>> examGrps = {};
-        final Map<String, DateTime> examDates = {};
-
-        for (var res in list) {
-          final examId = res['examId']?.toString() ?? '';
-          final pct = (res['percentage'] as num?)?.toDouble() ?? 0.0;
-          final exam = res['Exam'] as Map<String, dynamic>?;
-          final dateStr = exam?['startDate']?.toString() ?? '';
-
-          if (examId.isNotEmpty) {
-            examGrps.putIfAbsent(examId, () => []).add(pct);
-            if (dateStr.isNotEmpty) {
-              try {
-                examDates[examId] = DateTime.parse(dateStr);
-              } catch (_) {}
-            }
-          }
-        }
-
-        final List<MapEntry<String, double>> examAvgs = [];
-        for (var entry in examGrps.entries) {
-          final vals = entry.value;
-          final avg = vals.reduce((a, b) => a + b) / vals.length;
-          examAvgs.add(MapEntry(entry.key, avg));
-        }
-
-        examAvgs.sort((a, b) {
-          final da = examDates[a.key] ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = examDates[b.key] ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return da.compareTo(db);
-        });
-
-        final List<double> pts = examAvgs.map((e) => e.value).toList();
         if (pts.length >= 3 && mounted) {
           setState(() {
             _trendPoints = pts.sublist(pts.length - 3);
@@ -275,11 +226,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         }
       }
     } catch (e) {
-      dev.log('Error loading trend points from ExamResult: $e');
+      dev.log('Error loading trend points via REST API: $e');
     }
   }
 
-  Future<void> _createExamInSupabase(
+  Future<void> _createNewExam(
       String name,
       String examType,
       String classId,
@@ -288,11 +239,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       DateTime endDate,
       String description) async {
     try {
-      final nowStr = DateTime.now().toIso8601String();
       final examData = {
         'name': name,
-        'examType': examType,
-        'status': 'PUBLISHED',
+        'examType': examType == 'REGULAR' ? 'MONTHLY_TEST' : examType,
         'classId': classId,
         'academicYearId':
             'c573054e-43bf-4098-bb57-8b548378fb44', // Active year ID
@@ -300,14 +249,12 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
         'description': description.isNotEmpty ? description : null,
-        'createdAt': nowStr,
-        'updatedAt': nowStr,
       };
 
-      await Supabase.instance.client.from('Exam').insert(examData);
+      await ApiService.instance.post('exams', body: examData);
       _loadExams();
     } catch (e) {
-      dev.log('Error creating exam in Supabase: $e');
+      dev.log('Error creating exam via REST API: $e');
     }
   }
 
@@ -468,7 +415,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 
                 final endDate = startDate.add(const Duration(days: 7));
 
-                await _createExamInSupabase(
+                await _createNewExam(
                   nameCtrl.text.trim(),
                   selectedExamType,
                   selectedClassId!,

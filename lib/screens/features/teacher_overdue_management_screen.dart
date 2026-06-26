@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common_widgets.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../services/api_service.dart';
+import '../../services/socket_service.dart';
 
 class TeacherOverdueManagementScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -21,7 +22,6 @@ class _TeacherOverdueManagementScreenState
     extends State<TeacherOverdueManagementScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _overdueIssues = [];
-  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
@@ -32,67 +32,33 @@ class _TeacherOverdueManagementScreenState
 
   void _connectRealtime() {
     try {
-      final client = Supabase.instance.client;
-      _realtimeChannel = client
-          .channel('public:teacher_overdue_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'LibraryIssue',
-            callback: (payload) {
-              if (mounted) _loadOverdueData();
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Book',
-            callback: (payload) {
-              if (mounted) _loadOverdueData();
-            },
-          );
-      _realtimeChannel!.subscribe();
+      SocketService().on('LIBRARY_BOOK_RETURNED', _handleLibraryUpdate);
+      SocketService().on('LIBRARY_BOOK_ISSUED', _handleLibraryUpdate);
     } catch (e) {
       debugPrint('Error subscribing to overdue management realtime: $e');
     }
   }
 
+  void _handleLibraryUpdate(dynamic data) {
+    if (mounted) _loadOverdueData();
+  }
+
   @override
   void dispose() {
-    if (_realtimeChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_realtimeChannel!);
-      } catch (_) {}
-    }
+    try {
+      SocketService().off('LIBRARY_BOOK_RETURNED', _handleLibraryUpdate);
+      SocketService().off('LIBRARY_BOOK_ISSUED', _handleLibraryUpdate);
+    } catch (_) {}
     super.dispose();
   }
 
   Future<void> _loadOverdueData() async {
     setState(() => _isLoading = true);
     try {
-      final res = await Supabase.instance.client
-          .from('LibraryIssue')
-          .select('*, book:Book(*), student:Student(*)')
-          .isFilter('returnDate', null);
-
-      final List<Map<String, dynamic>> allActiveIssues =
-          List<Map<String, dynamic>>.from(res);
-
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-
-      _overdueIssues = allActiveIssues.where((issue) {
-        final dueDateStr = issue['dueDate'] ?? '';
-        if (dueDateStr.isEmpty) return false;
-        try {
-          final dueDate = DateTime.parse(dueDateStr);
-          final dueNormalized =
-              DateTime(dueDate.year, dueDate.month, dueDate.day);
-          return dueNormalized.isBefore(today);
-        } catch (_) {
-          return false;
-        }
-      }).toList();
+      final res = await ApiService.instance.get('library/overdue');
+      if (res['success'] == true && res['overdueBooks'] != null) {
+        _overdueIssues = List<Map<String, dynamic>>.from(res['overdueBooks']);
+      }
     } catch (e) {
       debugPrint('Error fetching overdue books: $e');
       if (mounted) {
@@ -135,7 +101,13 @@ class _TeacherOverdueManagementScreenState
     final book = issue['book'] as Map<String, dynamic>? ?? {};
     final student = issue['student'] as Map<String, dynamic>? ?? {};
     final title = book['title'] ?? 'Unknown Book';
-    final studentName = student['name'] ?? 'Unknown Student';
+    
+    final user = (student['user'] ?? student['User']) as Map? ?? {};
+    final firstName = user['firstName'] ?? user['first_name'] ?? '';
+    final lastName = user['lastName'] ?? user['last_name'] ?? '';
+    final studentName = '$firstName $lastName'.trim().isNotEmpty 
+        ? '$firstName $lastName'.trim() 
+        : (student['name'] ?? 'Unknown Student');
 
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -205,107 +177,20 @@ class _TeacherOverdueManagementScreenState
     setState(() => _isLoading = true);
 
     try {
-      final now = DateTime.now();
-      final nowStr = now.toIso8601String();
-      final studentId = issue['studentId'] ?? '';
+      final returnRes = await ApiService.instance.post('library/return', body: {
+        'issueId': issue['id'],
+        'conditionOnReturn': 'GOOD',
+        'remarks': 'Returned and fine paid via teacher portal.',
+      });
 
-      // 1. Resolve or create StudentFeeLedger
-      String ledgerId = '';
-      String academicYearId = '';
-      String feeStructureId = '';
-
-      final ledgerRes = await Supabase.instance.client
-          .from('StudentFeeLedger')
-          .select('*')
-          .eq('studentId', studentId)
-          .limit(1);
-
-      if (ledgerRes.isNotEmpty) {
-        ledgerId = ledgerRes[0]['id'] ?? '';
-        academicYearId = ledgerRes[0]['academicYearId'] ?? '';
-        feeStructureId = ledgerRes[0]['feeStructureId'] ?? '';
-      } else {
-        final ayRes = await Supabase.instance.client
-            .from('AcademicYear')
-            .select('id')
-            .limit(1);
-        final fsRes = await Supabase.instance.client
-            .from('FeeStructure')
-            .select('id')
-            .limit(1);
-        if (ayRes.isNotEmpty) academicYearId = ayRes[0]['id'] ?? '';
-        if (fsRes.isNotEmpty) feeStructureId = fsRes[0]['id'] ?? '';
-
-        if (academicYearId.isNotEmpty && feeStructureId.isNotEmpty) {
-          final newLedger = await Supabase.instance.client
-              .from('StudentFeeLedger')
-              .insert({
-                'studentId': studentId,
-                'academicYearId': academicYearId,
-                'feeStructureId': feeStructureId,
-                'totalPayable': 0.0,
-                'totalPaid': 0.0,
-                'totalPending': 0.0,
-                'totalDiscount': 0.0,
-                'status': 'PENDING',
-                'createdAt': nowStr,
-                'updatedAt': nowStr,
-              })
-              .select('id')
-              .single();
-          ledgerId = newLedger['id'] ?? '';
+      if (returnRes['success'] == true) {
+        if (mounted) {
+          showToast(context, 'Fine paid & book returned successfully! 📚');
         }
+        await _loadOverdueData();
+      } else {
+        throw Exception(returnRes['message'] ?? 'Failed to return book');
       }
-
-      // 2. Insert FeePayment for fine
-      if (ledgerId.isNotEmpty &&
-          academicYearId.isNotEmpty &&
-          feeStructureId.isNotEmpty) {
-        final receiptNo = 'RCPT-FINE-${now.millisecondsSinceEpoch}';
-        final txnId = 'TXN-FINE-${now.millisecondsSinceEpoch}';
-        await Supabase.instance.client.from('FeePayment').insert({
-          'receiptNumber': receiptNo,
-          'studentId': studentId,
-          'feeStructureId': feeStructureId,
-          'ledgerId': ledgerId,
-          'academicYearId': academicYearId,
-          'amount': fineAmount,
-          'discount': 0.0,
-          'penalty': 0.0,
-          'totalAmount': fineAmount,
-          'paymentType': 'RECEIPT',
-          'paymentDate': nowStr,
-          'paymentMode': 'ONLINE',
-          'status': 'COMPLETED',
-          'transactionId': txnId,
-          'createdAt': nowStr,
-          'updatedAt': nowStr,
-        });
-      }
-
-      // 3. Update LibraryIssue
-      await Supabase.instance.client.from('LibraryIssue').update({
-        'returnDate': nowStr,
-        'status': 'RETURNED',
-        'fineAmount': fineAmount,
-        'finePaid': true,
-        'updatedAt': nowStr,
-      }).eq('id', issue['id']);
-
-      // 4. Increment availableCopies
-      final currentAvailable = book['availableCopies'] as int? ?? 0;
-      final currentTotal = book['totalCopies'] as int? ?? 1;
-      final newAvailable = (currentAvailable + 1).clamp(0, currentTotal);
-      await Supabase.instance.client.from('Book').update({
-        'availableCopies': newAvailable,
-        'status': 'AVAILABLE',
-        'updatedAt': nowStr,
-      }).eq('id', book['id']);
-
-      if (mounted) {
-        showToast(context, 'Fine paid & book returned successfully! 📚');
-      }
-      await _loadOverdueData();
     } catch (e) {
       debugPrint('Error returning book: $e');
       if (mounted) {

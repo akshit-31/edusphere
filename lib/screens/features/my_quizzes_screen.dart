@@ -1,12 +1,12 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../theme/colors.dart';
-import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'create_quiz_screen.dart';
-import 'package:edusphere/theme/typography.dart';
+import '../../services/quiz_service.dart';
+import '../../models/quiz_model.dart';
+import '../../theme/colors.dart';
+import '../../theme/typography.dart';
+import '../../widgets/common_widgets.dart';
 
 class MyQuizzesScreen extends StatefulWidget {
   const MyQuizzesScreen({super.key});
@@ -15,7 +15,7 @@ class MyQuizzesScreen extends StatefulWidget {
 }
 
 class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
-  List<Map<String, dynamic>> _quizzes = [];
+  List<QuizModel> _quizzes = [];
   bool _loading = true;
 
   @override
@@ -25,13 +25,8 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList('published_quizzes') ?? [];
-    final list = raw
-        .map((s) => Map<String, dynamic>.from(jsonDecode(s) as Map))
-        .toList()
-        .reversed
-        .toList();
+    setState(() => _loading = true);
+    final list = await QuizService.instance.fetchQuizzes();
     if (mounted) {
       setState(() {
         _quizzes = list;
@@ -41,28 +36,13 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
   }
 
   Future<void> _delete(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList('published_quizzes') ?? [];
-    final updated = raw.where((s) {
-      final m = Map<String, dynamic>.from(jsonDecode(s) as Map);
-      return (m['id'] as String?) != id;
-    }).toList();
-    await prefs.setStringList('published_quizzes', updated);
-    // Also remove any student attempts for this quiz
-    final attRaw = prefs.getString('quiz_attempts') ?? '{}';
-    final attMap = Map<String, dynamic>.from(jsonDecode(attRaw) as Map);
-    attMap.remove(id);
-    await prefs.setString('quiz_attempts', jsonEncode(attMap));
-
-    // Also remove submissions of this quiz from the global submissions list
-    final subRaw = prefs.getStringList('quiz_submissions') ?? [];
-    final subUpdated = subRaw.where((s) {
-      final m = Map<String, dynamic>.from(jsonDecode(s) as Map);
-      return (m['quizId'] as String?) != id;
-    }).toList();
-    await prefs.setStringList('quiz_submissions', subUpdated);
-
-    _load();
+    final success = await QuizService.instance.deleteQuiz(id);
+    if (success) {
+      showToast(context, 'Quiz deleted successfully');
+      _load();
+    } else {
+      showToast(context, 'Failed to delete quiz');
+    }
   }
 
   @override
@@ -125,23 +105,16 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
         ),
       );
 
-  Widget _buildCard(BuildContext context, Map<String, dynamic> quiz) {
-    final id = quiz['id'] as String? ?? '';
-    final title = quiz['title'] as String? ?? 'Quiz';
-    final subject = quiz['subject'] as String? ?? 'General';
-    final duration = quiz['duration_minutes'] as int? ?? 20;
-    final qCount = (quiz['questions'] as List?)?.length ?? 0;
-    final cls = quiz['target_class'] as String? ?? '';
-    final sections = (quiz['target_sections'] as List?)?.join(', ') ?? '';
-    final createdAt = quiz['created_at'] as String? ?? '';
-    String dateStr = '';
-    if (createdAt.isNotEmpty) {
-      try {
-        final dt = DateTime.parse(createdAt).toLocal();
-        dateStr =
-            '${dt.day}/${dt.month}/${dt.year}  ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-      } catch (_) {}
-    }
+  Widget _buildCard(BuildContext context, QuizModel quiz) {
+    final id = quiz.id;
+    final title = quiz.title;
+    final subject = quiz.subject;
+    final duration = quiz.durationMinutes;
+    final qCount = quiz.questions.length;
+    final cls = quiz.targetClass ?? '';
+    final sections = quiz.targetSections.join(', ');
+    
+    final formattedDate = '${quiz.createdAt.day}/${quiz.createdAt.month}/${quiz.createdAt.year}';
 
     return Container(
       margin: EdgeInsets.only(bottom: 14.h),
@@ -170,7 +143,7 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title,
                   style:
-                      AppTypography.small.copyWith(color: AppColors.textDark)),
+                      AppTypography.small.copyWith(color: AppColors.textDark, fontWeight: FontWeight.bold)),
               Text(subject,
                   style: AppTypography.caption
                       .copyWith(color: AppColors.textMedium)),
@@ -197,16 +170,14 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
               AppColors.teacherPrimary),
           _chip('⏱ $duration min', const Color(0xFFFFFBEB), AppColors.warning),
           if (cls.isNotEmpty)
-            _chip('🏫 Class $cls - $sections', const Color(0xFFECFDF5),
+            _chip('🏫 Class $cls $sections', const Color(0xFFECFDF5),
                 const Color(0xFF10B981)),
         ]),
 
-        if (dateStr.isNotEmpty) ...[
-          SizedBox(height: 8.h),
-          Text('Published: $dateStr',
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textLight)),
-        ],
+        SizedBox(height: 8.h),
+        Text('Published: $formattedDate',
+            style:
+                AppTypography.caption.copyWith(color: AppColors.textLight)),
 
         SizedBox(height: 12.h),
         // Active badge
@@ -261,7 +232,6 @@ class _MyQuizzesScreenState extends State<MyQuizzesScreen> {
             onPressed: () {
               Navigator.pop(context);
               _delete(id);
-              showToast(context, 'Quiz deleted');
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

@@ -74,13 +74,13 @@ class LibraryRepository {
     }
 
     async findStudentByAdmissionNumber(admissionNumber) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { admissionNumber }
         });
     }
 
     async findStudentById(id) {
-        return prisma.student.findUnique({
+        return prisma.studentProfile.findUnique({
             where: { id }
         });
     }

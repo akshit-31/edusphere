@@ -63,6 +63,12 @@ const getAllocations = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, allocations, meta });
 });
 
+const deleteAllocation = asyncHandler(async (req, res) => {
+    await TransportService.deleteAllocation(req.params.id);
+    emitEvent('TRANSPORT_UPDATE', { type: 'ALLOCATION_DELETED', id: req.params.id }, 'ADMIN');
+    res.status(200).json({ success: true, message: 'Allocation deleted successfully' });
+});
+
 const getGlobalLogs = asyncHandler(async (req, res) => {
     const logs = await TransportService.getGlobalLogs(req.query);
     res.status(200).json({ success: true, logs });
@@ -178,6 +184,7 @@ module.exports = {
     suggestNearestStops,
     allocateStudent,
     getAllocations,
+    deleteAllocation,
     getGlobalLogs,
     startTrip,
     stopTrip,

@@ -7,7 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
@@ -50,85 +50,38 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   List<GroupedExam> _exams = [];
 
-  RealtimeChannel? _resultsChannel;
-  Timer? _resultsPollTimer;
-
   @override
   void initState() {
     super.initState();
     _loadResultsData();
-    _connectRealTime();
+    _connectSocket();
   }
 
   @override
   void dispose() {
-    _resultsPollTimer?.cancel();
-    if (_resultsChannel != null) {
-      try {
-        Supabase.instance.client.removeChannel(_resultsChannel!);
-      } catch (_) {}
-    }
+    _disconnectSocket();
     super.dispose();
   }
 
-  void _connectRealTime() {
+  void _connectSocket() {
     try {
-      final client = Supabase.instance.client;
-      if (_resultsChannel != null) {
-        client.removeChannel(_resultsChannel!);
-      }
-
-      dev.log('📡 Subscribing to Supabase Realtime for Results Screen...',
-          name: 'ResultsScreen');
-      _resultsChannel = client
-          .channel('public:results_screen_sync')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'ExamResult',
-            callback: (payload) {
-              dev.log('🔥 Real-time ExamResult event: $payload',
-                  name: 'ResultsScreen');
-              if (mounted) _loadResultsData(showLoading: false);
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'ReportCard',
-            callback: (payload) {
-              dev.log('🔥 Real-time ReportCard event: $payload',
-                  name: 'ResultsScreen');
-              if (mounted) _loadResultsData(showLoading: false);
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'Exam',
-            callback: (payload) {
-              dev.log('🔥 Real-time Exam event: $payload',
-                  name: 'ResultsScreen');
-              if (mounted) _loadResultsData(showLoading: false);
-            },
-          );
-
-      _resultsChannel!.subscribe((status, [error]) {
-        dev.log('📡 Results Realtime channel status: $status',
-            name: 'ResultsScreen');
-        if (error != null) {
-          dev.log('❌ Results Realtime error: $error', name: 'ResultsScreen');
-        }
-      });
+      SocketService().on('EXAM_RESULT_PUBLISHED', _onExamPublished);
     } catch (e) {
-      dev.log('⚠️ Error connecting Realtime for Results: $e',
-          name: 'ResultsScreen');
+      dev.log('⚠️ Error connecting Socket.IO for Results: $e', name: 'ResultsScreen');
     }
+  }
 
-    // Polling fallback every 30 seconds
-    _resultsPollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (mounted) _loadResultsData(showLoading: false);
-    });
+  void _disconnectSocket() {
+    try {
+      SocketService().off('EXAM_RESULT_PUBLISHED', _onExamPublished);
+    } catch (_) {}
+  }
+
+  void _onExamPublished(dynamic data) {
+    dev.log('🔥 Socket.IO EXAM_RESULT_PUBLISHED event received: $data', name: 'ResultsScreen');
+    if (mounted) {
+      _loadResultsData(showLoading: false);
+    }
   }
 
   Future<void> _loadResultsData({bool showLoading = true}) async {
@@ -181,116 +134,55 @@ class _ResultsScreenState extends State<ResultsScreen> {
         return;
       }
 
-      // ── 2. Fetch ExamResults from Supabase ────────────────────────────────
-      final client = Supabase.instance.client;
-      final Map<String, GroupedExam> groupedExamsMap = {};
+      // ── 2. Fetch ExamResults from REST API ────────────────────────────────
+      final response = await ApiService.instance.get('exams/students/$_studentId/results');
+      final List<GroupedExam> parsedExams = [];
 
-      List<dynamic> examResults = [];
-      try {
-        examResults = await client
-            .from('ExamResult')
-            .select(
-                '*, Exam(id, name, term, academicYear), Subject(id, name, code)')
-            .eq('studentId', _studentId)
-            .order('createdAt', ascending: false);
-        dev.log('📊 Fetched ${examResults.length} exam results from Supabase',
-            name: 'ResultsScreen');
-      } catch (e) {
-        dev.log('⚠️ ExamResult query failed: $e', name: 'ResultsScreen');
-      }
+      if (response != null && response['success'] == true) {
+        final List<dynamic> resultsList = response['results'] ?? [];
 
-      if (examResults.isNotEmpty) {
-        for (var r in examResults) {
+        for (var r in resultsList) {
           final rMap = r as Map<String, dynamic>;
-          final exam = rMap['Exam'] as Map? ?? {};
+          final exam = rMap['exam'] as Map? ?? {};
           final examId = exam['id'] as String? ?? 'unknown';
 
-          if (!groupedExamsMap.containsKey(examId)) {
-            groupedExamsMap[examId] = GroupedExam(
-              id: examId,
-              name: exam['name'] as String? ?? 'Exam',
-              term: exam['term'] as String? ?? 'MID_TERM',
-              academicYear: exam['academicYear'] as String? ?? '2024-25',
-              status: 'PUBLISHED',
-              subjects: [],
-            );
+          final academicYearObj = exam['academicYear'] as Map? ?? {};
+          final academicYearName = academicYearObj['name'] as String? ?? '2024-25';
+
+          final termObj = exam['term'] as Map? ?? {};
+          final termName = termObj['name'] as String? ?? 'Term';
+
+          final marksList = rMap['marks'] as List? ?? [];
+          final List<Map<String, dynamic>> subjectsList = [];
+
+          for (var m in marksList) {
+            final mMap = m as Map<String, dynamic>;
+            final maxMarks = (mMap['totalMarks'] as num? ?? 100).toInt();
+            final marksObtained = (mMap['obtainedMarks'] ?? 0) as num;
+
+            subjectsList.add({
+              'name': mMap['subjectName'] as String? ?? 'Subject',
+              'marks': marksObtained.toInt(),
+              'total': maxMarks,
+              'grade': mMap['grade'] as String? ?? _computeGrade((marksObtained / maxMarks * 100).round()),
+            });
           }
 
-          final subject = rMap['Subject'] as Map? ?? {};
-          final maxMarks = (rMap['maxMarks'] as num? ?? 100).toInt();
-          final marksObtained =
-              (rMap['marksObtained'] ?? rMap['marks'] ?? 0) as num;
-
-          groupedExamsMap[examId]!.subjects.add({
-            'name': subject['name'] as String? ?? 'Subject',
-            'marks': marksObtained.toInt(),
-            'total': maxMarks,
-            'grade': _computeGrade((marksObtained / maxMarks * 100).round()),
-          });
+          parsedExams.add(GroupedExam(
+            id: examId,
+            name: exam['name'] as String? ?? 'Exam',
+            term: termName,
+            academicYear: academicYearName,
+            status: rMap['isPublished'] == true ? 'PUBLISHED' : 'DRAFT',
+            subjects: subjectsList,
+          ));
         }
       }
-
-      // If ExamResult is empty or to complement, try ReportCard
-      if (groupedExamsMap.isEmpty) {
-        try {
-          final reportCards = await client
-              .from('ReportCard')
-              .select(
-                  '*, Exam(id, name, term, academicYear), ReportCardGrade(*, Subject(id, name, code))')
-              .eq('studentId', _studentId)
-              .order('createdAt', ascending: false);
-          dev.log('📊 Fetched ${reportCards.length} report cards from Supabase',
-              name: 'ResultsScreen');
-
-          if (reportCards.isNotEmpty) {
-            for (var card in reportCards) {
-              final exam = card['Exam'] as Map? ?? {};
-              final examId = exam['id'] as String? ?? 'unknown';
-
-              if (!groupedExamsMap.containsKey(examId)) {
-                groupedExamsMap[examId] = GroupedExam(
-                  id: examId,
-                  name: exam['name'] as String? ?? 'Exam',
-                  term: exam['term'] as String? ?? 'MID_TERM',
-                  academicYear: exam['academicYear'] as String? ?? '2024-25',
-                  status: 'PUBLISHED',
-                  subjects: [],
-                );
-              }
-
-              final grades = card['ReportCardGrade'] as List? ?? [];
-              for (var g in grades) {
-                final subject = g['Subject'] as Map? ?? {};
-                final maxMarks = (g['maxMarks'] as num? ?? 100).toInt();
-                final marksObtained =
-                    (g['marksObtained'] ?? g['marks'] ?? 0) as num;
-
-                // Avoid duplicates if both tables have data
-                bool exists = groupedExamsMap[examId]!.subjects.any((s) =>
-                    s['name'] == (subject['name'] as String? ?? 'Subject'));
-                if (!exists) {
-                  groupedExamsMap[examId]!.subjects.add({
-                    'name': subject['name'] as String? ?? 'Subject',
-                    'marks': marksObtained.toInt(),
-                    'total': maxMarks,
-                    'grade':
-                        _computeGrade((marksObtained / maxMarks * 100).round()),
-                  });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          dev.log('⚠️ ReportCard query failed: $e', name: 'ResultsScreen');
-        }
-      }
-
-
 
       // Convert map to list
       if (mounted) {
         setState(() {
-          _exams = groupedExamsMap.values.toList();
+          _exams = parsedExams;
           // Filter out exams with 0 subjects
           _exams.removeWhere((e) => e.subjects.isEmpty);
           _isLoading = false;

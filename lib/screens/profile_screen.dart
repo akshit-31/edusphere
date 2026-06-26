@@ -5,9 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+
+
+
+
+import '../services/cache_service.dart';
+import '../services/student_service.dart';
 
 import '../theme/colors.dart';
 import '../widgets/common_widgets.dart';
@@ -123,7 +129,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _address = 'No location registered';
   bool _isProfileLoading = false;
   bool _hasProfileError = false;
+  // ignore: unused_field
+  // ignore: unused_field
   String? _studentUserId;
+  String? _currentUserId;
 
   // Teacher specific fields
   String _employeeId = 'ID_PENDING';
@@ -187,19 +196,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _fatherName = 'Rajesh Sharma';
   String _motherName = 'Priya Sharma';
   String _guardianPhone = '+91 98765 43210';
-  final List<RealtimeChannel> _realtimeChannels = [];
-
+  
   // Tab details database variables
   bool _isLoadingTabDetails = false;
   List<Map<String, dynamic>> _attendanceRecords = [];
   Map<String, dynamic>? _feeLedger;
+  // ignore: unused_field
+  // ignore: unused_field
   List<Map<String, dynamic>> _feePayments = [];
+  // ignore: unused_field
+  // ignore: unused_field
   Map<String, dynamic>? _transportAllocation;
   Map<int, List<Map<String, dynamic>>> _timetableSlots = {};
 
   @override
+  @override
   void initState() {
     super.initState();
+    _currentUserId = CacheService.instance.prefs.getString('user_id');
     if (widget.role == 'teacher') {
       _loadTeacherDataFromSupabase();
       _loadSessionData();
@@ -230,13 +244,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   @override
+  @override
   void dispose() {
     _profilePollTimer?.cancel();
-    for (var ch in _realtimeChannels) {
-      try {
-        Supabase.instance.client.removeChannel(ch);
-      } catch (_) {}
-    }
     _nameCtrl.dispose();
     _designCtrl.dispose();
     _empIdCtrl.dispose();
@@ -254,7 +264,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _isLoadingTabDetails = true;
     });
-    final client = Supabase.instance.client;
 
     // 1. Fetch Attendance Records
     try {
@@ -265,17 +274,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _attendanceRecords =
               List<Map<String, dynamic>>.from(attRes['attendance'] ?? []);
         });
-      } else {
-        final List<dynamic> attResDb = await client
-            .from('AttendanceRecord')
-            .select('date, status, remarks')
-            .eq('studentId', studentId)
-            .order('date', ascending: false);
-        if (mounted) {
-          setState(() {
-            _attendanceRecords = List<Map<String, dynamic>>.from(attResDb);
-          });
-        }
       }
     } catch (e) {
       debugPrint('Error fetching attendance details: $e');
@@ -295,65 +293,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ledgers.isNotEmpty ? Map<String, dynamic>.from(ledgers[0]) : null;
           _feePayments = List<Map<String, dynamic>>.from(recentPayments);
         });
-      } else {
-        final feeLedgerRes = await client
-            .from('StudentFeeLedger')
-            .select(
-                'id, totalPayable, totalPaid, totalPending, status, feeStructure:FeeStructure(name)')
-            .eq('studentId', studentId)
-            .maybeSingle();
-
-        if (feeLedgerRes != null && mounted) {
-          setState(() {
-            _feeLedger = Map<String, dynamic>.from(feeLedgerRes);
-          });
-
-          final List<dynamic> paymentsRes = await client
-              .from('FeePayment')
-              .select('receiptNumber, amount, paymentDate, paymentMode, status')
-              .eq('studentId', studentId)
-              .order('paymentDate', ascending: false);
-          if (mounted) {
-            setState(() {
-              _feePayments = List<Map<String, dynamic>>.from(paymentsRes);
-            });
-          }
-        }
       }
     } catch (e) {
       debugPrint('Error fetching fee details: $e');
     }
 
-    // 3. Fetch Transport Allocation
-    try {
-      final client = Supabase.instance.client;
-      final response = await client
-          .from('TransportAllocation')
-          .select('*, TransportRoute(*), RouteStop(*)')
-          .eq('studentId', studentId)
-          .eq('status', 'ACTIVE')
-          .maybeSingle();
-
-      if (response != null && mounted) {
-        setState(() {
-          _transportAllocation = {
-            'status': response['status'],
-            'stop': response['RouteStop'],
-            'route': response['TransportRoute'],
-          };
-        });
-      } else {
-        if (mounted) {
-          setState(() {
-            _transportAllocation = null;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching transport details: $e');
-    }
-
-    // 4. Fetch Timetable slots if sectionId is present
+    // 3. Fetch Timetable slots if sectionId is present
     if (sectionId != null) {
       try {
         final timetableRes =
@@ -389,32 +334,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             _timetableSlots = grouped;
           });
-        } else {
-          final List<dynamic> slotsRes = await client
-              .from('TimetableSlot')
-              .select(
-                  'dayOfWeek, startTime, endTime, period, durationMinutes, subject:Subject(name, code), teacher:Teacher(User(firstName, lastName)), room:Room(name)')
-              .eq('sectionId', sectionId)
-              .order('period', ascending: true);
-
-          final Map<int, List<Map<String, dynamic>>> grouped = {};
-          for (var s in slotsRes) {
-            final slot = Map<String, dynamic>.from(s);
-            final day = slot['dayOfWeek'] as int? ?? 1;
-            grouped.putIfAbsent(day, () => []).add(slot);
-          }
-          if (mounted) {
-            setState(() {
-              _timetableSlots = grouped;
-            });
-          }
         }
       } catch (e) {
         debugPrint('Error fetching timetable details: $e');
       }
     }
 
-    // 5. Fetch Documents
+    // 4. Fetch Documents
     try {
       final docRes =
           await ApiService.instance.get('students/$studentId/documents');
@@ -515,280 +441,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      final client = Supabase.instance.client;
-      Map<String, dynamic>? studentRes;
-
       debugPrint(
-          '🔍 DB/API Student Profile request initiated. Student ID: ${widget.studentId}');
+          '🔍 API Student Profile request initiated. Student ID: ${widget.studentId}');
 
-      if (widget.studentId != null) {
-        final res = await client
-            .from('Student')
-            .select('*, User(*), Class(*, AcademicYear(*)), Section(*), StudentDocument(*), StudentParent(*, Parent(*)), AcademicYear(*)')
-
-            .eq('id', widget.studentId!)
-            .maybeSingle();
-        if (res != null) {
-          studentRes = Map<String, dynamic>.from(res);
-        }
-      } else {
-        final currentUser = client.auth.currentUser;
-        if (currentUser != null) {
-          final res = await client
-              .from('Student')
-              .select('*, User(*), Class(*, AcademicYear(*)), Section(*), StudentDocument(*), StudentParent(*, Parent(*)), AcademicYear(*)')
-
-              .eq('userId', currentUser.id)
-              .maybeSingle();
-          if (res != null) {
-            studentRes = Map<String, dynamic>.from(res);
-          }
-        }
-      }
-
-      if (studentRes != null) {
-        final studentData = studentRes;
-        debugPrint(
-            '✅ DB Student data loaded successfully. ID: ${studentData['id']}');
-
-        final userMap = studentData['User'] as Map<String, dynamic>? ?? {};
-        final classMap = studentData['Class'] as Map<String, dynamic>? ?? {};
-        final sectionMap =
-            studentData['Section'] as Map<String, dynamic>? ?? {};
-
-        final String firstName = userMap['firstName'] as String? ?? '';
-        final String lastName = userMap['lastName'] as String? ?? '';
-
-        _studentUserId =
-            studentData['userId']?.toString() ?? userMap['id']?.toString();
-
-        List<Map<String, String>> docs = [];
-        final studentDocList =
-            studentData['StudentDocument'] as List<dynamic>? ?? [];
-        if (studentDocList.isNotEmpty) {
-          docs = studentDocList.map((d) {
-            final dMap = d as Map<String, dynamic>;
-            final String docName =
-                dMap['documentName'] as String? ?? 'Document.pdf';
-            final String? uploadDateStr = dMap['uploadedAt'] as String?;
-            String dateStr = '—';
-            if (uploadDateStr != null) {
-              try {
-                final parsed = DateTime.parse(uploadDateStr);
-                dateStr = '${parsed.month}/${parsed.day}/${parsed.year}';
-              } catch (_) {}
-            }
-            return {
-              'name': docName,
-              'date': dateStr,
-              'url': dMap['fileUrl']?.toString() ?? '',
-              'id': dMap['id']?.toString() ?? '',
-            };
-          }).toList();
-        }
-
-        // Merge local documents that might have failed to sync to the server
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final localDocsJson = prefs.getString('student_uploaded_documents');
-          if (localDocsJson != null) {
-            final List<dynamic> localDocsList = json.decode(localDocsJson);
-            final currentIds = docs.map((e) => e['id']).toSet();
-            
-            for (var ld in localDocsList.reversed) {
-              final Map<String, String> localDocMap = Map<String, String>.from(ld);
-              if (localDocMap['id'] != null && !currentIds.contains(localDocMap['id'])) {
-                docs.insert(0, localDocMap); // Insert at start to show latest uploads
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('Error merging local docs: $e');
-        }
-
-        setState(() {
-          _studentName = '$firstName $lastName'.trim();
-          if (_studentName.isEmpty) _studentName = widget.studentName ?? '—';
-
-          _studentEmail =
-              userMap['email'] as String? ?? widget.studentEmail ?? '—';
-          _admissionNo = studentData['admissionNumber'] as String? ??
-              widget.admissionNo ??
-              '—';
-
-          final String rawClassName =
-              classMap['name']?.toString() ?? widget.studentClass ?? '—';
-          if (rawClassName.contains(' - ')) {
-            final parts = rawClassName.split(' - ');
-            _studentClass = parts[0];
-            _section = parts[1];
-          } else {
-            _studentClass = rawClassName;
-            _section = sectionMap['name']?.toString() ?? '—';
-          }
-
-          _rollNo = studentData['rollNumber']?.toString() ?? '—';
-          final academicYear = studentData['AcademicYear'] as Map<String, dynamic>? ?? classMap['AcademicYear'] as Map<String, dynamic>?;
-
-          _batch = academicYear?['name'] as String? ?? '—';
-          _medium = studentData['medium'] as String? ?? '—';
-
-          final joinDateStr = studentData['joiningDate'] as String?;
-          if (joinDateStr != null) {
-            try {
-              final parsed = DateTime.parse(joinDateStr);
-              _studentJoinedDate =
-                  '${parsed.month}/${parsed.day}/${parsed.year}';
-            } catch (_) {
-              _studentJoinedDate = '—';
-            }
-          } else {
-            _studentJoinedDate = '—';
-          }
-
-          _emergencyInfo = studentData['emergencyPhone'] as String? ??
-              studentData['emergencyContact'] as String? ??
-              '—';
-          if (_emergencyInfo.isEmpty) _emergencyInfo = '—';
-
-          final rawGender = userMap['gender'] as String? ?? '—';
-          if (rawGender.toUpperCase() == 'MALE') {
-            _studentGender = 'Male';
-          } else if (rawGender.toUpperCase() == 'FEMALE') {
-            _studentGender = 'Female';
-          } else {
-            _studentGender = rawGender;
-          }
-
-          final dobStr = userMap['dateOfBirth'] as String?;
-          if (dobStr != null) {
-            try {
-              final parsed = DateTime.parse(dobStr);
-              _studentDob =
-                  '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
-            } catch (_) {
-              _studentDob = dobStr;
-            }
-          } else {
-            _studentDob = '—';
-          }
-
-          _studentBloodGroup = userMap['bloodGroup'] as String? ?? '—';
-          _religion = studentData['religion'] as String? ?? '—';
-          _casteGroup = studentData['caste'] as String? ?? '—';
-          _nationality = studentData['nationality'] as String? ?? '—';
-          _dbQrCode = userMap['qrCode'] as String?;
-
-          final rawAvatar = userMap['avatar']?.toString() ?? '';
-          if (rawAvatar.isNotEmpty) {
-            _avatarUrl = (rawAvatar.startsWith('http') ||
-                    rawAvatar.startsWith('data:image'))
-                ? rawAvatar
-                : '${ApiConfig.serverBaseUrl}$rawAvatar';
-          } else {
-            _avatarUrl = null;
-          }
-          SharedPreferences.getInstance().then((prefs) {
-            if (_avatarUrl != null) {
-              prefs.setString('student_photo_url', _avatarUrl!);
-            } else {
-              prefs.remove('student_photo_url');
-            }
-          });
-
-          _userName = _studentName;
-          _email = _studentEmail;
-          _phone = userMap['phone'] as String? ?? '—';
-          _gender = _studentGender;
-          _dob = _studentDob;
-          _bloodGroup = _studentBloodGroup;
-          _address = userMap['address'] as String? ?? '—';
-          _rollNumber = _rollNo;
-          _className = sectionMap['name'] != null
-              ? '$_studentClass - $_section'
-              : _studentClass;
-          _admissionId = _admissionNo;
-
-          String father = '—';
-          String mother = '—';
-          String guardianPhoneVal =
-              studentData['emergencyPhone'] as String? ?? '—';
-
-          final studentParentList =
-              studentData['StudentParent'] as List<dynamic>? ?? [];
-          if (studentParentList.isNotEmpty) {
-            for (var sp in studentParentList) {
-              final spMap = sp as Map<String, dynamic>;
-              final rel = spMap['relationship'] as String?;
-              final parentObj = spMap['Parent'] as Map<String, dynamic>?;
-              if (parentObj != null) {
-                final pFullName =
-                    '${parentObj['firstName'] ?? ''} ${parentObj['lastName'] ?? ''}'
-                        .trim();
-                final pPhone = parentObj['phone'] as String? ?? '—';
-                if (rel == 'FATHER') {
-                  father = pFullName;
-                  if (guardianPhoneVal == '—') guardianPhoneVal = pPhone;
-                } else if (rel == 'MOTHER') {
-                  mother = pFullName;
-                  if (guardianPhoneVal == '—') guardianPhoneVal = pPhone;
-                }
-              }
-            }
-          }
-
-          if (father == '—' && mother == '—') {
-            father = studentData['emergencyContact'] as String? ?? '—';
-          }
-
-          _fatherName = father;
-          _motherName = mother;
-          _guardianPhone = guardianPhoneVal;
-
-          _uploadedDocuments = docs;
-          _currentStudentDbId = studentData['id'] as String?;
-          _isProfileLoading = false;
-        });
-
-        final studentId = studentData['id'] as String;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('student_id', studentId);
-        
-        final bool localPush = prefs.getBool('push_notifications_enabled') ?? true;
-        final bool localInApp = prefs.getBool('in_app_notifications_enabled') ?? true;
-        if (mounted) {
-          setState(() {
-            _pushNotifications = localPush;
-            _inAppNotifications = localInApp;
-          });
-        }
-
-        final String? sectionId = studentData['sectionId'] as String?;
-        _loadAllTabDetails(studentId, sectionId);
-        _connectRealTimeSync();
-
-        if (userMap['id'] != null) {
-          try {
-            final qrRes =
-                await ApiService.instance.get('users/${userMap['id']}/qr');
-            if (qrRes != null &&
-                qrRes['success'] == true &&
-                qrRes['qrCode'] != null) {
-              final qr = qrRes['qrCode'] as String?;
-              if (qr != null && qr.isNotEmpty) {
-                setState(() {
-                  _dbQrCode = qr;
-                });
-                await prefs.setString('student_qrcode', qr);
-              }
-            }
-          } catch (_) {}
-        }
-        return;
-      }
-
-      debugPrint(
-          '📡 Supabase student returned empty result. Falling back to REST API...');
       final response = widget.studentId != null
           ? await ApiService.instance.get('students/${widget.studentId}')
           : await ApiService.instance.get('students/me');
@@ -813,12 +468,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _studentUserId =
           studentResMap['userId']?.toString() ?? userMap['id']?.toString();
 
-      // Try to get batch from academicYear data (before setState)
       final classAcademicYear = classMap['academicYear'] as Map? ??
           classMap['AcademicYear'] as Map? ?? {};
       final studentAcademicYear = studentResMap['academicYear'] as Map? ??
           studentResMap['AcademicYear'] as Map? ?? {};
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = CacheService.instance.prefs;
       final batchFromPrefs = prefs.getString('student_batch');
       final batchValue = classAcademicYear['name'] as String? ??
           studentAcademicYear['name'] as String? ??
@@ -896,13 +550,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         } else {
           _avatarUrl = null;
         }
-        SharedPreferences.getInstance().then((prefs) {
-          if (_avatarUrl != null) {
-            prefs.setString('student_photo_url', _avatarUrl!);
-          } else {
-            prefs.remove('student_photo_url');
-          }
-        });
+
+        final prefs = CacheService.instance.prefs;
+        if (_avatarUrl != null) {
+          prefs.setString('student_photo_url', _avatarUrl!);
+        } else {
+          prefs.remove('student_photo_url');
+        }
 
         _userName = _studentName;
         _email = _studentEmail;
@@ -917,6 +571,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : _studentClass;
         _admissionId = _admissionNo;
         _currentStudentDbId = studentResMap['id']?.toString();
+        
+        final transportAlloc = studentResMap['transportAllocation'] as Map<String, dynamic>?;
+        if (transportAlloc != null) {
+          final routeMap = transportAlloc['route'] as Map<String, dynamic>?;
+          final stopMap = transportAlloc['stop'] as Map<String, dynamic>?;
+          _transportAllocation = {
+            'status': transportAlloc['status'],
+            'stop': stopMap,
+            'route': routeMap,
+          };
+        } else {
+          _transportAllocation = null;
+        }
+        
         _isProfileLoading = false;
       });
 
@@ -1014,7 +682,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Merge local documents that might have failed to sync to the server
       try {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = CacheService.instance.prefs;
         final localDocsJson = prefs.getString('student_uploaded_documents');
         if (localDocsJson != null) {
           final List<dynamic> localDocsList = json.decode(localDocsJson);
@@ -1038,14 +706,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     } catch (e) {
       debugPrint(
-          '🚨 Supabase/REST Student Profile queries both failed. Error: $e');
+          '🚨 REST Student Profile queries failed. Error: $e');
       if (widget.studentId != null) {
         setState(() {
           _isProfileLoading = false;
           _hasProfileError = true;
         });
       } else {
-        await _loadStudentData();
+        await _loadProfileData();
         setState(() {
           _isProfileLoading = false;
         });
@@ -1057,156 +725,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _connectRealTimeSync() {
     try {
-      final client = Supabase.instance.client;
-      final currentUser = client.auth.currentUser;
-
-      // If no Supabase auth, set up polling fallback (every 30s)
-      if (currentUser == null) {
-        _profilePollTimer?.cancel();
-        _profilePollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-          if (mounted && widget.role == 'student') {
+      _profilePollTimer?.cancel();
+      _profilePollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) {
+          if (widget.role == 'student') {
             _loadStudentDataFromSupabase();
+          } else if (widget.role == 'teacher') {
+            _loadTeacherDataFromSupabase();
           }
-        });
-        // Also listen to Socket.IO events (no auth needed)
-        SocketService().on('STUDENT_UPDATED', (data) {
-          if (!mounted) return;
-          try {
-            if (widget.role == 'student') _loadStudentDataFromSupabase();
-          } catch (e) {
-            debugPrint('Error handling Socket.IO update: $e');
-          }
-        });
-        return;
-      }
-
-      for (var ch in _realtimeChannels) {
-        try {
-          client.removeChannel(ch);
-        } catch (_) {}
-      }
-      _realtimeChannels.clear();
-
-      final String targetStudentId = widget.studentId ?? '';
-      final String targetUserId = widget.studentId != null
-          ? (_studentUserId ?? '')
-          : (widget.teacherId ?? currentUser.id);
-
-      debugPrint(
-          '🔌 Connecting Real-Time Sync. Student ID: $targetStudentId, User ID: $targetUserId');
-
-      if (targetUserId.isNotEmpty) {
-        final userChannel = client
-            .channel('public:user_profile_sync_$targetUserId')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'User',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'id',
-                value: targetUserId,
-              ),
-              callback: (_) {
-                debugPrint(
-                    '🔄 Realtime update detected on User: $targetUserId. Reloading...');
-                if (mounted) {
-                  if (widget.role == 'student') {
-                    _loadStudentDataFromSupabase();
-                  } else if (widget.role == 'teacher') {
-                    _loadTeacherDataFromSupabase();
-                  }
-                }
-              },
-            );
-        userChannel.subscribe();
-        _realtimeChannels.add(userChannel);
-      }
-
-      if (widget.role == 'student') {
-        final String studentFilterValue = widget.studentId ?? currentUser.id;
-        final String studentFilterColumn =
-            widget.studentId != null ? 'id' : 'userId';
-
-        final studentChannel = client
-            .channel('public:student_profile_sync_$studentFilterValue')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'Student',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: studentFilterColumn,
-                value: studentFilterValue,
-              ),
-              callback: (_) {
-                debugPrint(
-                    '🔄 Realtime update detected on Student. Reloading...');
-                if (mounted) {
-                  _loadStudentDataFromSupabase();
-                }
-              },
-            );
-        studentChannel.subscribe();
-        _realtimeChannels.add(studentChannel);
-
-        final docChannel = client
-            .channel('public:student_doc_sync_$targetStudentId')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'StudentDocument',
-              callback: (_) {
-                debugPrint(
-                    '🔄 Realtime update detected on StudentDocument. Reloading...');
-                if (mounted) {
-                  _loadStudentDataFromSupabase();
-                }
-              },
-            );
-        docChannel.subscribe();
-        _realtimeChannels.add(docChannel);
-
-        final parentChannel = client
-            .channel('public:student_parent_sync_$targetStudentId')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'StudentParent',
-              callback: (_) {
-                debugPrint(
-                    '🔄 Realtime update detected on StudentParent. Reloading...');
-                if (mounted) {
-                  _loadStudentDataFromSupabase();
-                }
-              },
-            );
-        parentChannel.subscribe();
-        _realtimeChannels.add(parentChannel);
-      } else if (widget.role == 'teacher') {
-        final teacherChannel = client
-            .channel(
-                'public:teacher_profile_sync_${widget.teacherId ?? currentUser.id}')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'Teacher',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'userId',
-                value: widget.teacherId ?? currentUser.id,
-              ),
-              callback: (_) {
-                debugPrint(
-                    '🔄 Realtime update detected on Teacher. Reloading...');
-                if (mounted) {
-                  _loadTeacherDataFromSupabase();
-                }
-              },
-            );
-        teacherChannel.subscribe();
-        _realtimeChannels.add(teacherChannel);
-      }
+        }
+      });
 
       // Socket.IO event updates
       SocketService().on('STUDENT_UPDATED', (data) {
@@ -1245,16 +773,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       });
     } catch (e) {
-      debugPrint('⚠️ Error connecting Supabase Realtime in ProfileScreen: $e');
+      debugPrint('⚠️ Error connecting Realtime in ProfileScreen: $e');
     }
   }
 
-  Future<void> _saveStudentDataToSupabase() async {
+  Future<void> _saveStudentDataToBackend() async {
     try {
-      final client = Supabase.instance.client;
-      final currentUser = client.auth.currentUser;
-      if (currentUser == null) return;
-
       final nameParts = _studentName.trim().split(RegExp(r'\s+'));
       final String first = nameParts.isNotEmpty ? nameParts[0] : '';
       final String last = nameParts.length >= 2 ? nameParts.sublist(1).join(' ') : '';
@@ -1282,97 +806,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
 
-      final String targetUserId = _studentUserId ?? currentUser.id;
-      final String? targetStudentId = widget.studentId ?? _currentStudentDbId;
-
-      // Find Class ID
-      String? classId;
-      if (_studentClass.isNotEmpty && _studentClass != '—') {
-        final classList = await client
-            .from('Class')
-            .select('id')
-            .ilike('name', _studentClass.trim())
-            .limit(1);
-        if (classList.isNotEmpty) {
-          classId = classList[0]['id'] as String?;
-        }
-      }
-
-      // Find Section ID
-      String? sectionId;
-      if (_section.isNotEmpty && _section != '—' && classId != null) {
-        final sectionList = await client
-            .from('Section')
-            .select('id')
-            .ilike('name', _section.trim())
-            .eq('classId', classId)
-            .limit(1);
-        if (sectionList.isNotEmpty) {
-          sectionId = sectionList[0]['id'] as String?;
-        }
-      }
-
-      // Find Academic Year ID (Batch)
-      String? academicYearId;
-      if (_batch.isNotEmpty && _batch != '—') {
-        final batchSearch = _batch.trim();
-        var yearList = await client
-            .from('AcademicYear')
-            .select('id')
-            .ilike('name', batchSearch)
-            .limit(1);
-        
-        if (yearList.isEmpty && batchSearch.contains('-')) {
-          // Handle format like "2024-25" -> "2024-2025"
-          final parts = batchSearch.split('-');
-          if (parts.length == 2 && parts[1].length == 2) {
-            final fullYearSearch = '${parts[0]}-20${parts[1]}';
-            yearList = await client
-                .from('AcademicYear')
-                .select('id')
-                .ilike('name', fullYearSearch)
-                .limit(1);
-          }
-        }
-
-        if (yearList.isNotEmpty) {
-          academicYearId = yearList[0]['id'] as String?;
-        }
-      }
-
-      // 1. Update User table
-      await client.from('User').update({
-        if (first.isNotEmpty) 'firstName': first,
+      final updatePayload = {
+        'firstName': first,
         'lastName': last,
+        'phone': _phone,
+        'address': _address,
         if (dbGender != null) 'gender': dbGender,
         if (dbDob != null) 'dateOfBirth': dbDob,
         'bloodGroup': _studentBloodGroup == '—' || _studentBloodGroup == 'N/A' ? null : _studentBloodGroup,
-      }).eq('id', targetUserId);
-
-      // 2. Update Student table
-      await client.from('Student').update({
-        'admissionNumber': _admissionNo == '—' ? null : _admissionNo,
-        'rollNumber': _rollNo == '—' ? null : _rollNo,
         'emergencyPhone': _emergencyInfo == '—' || _emergencyInfo == 'UNSET' ? null : _emergencyInfo,
         'religion': _religion == '—' ? null : _religion.toUpperCase(),
         'caste': _casteGroup == '—' ? null : _casteGroup.toUpperCase(),
         'nationality': _nationality == '—' ? null : _nationality.toUpperCase(),
-        if (classId != null) 'currentClassId': classId,
-        if (sectionId != null) 'sectionId': sectionId,
-        if (academicYearId != null) 'academicYearId': academicYearId,
-      }).eq(targetStudentId != null ? 'id' : 'userId', targetStudentId ?? targetUserId);
+      };
 
-      // 3. Update backend API too
-      if (widget.studentId == null) {
-        await ApiService.instance.put('students/me', body: {
-          'emergencyPhone': _emergencyInfo == '—' || _emergencyInfo == 'UNSET' ? null : _emergencyInfo,
-        });
+      if (widget.studentId != null) {
+        await ApiService.instance.put('students/${widget.studentId}', body: updatePayload);
+      } else {
+        await ApiService.instance.put('users/me', body: updatePayload);
       }
+      
+      debugPrint('✅ Student profile successfully saved to backend.');
     } catch (e) {
-      debugPrint('Error saving student profile to Supabase: $e');
+      debugPrint('Error saving student profile to Backend: $e');
     }
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Future<void> _loadStudentData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -1503,73 +964,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final String ext = platformFile.extension?.toUpperCase() ?? 'PDF';
         final fileBytes = platformFile.bytes;
 
-        final client = Supabase.instance.client;
-        String fileUrl = 'https://example.com/mock_$docName';
-
         if (fileBytes != null) {
-          try {
-            final storagePath = 'documents/$studentId/${DateTime.now().millisecondsSinceEpoch}_$docName';
-            await client.storage.from('avatars').uploadBinary(
-                  storagePath,
-                  fileBytes,
-                  fileOptions: FileOptions(upsert: true),
-                );
-            fileUrl = client.storage.from('avatars').getPublicUrl(storagePath);
-          } catch (storageErr) {
-            debugPrint('Storage upload failed: $storageErr');
-            // Fallback to base64 if small enough
-            if (fileBytes.length < 2 * 1024 * 1024) {
-               fileUrl = 'data:application/$ext;base64,' + base64Encode(fileBytes);
-            }
-          }
-        }
-
-        // Fix FK constraint by trying to find the true Supabase Student ID for the current user
-        String finalStudentId = studentId;
-        try {
-          final currentUser = client.auth.currentUser;
-          if (currentUser != null) {
-            final checkStudent = await client.from('Student').select('id').eq('userId', currentUser.id).maybeSingle();
-            if (checkStudent != null && checkStudent['id'] != null) {
-               finalStudentId = checkStudent['id'].toString();
-            }
-          }
-        } catch (_) {}
-
-        Map<String, dynamic>? response;
-        try {
-          response = await client.from('StudentDocument').insert({
-            'studentId': finalStudentId,
-            'documentName': docName,
-            'documentType': ext,
-            'fileUrl': fileUrl,
-            'uploadedAt': DateTime.now().toIso8601String(),
-            'fileSize': platformFile.size,
-          }).select().single();
-        } catch (dbErr) {
-          debugPrint('DB Insert failed (might be FK constraint), continuing with local state: $dbErr');
-        }
-
-        if (mounted) {
-          setState(() {
-            final dateStr = '${DateTime.now().month}/${DateTime.now().day}/${DateTime.now().year}';
-            _uploadedDocuments.insert(0, {
-              'name': docName,
-              'date': dateStr,
-              'url': fileUrl,
-              'id': response?['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            });
-          });
-          
-          _saveStudentData(); // Persist locally just in case
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF1A6FDB),
-              content: Text('Document "$docName" uploaded successfully!',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-            ),
+          final response = await StudentService.instance.uploadStudentDocument(
+            studentId: studentId,
+            fileBytes: fileBytes,
+            fileName: docName,
+            documentType: ext,
+            documentName: docName,
           );
+
+          if (response['success'] == true) {
+            final document = response['document'] ?? response['data'] ?? {};
+            if (mounted) {
+              setState(() {
+                final dateStr = '${DateTime.now().month}/${DateTime.now().day}/${DateTime.now().year}';
+                _uploadedDocuments.insert(0, {
+                  'name': docName,
+                  'date': dateStr,
+                  'url': document['fileUrl']?.toString() ?? '',
+                  'id': document['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                });
+              });
+              
+              _saveStudentData(); // Persist locally just in case
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF1A6FDB),
+                  content: Text('Document "$docName" uploaded successfully!',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                ),
+              );
+            }
+          } else {
+            throw Exception(response['message'] ?? 'Upload failed');
+          }
+        } else {
+          throw Exception('No bytes found in selected file.');
         }
       }
     } catch (e) {
@@ -1604,20 +1035,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      final client = Supabase.instance.client;
-      await client.from('StudentDocument').delete().eq('id', docId);
+      final response = await StudentService.instance.deleteStudentDocument(docId);
+      
+      if (response['success'] == true) {
+        setState(() {
+          _uploadedDocuments.removeAt(index);
+        });
+        _saveStudentData();
 
-      try {
-        await ApiService.instance.delete('students/documents/$docId');
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF1A6FDB),
-            content: Text('Document "$name" deleted successfully!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF1A6FDB),
+              content: Text('Document "$name" deleted successfully!', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['message'] ?? 'Delete failed');
       }
     } catch (e) {
       debugPrint('Error deleting document: $e');
@@ -1660,7 +1095,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             onPressed: () async {
               final String val = ctrl.text.trim();
-              Navigator.pop(context);
               setState(() {
                 _emergencyInfo = val.isEmpty ? '—' : val;
               });
@@ -1668,20 +1102,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await _saveStudentData();
               
               try {
-                if (widget.studentId != null) {
-                  final client = Supabase.instance.client;
-                  await client.from('Student').update({'emergencyPhone': val.isEmpty ? null : val}).eq('id', widget.studentId!);
-                } else {
-                  await _saveStudentDataToSupabase();
-                  final client = Supabase.instance.client;
-                  final currentUser = client.auth.currentUser;
-                  if (currentUser != null) {
-                    await client.from('Student').update({'emergencyPhone': val.isEmpty ? null : val}).eq('userId', currentUser.id);
-                  }
+                await _saveStudentDataToBackend();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  showToast(context, 'Emergency contact updated!');
                 }
-                showToast(context, 'Emergency contact updated!');
               } catch (e) {
-                showToast(context, 'Error updating contact');
+                if (context.mounted) {
+                  showToast(context, 'Error updating contact');
+                }
               }
             },
             child: Text('Save', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -1801,7 +1230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: EdgeInsets.symmetric(vertical: 16.h),
                         elevation: 0,
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         setState(() {
                           _studentName = nameCtrl.text;
                           _admissionNo = admissionCtrl.text;
@@ -1817,17 +1246,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _studentGender = genderCtrl.text;
                           _studentBloodGroup = bloodCtrl.text;
                         });
-                        _saveStudentData();
-                        _saveStudentDataToSupabase();
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: const Color(0xFF10B981),
-                            content: Text('Profile updated successfully!',
-                                style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        );
+                        await _saveStudentData();
+                        await _saveStudentDataToBackend();
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: const Color(0xFF10B981),
+                              content: Text('Profile updated successfully!',
+                                  style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          );
+                        }
                       },
                       child: Text('Save Changes', style: AppTypography.small),
                     ),
@@ -1882,11 +1313,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadTeacherDataFromSupabase() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final client = Supabase.instance.client;
-      final currentUser = client.auth.currentUser;
-
-      String? currentUserId = widget.teacherId ?? currentUser?.id;
+      final prefs = CacheService.instance.prefs;
+      String? currentUserId = widget.teacherId ?? _currentUserId;
       if (currentUserId == null || currentUserId.isEmpty) {
         currentUserId = prefs.getString('user_id');
       }
@@ -1946,13 +1374,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         } else {
           _avatarUrl = null;
         }
-        SharedPreferences.getInstance().then((prefs) {
-          if (_avatarUrl != null) {
-            prefs.setString('teacher_photo_url', _avatarUrl!);
-          } else {
-            prefs.remove('teacher_photo_url');
-          }
-        });
+        
+        final prefs = CacheService.instance.prefs;
+        if (_avatarUrl != null) {
+          prefs.setString('teacher_photo_url', _avatarUrl!);
+        } else {
+          prefs.remove('teacher_photo_url');
+        }
 
         final rawGender = userMap['gender'] as String? ?? 'Not Specified';
         if (rawGender.toUpperCase() == 'MALE') {
@@ -2016,7 +1444,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _admissionNo = _employeeId;
       });
 
-      if (widget.teacherId == null || widget.teacherId == currentUser?.id) {
+      if (widget.teacherId == null || widget.teacherId == _currentUserId) {
         await prefs.setString('teacher_name', _userName);
         await prefs.setString('teacher_email', _email);
         await prefs.setString('teacher_mobile', _phone);
@@ -2038,12 +1466,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveTeacherDataToSupabase(Map<String, String> data) async {
+  Future<void> _saveTeacherDataToBackend(Map<String, String> data) async {
     try {
-      final client = Supabase.instance.client;
-      final currentUser = client.auth.currentUser;
-      if (currentUser == null) return;
-
       final Map<String, dynamic> userUpdates = {};
       if (data.containsKey('name')) {
         final parts = data['name']!.split(' ');
@@ -2052,7 +1476,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       if (data.containsKey('phone')) userUpdates['phone'] = data['phone'];
       if (data.containsKey('gender')) {
-        userUpdates['gender'] = data['gender']!.toUpperCase();
+        userUpdates['gender'] = data['gender']!.toUpperCase().startsWith('M') ? 'MALE' : 'FEMALE';
       }
       if (data.containsKey('dob')) {
         try {
@@ -2073,38 +1497,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       if (data.containsKey('address')) userUpdates['address'] = data['address'];
 
-      if (userUpdates.isNotEmpty) {
-        await client.from('User').update(userUpdates).eq('id', currentUser.id);
-      }
-
-      final Map<String, dynamic> teacherUpdates = {};
-      if (data.containsKey('employeeId')) {
-        teacherUpdates['employeeId'] = data['employeeId'];
-      }
       if (data.containsKey('designation')) {
-        teacherUpdates['specialization'] = data['designation'];
+        userUpdates['specialization'] = data['designation'];
       }
       if (data.containsKey('department')) {
-        teacherUpdates['qualification'] = data['department'];
+        userUpdates['qualification'] = data['department'];
       }
 
-      if (teacherUpdates.isNotEmpty) {
-        await client
-            .from('Teacher')
-            .update(teacherUpdates)
-            .eq('userId', currentUser.id);
-      }
+      await ApiService.instance.put('users/me', body: userUpdates);
+      debugPrint('✅ Teacher profile successfully saved to backend.');
     } catch (e) {
-      debugPrint('Error saving teacher profile to Supabase: $e');
+      debugPrint('Error saving teacher profile to Backend: $e');
     }
   }
 
   Future<void> _loadProfileData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final currentUser = Supabase.instance.client.auth.currentUser;
+    final prefs = CacheService.instance.prefs;
     setState(() {
       if (widget.role == 'teacher') {
-        if (widget.teacherId != null && widget.teacherId != currentUser?.id) {
+        if (widget.teacherId != null && widget.teacherId != _currentUserId) {
           _userName = 'Loading Teacher...';
           _email = '';
           _phone = 'N/A';
@@ -2202,7 +1613,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (data.containsKey('experience')) {
         await prefs.setString('teacher_exp', data['experience']!);
       }
-      await _saveTeacherDataToSupabase(data);
+      await _saveTeacherDataToBackend(data);
     } else {
       if (data.containsKey('name')) {
         await prefs.setString('student_name', data['name']!);
@@ -2235,7 +1646,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await prefs.setString('student_admission_id', data['admissionId']!);
       }
     }
-    await _loadTeacherDataFromSupabase();
+    await _loadTeacherDataFromSupabase(); // Reloads teacher data
     if (mounted) {
       showToast(context, 'Profile updated successfully!');
     }
@@ -2861,7 +2272,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: _togglePushNotifications,
                 title: Text('Push Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 subtitle: Text('Receive alerts about attendance & announcements', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
-                activeColor: const Color(0xFF1A6FDB),
+                activeThumbColor: const Color(0xFF1A6FDB),
               ),
               _divider(),
               SwitchListTile(
@@ -2869,7 +2280,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: _toggleInAppNotifications,
                 title: Text('In-App Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 subtitle: Text('Show popups and badge counts inside the app', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
-                activeColor: const Color(0xFF1A6FDB),
+                activeThumbColor: const Color(0xFF1A6FDB),
               ),
             ],
           ),
@@ -2999,6 +2410,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildTabbedHeaderCard(bool isDesktop) {
     final List<String> parts = _studentName.trim().split(RegExp(r'\s+'));
     final String initials = parts.length >= 2
@@ -3234,6 +2647,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildTabbedNavigation(bool isDesktop) {
     return Container(
       width: double.infinity,
@@ -3277,6 +2692,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildTabbedTabContent(bool isDesktop) {
     if (_isLoadingTabDetails) {
       return Container(
@@ -3924,6 +3341,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildAttendanceStatCard(
       String label, String value, Color textColor, Color bgColor) {
     return Expanded(
@@ -3947,6 +3366,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildAttendanceRow(String dateStr, String status, String remarks) {
     Color badgeBg;
     Color badgeText;
@@ -4004,6 +3425,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildMockAttendanceList() {
     final List<Map<String, String>> mockData = [
       {
@@ -4079,6 +3502,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildMockFeePayments() {
     final List<Map<String, dynamic>> mockData = [
       {
@@ -4106,6 +3531,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_field
+  // ignore: unused_field
   final List<String> _timetableDays = const [
     'Monday',
     'Tuesday',
@@ -4184,6 +3611,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildTableHeaderRow() {
     return Container(
       decoration: const BoxDecoration(
@@ -4201,6 +3630,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ignore: unused_element
+  // ignore: unused_element
   Widget _buildDayRow(String day) {
     return Container(
       decoration: const BoxDecoration(
@@ -4826,10 +4257,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           return;
         }
 
-        final client = Supabase.instance.client;
-        final prefs = await SharedPreferences.getInstance();
-        final userId =
-            client.auth.currentUser?.id ?? prefs.getString('user_id');
+        final prefs = CacheService.instance.prefs;
+        final userId = _currentUserId ?? prefs.getString('user_id');
 
         if (userId == null) {
           if (mounted) {
@@ -4840,10 +4269,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         if (mounted) showToast(context, 'Uploading avatar...');
 
-        final storagePath =
-            'avatars/$userId-${DateTime.now().millisecondsSinceEpoch}.$extension';
-
-        // Optimistically update UI using base64 memory image to avoid 404 caching from CDN delays
+        // Optimistically update UI using base64 memory image
         final base64String = base64Encode(bytes);
         final base64DataUrl = 'data:image/$extension;base64,$base64String';
         if (mounted) {
@@ -4853,59 +4279,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         try {
-          // Try to create the bucket in case it's not created
-          try {
-            await client.storage
-                .createBucket('avatars', const BucketOptions(public: true));
-          } catch (_) {}
+          final res = await ApiService.instance.multipartRequest(
+            'PATCH',
+            'users/$userId/avatar',
+            fileKey: 'avatar',
+            fileBytes: bytes,
+            fileName: '$userId.$extension',
+          );
 
-          // Try uploading to Supabase Storage
-          await client.storage.from('avatars').uploadBinary(
-                storagePath,
-                bytes,
-                fileOptions:
-                    FileOptions(contentType: 'image/$extension', upsert: true),
-              );
+          if (res != null && res['success'] == true) {
+            final publicUrl = res['user']?['avatar'] as String? ?? base64DataUrl;
+            await prefs.setString('${widget.role}_photo_url', publicUrl);
 
-          final publicUrl =
-              client.storage.from('avatars').getPublicUrl(storagePath);
+            if (widget.onAvatarUpdated != null) {
+              widget.onAvatarUpdated!(publicUrl);
+            }
 
-          await client
-              .from('User')
-              .update({'avatar': publicUrl}).eq('id', userId);
-          await prefs.setString('${widget.role}_photo_url', publicUrl);
-
-          if (widget.onAvatarUpdated != null) {
-            widget.onAvatarUpdated!(publicUrl);
-          }
-
-          if (mounted) {
-            showToast(context, 'Avatar updated successfully!');
+            if (mounted) {
+              setState(() {
+                _avatarUrl = publicUrl;
+              });
+              showToast(context, 'Avatar updated successfully!');
+            }
+          } else {
+            throw Exception(res?['message'] ?? 'Upload failed');
           }
         } catch (storageErr) {
-          debugPrint(
-              'Storage upload failed: $storageErr. Falling back to database base64 storage...');
-
-          // Fallback to storing image directly in User.avatar as base64 Data URL
-          final base64String = base64Encode(bytes);
-          final base64DataUrl = 'data:image/$extension;base64,$base64String';
-
-          await client
-              .from('User')
-              .update({'avatar': base64DataUrl}).eq('id', userId);
-          await prefs.setString('${widget.role}_photo_url', base64DataUrl);
-
-          if (widget.onAvatarUpdated != null) {
-            widget.onAvatarUpdated!(base64DataUrl);
-          }
-
-          if (mounted) {
-            setState(() {
-              _avatarUrl = base64DataUrl;
-            });
-            showToast(
-                context, 'Avatar updated successfully (base64 fallback)!');
-          }
+          debugPrint('Backend upload failed: $storageErr');
+          if (mounted) showToast(context, 'Failed to update avatar: $storageErr');
         }
       }
     } catch (e) {
@@ -5073,7 +4474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       floatingActionButton: (widget.role == 'teacher' &&
               widget.teacherId != null &&
-              widget.teacherId != Supabase.instance.client.auth.currentUser?.id)
+              widget.teacherId != _currentUserId)
           ? null
           : FloatingActionButton(
               onPressed: _showEditProfileSheet,
@@ -5571,7 +4972,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool isOwnProfile = widget.role == 'student'
         ? (widget.studentId == null)
         : (widget.teacherId == null ||
-            widget.teacherId == Supabase.instance.client.auth.currentUser?.id);
+            widget.teacherId == _currentUserId);
 
     return _buildListCard(
       'Security Status',

@@ -1,6 +1,7 @@
 const ExamService = require('../services/ExamService');
 const { emitEvent } = require('../services/socketService');
 const asyncHandler = require('express-async-handler');
+const prisma = require('../config/database');
 
 /**
  * Controller for Exam related routes
@@ -154,7 +155,7 @@ const getStudentExamResults = asyncHandler(async (req, res) => {
 
   // IDOR Check: Students can only view their own results
   if (userRole === 'STUDENT') {
-    const student = await prisma.student.findFirst({ where: { userId } });
+    const student = await prisma.studentProfile.findFirst({ where: { userId } });
     if (!student || student.id !== studentId) {
       return res.status(403).json({ 
         success: false,
@@ -162,6 +163,8 @@ const getStudentExamResults = asyncHandler(async (req, res) => {
       });
     }
   }
+
+  const result = await ExamService.getStudentExamResults(studentId, req.query);
 
   res.status(200).json({ 
     success: true,
@@ -172,6 +175,7 @@ const getStudentExamResults = asyncHandler(async (req, res) => {
 // Get exam results report
 const getExamResultsReport = asyncHandler(async (req, res) => {
   const { examId } = req.params;
+  const result = await ExamService.getExamResultsReport(examId, req.query);
   res.status(200).json({ 
     success: true,
     ...result 
