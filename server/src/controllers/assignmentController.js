@@ -42,6 +42,10 @@ const createAssignment = asyncHandler(async (req, res) => {
     message: 'Assignment created successfully',
     assignment,
   });
+
+  // Emit real-time event
+  const { emitEvent } = require('../services/socketService');
+  emitEvent('ASSIGNMENT_CREATED', assignment);
 });
 
 // Get assignments for a student (based on their class/section)
@@ -161,6 +165,10 @@ const deleteAssignment = asyncHandler(async (req, res) => {
   await prisma.assignment.delete({ where: { id } });
 
   res.json({ message: 'Assignment deleted successfully' });
+
+  // Emit real-time event
+  const { emitEvent } = require('../services/socketService');
+  emitEvent('ASSIGNMENT_UPDATED', { id, deleted: true });
 });
 
 module.exports = {

@@ -69,4 +69,51 @@ class AttendanceService {
     final response = await ApiService.instance.get('attendance/my');
     return response as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> createSlot({
+    required String date,
+    required String classId,
+    String? sectionId,
+  }) async {
+    final response = await ApiService.instance.post('attendance/slots', body: {
+      'date': date,
+      'classId': classId,
+      if (sectionId != null) 'sectionId': sectionId,
+      'attendeeType': 'STUDENT',
+    });
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getSlots({
+    required String date,
+    String? classId,
+  }) async {
+    final queryParams = {
+      'date': date,
+      if (classId != null) 'classId': classId,
+      'attendeeType': 'STUDENT',
+    };
+    final response = await ApiService.instance.get('attendance/slots', queryParams: queryParams);
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getSlotWithStudents(String slotId) async {
+    final response = await ApiService.instance.get('attendance/slots/$slotId');
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> submitSlotAttendance(
+    String slotId,
+    List<Map<String, dynamic>> attendanceData,
+  ) async {
+    final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
+      'attendanceData': attendanceData,
+    });
+    return response as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> deleteSlot(String slotId) async {
+    final response = await ApiService.instance.delete('attendance/slots/$slotId');
+    return response as Map<String, dynamic>;
+  }
 }

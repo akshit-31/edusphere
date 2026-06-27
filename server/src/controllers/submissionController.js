@@ -67,6 +67,24 @@ const submitAssignment = asyncHandler(async (req, res) => {
     message: 'Assignment submitted successfully',
     submission,
   });
+
+  // Emit real-time event to the teacher's user room
+  const { emitEvent } = require('../services/socketService');
+  prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: { teacherId: true, teacher: { select: { userId: true } } }
+  }).then(asg => {
+    if (asg && asg.teacher && asg.teacher.userId) {
+      emitEvent('SUBMISSION_UPDATED', {
+        id: submission.id,
+        assignmentId,
+        studentId: student.id,
+        status
+      }, `user_${asg.teacher.userId}`);
+    }
+  }).catch(err => {
+    console.error("Error emitting SUBMISSION_UPDATED event on submission:", err);
+  });
 });
 
 // Grade a submission (Teacher only)
@@ -101,6 +119,25 @@ const gradeSubmission = asyncHandler(async (req, res) => {
     success: true,
     message: 'Submission graded successfully',
     submission: updatedSubmission,
+  });
+
+  // Emit real-time event to student user room
+  const { emitEvent } = require('../services/socketService');
+  prisma.studentProfile.findUnique({
+    where: { id: updatedSubmission.studentId },
+    select: { userId: true }
+  }).then(student => {
+    if (student && student.userId) {
+      emitEvent('SUBMISSION_UPDATED', {
+        id: updatedSubmission.id,
+        assignmentId: updatedSubmission.assignmentId,
+        studentId: updatedSubmission.studentId,
+        grade,
+        status: 'GRADED'
+      }, `user_${student.userId}`);
+    }
+  }).catch(err => {
+    console.error("Error emitting SUBMISSION_UPDATED event on grading:", err);
   });
 });
 

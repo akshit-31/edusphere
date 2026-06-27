@@ -52,12 +52,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _connectRealTime();
   }
 
+  void _onAttendanceEvent(dynamic data) {
+    dev.log('⚡ [SOCKET.IO EVENT] Attendance event received: $data', name: 'AttendanceScreen');
+    if (mounted) {
+      _loadAttendanceData(showLoading: false);
+    }
+  }
+
   @override
   void dispose() {
     try {
-      SocketService().off('ATTENDANCE_UPDATED');
-      SocketService().off('ATTENDANCE_MARKED');
-      SocketService().off('attendanceMarked');
+      SocketService().off('ATTENDANCE_UPDATED', _onAttendanceEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onAttendanceEvent);
+      SocketService().off('attendanceMarked', _onAttendanceEvent);
     } catch (_) {}
     super.dispose();
   }
@@ -65,16 +72,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void _connectRealTime() {
     // Connect Socket.IO events for real-time updates
     try {
-      final attendanceCallback = (data) {
-        dev.log('⚡ [SOCKET.IO EVENT] Attendance event received: $data', name: 'AttendanceScreen');
-        if (mounted) {
-          _loadAttendanceData(showLoading: false);
-        }
-      };
+      SocketService().off('ATTENDANCE_UPDATED', _onAttendanceEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onAttendanceEvent);
+      SocketService().off('attendanceMarked', _onAttendanceEvent);
 
-      SocketService().on('ATTENDANCE_UPDATED', attendanceCallback);
-      SocketService().on('ATTENDANCE_MARKED', attendanceCallback);
-      SocketService().on('attendanceMarked', attendanceCallback);
+      SocketService().on('ATTENDANCE_UPDATED', _onAttendanceEvent);
+      SocketService().on('ATTENDANCE_MARKED', _onAttendanceEvent);
+      SocketService().on('attendanceMarked', _onAttendanceEvent);
     } catch (e) {
       dev.log('Error registering Socket.IO events: $e', name: 'AttendanceScreen');
     }

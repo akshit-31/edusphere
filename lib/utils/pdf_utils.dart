@@ -57,7 +57,7 @@ class PDFUtils {
     try {
       final Uint8List bytes = await pdf.save();
 
-      String? outputFile = await FilePicker.platform.saveFile(
+      String? outputFile = await FilePicker.saveFile(
         dialogTitle: 'Please select where to save your $title',
         fileName: '${title.replaceAll(' ', '_')}.pdf',
         type: FileType.custom,

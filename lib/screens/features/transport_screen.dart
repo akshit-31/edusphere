@@ -8,6 +8,7 @@ import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import 'package:edusphere/theme/typography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../config/api_endpoints.dart';
 
 class TransportScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -110,7 +111,7 @@ class _TransportScreenState extends State<TransportScreen> {
         throw Exception('Student ID not found in SharedPreferences');
       }
 
-      final res = await ApiService.instance.get('transport/allocations/my');
+      final res = await ApiService.instance.get(ApiEndpoints.myTransportAllocation);
       if (mounted) {
         setState(() {
           _studentIdDebug = res != null ? res.toString() : 'API returned null';

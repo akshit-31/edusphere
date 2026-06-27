@@ -7,6 +7,7 @@ import '../../widgets/common_widgets.dart';
 import '../../services/api_service.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../config/api_endpoints.dart';
 
 class FeesScreen extends StatefulWidget {
   const FeesScreen({super.key});
@@ -40,7 +41,7 @@ class _FeesScreenState extends State<FeesScreen> {
         _isLoading = true;
         _errorMsg = null;
       });
-      final res = await ApiService.instance.get('fees/students/me/status');
+      final res = await ApiService.instance.get(ApiEndpoints.myFeeStatus);
 
       if (res['success'] == true) {
         final summary = res['summary'] as Map? ?? {};

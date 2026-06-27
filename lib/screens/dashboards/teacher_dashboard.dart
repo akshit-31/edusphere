@@ -63,19 +63,10 @@ class _TeacherDashboardState extends State<TeacherDashboard>
   void dispose() {
     _teacherDashTimer?.cancel();
 
-    // Clean up Socket.IO listeners
+    // Clean up Socket.IO listeners cleanly
     try {
-      final socketEvents = [
-        'STUDENT_ADDED',
-        'STUDENT_DELETED',
-        'STUDENT_UPDATED',
-        'ATTENDANCE_UPDATED',
-        'CLASS_UPDATED',
-        'EVENT_UPDATED',
-        'DASHBOARD_STATS_CHANGED'
-      ];
-      for (var event in socketEvents) {
-        SocketService().off(event);
+      for (var event in _socketEvents) {
+        SocketService().off(event, _onRealtimeEvent);
       }
     } catch (e) {
       dev.log('Error unregistering Socket.IO events: $e',
@@ -112,35 +103,40 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     }
   }
 
+  final List<String> _socketEvents = [
+    'STUDENT_ADDED',
+    'STUDENT_DELETED',
+    'STUDENT_UPDATED',
+    'ATTENDANCE_UPDATED',
+    'CLASS_UPDATED',
+    'EVENT_UPDATED',
+    'DASHBOARD_STATS_CHANGED'
+  ];
+
+  void _onRealtimeEvent(dynamic data) {
+    dev.log('⚡ Socket.IO event received on Teacher Dashboard', name: 'TeacherDashboard');
+    if (mounted) {
+      _loadUpcomingEvents();
+      _fetchDashboardData('realtime_event', eventName: 'SocketIO:Event');
+    }
+  }
+
+
+
   Future<void> _connectRealTime() async {
     // Connect Socket.IO events
     try {
-      final socketEvents = [
-        'STUDENT_ADDED',
-        'STUDENT_DELETED',
-        'STUDENT_UPDATED',
-        'ATTENDANCE_UPDATED',
-        'CLASS_UPDATED',
-        'EVENT_UPDATED',
-        'DASHBOARD_STATS_CHANGED'
-      ];
-
-      for (var event in socketEvents) {
-        SocketService().on(event, (data) {
-          dev.log('⚡ Socket.IO event received: $event',
-              name: 'TeacherDashboard');
-          if (mounted) {
-            _loadUpcomingEvents();
-            _fetchDashboardData('realtime_event', eventName: 'SocketIO:$event');
-          }
-        });
+      for (var event in _socketEvents) {
+        SocketService().off(event, _onRealtimeEvent);
+        SocketService().on(event, _onRealtimeEvent);
       }
     } catch (e) {
       dev.log('Error registering Socket.IO events: $e',
           name: 'TeacherDashboard');
     }
 
-    _teacherDashTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _teacherDashTimer?.cancel();
+    _teacherDashTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (mounted) {
         _loadUpcomingEvents();
         _fetchDashboardData('periodic');

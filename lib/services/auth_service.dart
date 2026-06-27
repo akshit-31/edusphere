@@ -58,7 +58,7 @@ class AuthService {
     if (nav != null) {
       nav.pushAndRemoveUntil(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const WelcomeScreen(),
+          pageBuilder: (_, __, ___) => const WelcomeScreen(fromLogout: true),
           transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
           transitionDuration: const Duration(milliseconds: 400),
         ),

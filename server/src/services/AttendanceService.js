@@ -264,7 +264,20 @@ class AttendanceService {
         if (subjectId) where.subjectId = subjectId;
         if (attendeeType) where.attendeeType = attendeeType;
 
-        return AttendanceRepository.findAttendanceSlots(where);
+        const slots = await AttendanceRepository.findAttendanceSlots(where);
+        
+        const slotsWithCount = await Promise.all(slots.map(async (slot) => {
+            let studentCount = 0;
+            if (slot.attendeeType === ROLES.STUDENT && slot.classId) {
+                studentCount = await AttendanceRepository.getStudentCountForSlot(slot.classId, slot.sectionId);
+            }
+            return {
+                ...slot,
+                studentCount
+            };
+        }));
+
+        return slotsWithCount;
     }
 
     async getSlotWithEntities(id) {

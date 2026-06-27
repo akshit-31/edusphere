@@ -147,6 +147,12 @@ class AttendanceRepository {
         });
     }
 
+    async getStudentCountForSlot(classId, sectionId) {
+        const where = { currentClassId: classId, status: 'ACTIVE' };
+        if (sectionId) where.sectionId = sectionId;
+        return prisma.studentProfile.count({ where });
+    }
+
     async findTeachersForSlot() {
         return prisma.teacher.findMany({
             where: { status: 'ACTIVE' },

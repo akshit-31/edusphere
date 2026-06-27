@@ -36,6 +36,12 @@ class _StudentAllocationsScreenState extends State<StudentAllocationsScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() {

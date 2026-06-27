@@ -1,17 +1,25 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:developer' as dev;
+import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import 'auth_service.dart';
 
 class ApiService {
-  ApiService._privateConstructor();
+  ApiService._privateConstructor() {
+    _dio = Dio(BaseOptions(
+      baseUrl: ApiConfig.apiUrl.endsWith('/') ? ApiConfig.apiUrl : '${ApiConfig.apiUrl}/',
+      connectTimeout: const Duration(seconds: 120),
+      receiveTimeout: const Duration(seconds: 120),
+      sendTimeout: const Duration(seconds: 120),
+    ));
+    _setupInterceptors();
+  }
   static final ApiService instance = ApiService._privateConstructor();
 
+  late final Dio _dio;
   String? _token;
   bool _initialized = false;
 
@@ -25,144 +33,138 @@ class ApiService {
         name: 'ApiService');
   }
 
-  Map<String, String> _getHeaders() {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (_token != null && _token!.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $_token';
-    }
-    return headers;
-  }
+  Dio get dio => _dio;
 
-  // Set the token manually (e.g. after login)
   Future<void> setToken(String token) async {
     _token = token;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_token', token);
   }
 
-  // Clear the token (e.g. on logout)
   Future<void> clearToken() async {
     _token = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('api_token');
   }
 
-  // Helper method to wrap HTTP requests with DNS fallback and logging
-  Future<http.Response> _requestWrapper(
-    String method,
-    Uri uri,
-    Map<String, String> headers, {
-    Object? body,
-  }) async {
-    dev.log('📡 [API REQUEST] Method: $method | URL: $uri', name: 'ApiService');
-    dev.log('📡 [API REQUEST] Headers: $headers', name: 'ApiService');
-    if (body != null) {
-      dev.log('📡 [API REQUEST] Body: $body', name: 'ApiService');
+  String _cleanPath(String endpoint) {
+    if (endpoint.startsWith('/')) {
+      return endpoint.substring(1);
     }
+    return endpoint;
+  }
 
-    http.Response response;
+  void _setupInterceptors() {
+    // Token Injector & Logging Interceptor
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        options.headers['Content-Type'] = 'application/json';
+        options.headers['Accept'] = 'application/json';
+        if (_token != null && _token!.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $_token';
+        }
+        dev.log('📡 [API REQUEST] ${options.method} | URL: ${options.uri}', name: 'ApiService');
+        if (options.data != null) {
+          dev.log('📡 [API REQUEST] Body: ${options.data}', name: 'ApiService');
+        }
+        return handler.next(options);
+      },
+      onResponse: (response, handler) {
+        dev.log('📥 [API RESPONSE] Status: ${response.statusCode} for ${response.requestOptions.method} ${response.requestOptions.path}', name: 'ApiService');
+        dev.log('📥 [API RESPONSE] Body: ${response.data}', name: 'ApiService');
+        return handler.next(response);
+      },
+      onError: (DioException e, handler) async {
+        dev.log('❌ [API ERROR] URL: ${e.requestOptions.uri} | Status: ${e.response?.statusCode} | Message: ${e.message}', name: 'ApiService');
 
-    Future<http.Response> runHttp(
-        Uri targetUri, Map<String, String> targetHeaders) async {
-      const timeout = Duration(seconds: 120);
-      if (method == 'GET') {
-        return await http
-            .get(targetUri, headers: targetHeaders)
-            .timeout(timeout);
-      } else if (method == 'POST') {
-        return await http
-            .post(targetUri, headers: targetHeaders, body: body)
-            .timeout(timeout);
-      } else if (method == 'PUT') {
-        return await http
-            .put(targetUri, headers: targetHeaders, body: body)
-            .timeout(timeout);
-      } else if (method == 'DELETE') {
-        return await http
-            .delete(targetUri, headers: targetHeaders)
-            .timeout(timeout);
-      } else {
-        throw UnsupportedError('Unsupported HTTP method: $method');
-      }
-    }
+        // Check for 401 Session Expiry
+        if (e.response?.statusCode == 401) {
+          dev.log('⚠️ Session expired (401). Triggering logout.', name: 'ApiService');
+          unawaited(AuthService.handleSessionExpired());
+          return handler.next(e);
+        }
 
-    try {
-      response = await runHttp(uri, headers);
-    } catch (e) {
-      if (!kIsWeb &&
-          e is SocketException &&
-          uri.host == 'edusphere-erp-frontend.onrender.com') {
-        dev.log(
-            '⚠️ [API WARNING] DNS resolution failed for edusphere-erp-frontend.onrender.com. Trying fallback IP 216.24.57.9...',
-            name: 'ApiService');
-        try {
-          final fallbackUri = uri.replace(host: '216.24.57.9');
-          final fallbackHeaders = Map<String, String>.from(headers);
-          fallbackHeaders['Host'] = 'edusphere-erp-frontend.onrender.com';
-          dev.log(
-              '📡 [API FALLBACK] URL: $fallbackUri | Headers: $fallbackHeaders',
-              name: 'ApiService');
-          response = await runHttp(fallbackUri, fallbackHeaders);
-        } catch (e2) {
-          dev.log(
-              '⚠️ [API WARNING] Fallback to 216.24.57.9 failed. Trying fallback IP 216.24.57.8...',
-              name: 'ApiService');
+        // DNS Fallback / Network Retry Implementation
+        final isSocketException = e.error is SocketException ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.connectionError;
+
+        if (!kIsWeb && isSocketException && e.requestOptions.uri.host == 'edusphere-erp-frontend.onrender.com') {
           try {
-            final fallbackUri = uri.replace(host: '216.24.57.8');
-            final fallbackHeaders = Map<String, String>.from(headers);
-            fallbackHeaders['Host'] = 'edusphere-erp-frontend.onrender.com';
-            dev.log(
-                '📡 [API FALLBACK 2] URL: $fallbackUri | Headers: $fallbackHeaders',
-                name: 'ApiService');
-            response = await runHttp(fallbackUri, fallbackHeaders);
-          } catch (e3) {
-            dev.log('❌ [API ERROR] All fallback IPs failed: $e3',
-                name: 'ApiService');
-            rethrow;
+            dev.log('⚠️ [API WARNING] DNS resolution failed. Trying fallback IP 216.24.57.9...', name: 'ApiService');
+            final response = await _retryWithFallback(e.requestOptions, '216.24.57.9');
+            return handler.resolve(response);
+          } catch (e2) {
+            try {
+              dev.log('⚠️ [API WARNING] Fallback 1 failed. Trying fallback IP 216.24.57.8...', name: 'ApiService');
+              final response = await _retryWithFallback(e.requestOptions, '216.24.57.8');
+              return handler.resolve(response);
+            } catch (e3) {
+              dev.log('❌ [API ERROR] All fallback IPs failed: $e3', name: 'ApiService');
+            }
           }
         }
-      } else {
-        dev.log('❌ [API ERROR] Network request failed: $e', name: 'ApiService');
-        rethrow;
-      }
-    }
 
-    dev.log(
-        '📥 [API RESPONSE] Status: ${response.statusCode} for $method ${uri.path}',
-        name: 'ApiService');
-    dev.log('📥 [API RESPONSE] Body: ${response.body}', name: 'ApiService');
+        // Automatic retry logic for generic network timeouts/issues (retry up to 3 times)
+        final int retryCount = e.requestOptions.extra['retryCount'] ?? 0;
+        if (isSocketException && retryCount < 3) {
+          e.requestOptions.extra['retryCount'] = retryCount + 1;
+          dev.log('📡 [API RETRY] Retrying request ${e.requestOptions.uri} (${retryCount + 1}/3)...', name: 'ApiService');
+          await Future.delayed(Duration(seconds: 2 * (retryCount + 1))); // Exponential backoff
+          try {
+            final response = await _dio.fetch(e.requestOptions);
+            return handler.resolve(response);
+          } catch (retryErr) {
+            if (retryErr is DioException) {
+              return handler.next(retryErr);
+            }
+            return handler.reject(DioException(requestOptions: e.requestOptions, error: retryErr));
+          }
+        }
 
-    return response;
+        return handler.next(e);
+      },
+    ));
+  }
+
+  Future<Response<dynamic>> _retryWithFallback(RequestOptions options, String ipAddress) async {
+    final originalUri = options.uri;
+    final fallbackUri = originalUri.replace(host: ipAddress);
+    final fallbackHeaders = Map<String, dynamic>.from(options.headers);
+    fallbackHeaders['Host'] = 'edusphere-erp-frontend.onrender.com';
+
+    final optionsCopy = Options(
+      method: options.method,
+      headers: fallbackHeaders,
+      sendTimeout: options.sendTimeout,
+      receiveTimeout: options.receiveTimeout,
+    );
+
+    dev.log('📡 [API FALLBACK] Fetching: $fallbackUri', name: 'ApiService');
+    return await Dio().request(
+      fallbackUri.toString(),
+      data: options.data,
+      queryParameters: options.queryParameters,
+      options: optionsCopy,
+    );
   }
 
   // Perform backend login
   Future<Map<String, dynamic>> login(String email, String password) async {
-    final url = Uri.parse('${ApiConfig.apiUrl}/auth/login');
-
-    final response = await _requestWrapper(
-      'POST',
-      url,
-      {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
+    final response = await _dio.post(
+      'auth/login',
+      data: {
         'email': email,
         'password': password,
-      }),
+      },
     );
 
-    final Map<String, dynamic> data = jsonDecode(response.body);
+    final Map<String, dynamic> data = response.data is Map ? response.data : {};
 
     if (response.statusCode == 200 && data['success'] == true) {
-      // Extract token from body or from Set-Cookie header if not in body
       String? jwtToken = data['token'] as String?;
       if (jwtToken == null || jwtToken.isEmpty) {
-        // Fallback: parse from Set-Cookie header
-        final setCookie = response.headers['set-cookie'];
+        final setCookie = response.headers.value('set-cookie');
         if (setCookie != null) {
           final match = RegExp(r'auth_token=([^;]+)').firstMatch(setCookie);
           if (match != null) {
@@ -174,19 +176,15 @@ class ApiService {
       if (jwtToken != null && jwtToken.isNotEmpty) {
         await setToken(jwtToken);
       } else {
-        dev.log('⚠️ Warning: No JWT token found in login response',
-            name: 'ApiService');
+        dev.log('⚠️ Warning: No JWT token found in login response', name: 'ApiService');
       }
     }
     return data;
   }
 
   // Generic GET request
-  Future<dynamic> get(String endpoint,
-      {Map<String, String>? queryParams}) async {
+  Future<dynamic> get(String endpoint, {Map<String, String>? queryParams}) async {
     await init();
-
-    // Clean up queryParams to avoid null keys/values
     Map<String, String>? cleanedParams;
     if (queryParams != null) {
       cleanedParams = {};
@@ -197,73 +195,40 @@ class ApiService {
       });
     }
 
-    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint')
-        .replace(queryParameters: cleanedParams);
-
-    final response = await _requestWrapper('GET', uri, _getHeaders());
-
-    if (response.statusCode == 401) {
-      // Token expired — clear token and redirect user to login screen
-      unawaited(AuthService.handleSessionExpired());
-    }
-
-    final decoded = jsonDecode(response.body);
-    return decoded;
+    final response = await _dio.get(
+      _cleanPath(endpoint),
+      queryParameters: cleanedParams,
+    );
+    return response.data;
   }
 
   // Generic POST request
   Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) async {
     await init();
-    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint');
-
-    final response = await _requestWrapper(
-      'POST',
-      uri,
-      _getHeaders(),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _dio.post(
+      _cleanPath(endpoint),
+      data: body,
     );
-
-    if (response.statusCode == 401) {
-      unawaited(AuthService.handleSessionExpired());
-    }
-
-    final decoded = jsonDecode(response.body);
-    return decoded;
+    return response.data;
   }
 
   // Generic PUT request
   Future<dynamic> put(String endpoint, {Map<String, dynamic>? body}) async {
     await init();
-    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint');
-
-    final response = await _requestWrapper(
-      'PUT',
-      uri,
-      _getHeaders(),
-      body: body != null ? jsonEncode(body) : null,
+    final response = await _dio.put(
+      _cleanPath(endpoint),
+      data: body,
     );
-
-    if (response.statusCode == 401) {
-      unawaited(AuthService.handleSessionExpired());
-    }
-
-    final decoded = jsonDecode(response.body);
-    return decoded;
+    return response.data;
   }
 
   // Generic DELETE request
   Future<dynamic> delete(String endpoint) async {
     await init();
-    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint');
-
-    final response = await _requestWrapper('DELETE', uri, _getHeaders());
-
-    if (response.statusCode == 401) {
-      unawaited(AuthService.handleSessionExpired());
-    }
-
-    final decoded = jsonDecode(response.body);
-    return decoded;
+    final response = await _dio.delete(
+      _cleanPath(endpoint),
+    );
+    return response.data;
   }
 
   // Perform multipart file upload
@@ -276,41 +241,24 @@ class ApiService {
     Map<String, String>? fields,
   }) async {
     await init();
-    final uri = Uri.parse('${ApiConfig.apiUrl}/$endpoint');
-    dev.log('📡 [API MULTIPART] Method: $method | URL: $uri', name: 'ApiService');
+    dev.log('📡 [API MULTIPART] Method: $method | Path: $endpoint', name: 'ApiService');
 
-    final request = http.MultipartRequest(method, uri);
-    request.headers.addAll(_getHeaders());
+    final formData = FormData.fromMap({
+      if (fields != null) ...fields,
+      fileKey: MultipartFile.fromBytes(
+        fileBytes,
+        filename: fileName,
+      ),
+    });
 
-    // Add fields
-    if (fields != null) {
-      request.fields.addAll(fields);
-    }
-
-    // Add file
-    final multipartFile = http.MultipartFile.fromBytes(
-      fileKey,
-      fileBytes,
-      filename: fileName,
+    final response = await _dio.request(
+      _cleanPath(endpoint),
+      data: formData,
+      options: Options(
+        method: method,
+      ),
     );
-    request.files.add(multipartFile);
 
-    try {
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 120));
-      final response = await http.Response.fromStream(streamedResponse);
-      
-      dev.log('📥 [API MULTIPART RESPONSE] Status: ${response.statusCode} for $method ${uri.path}', name: 'ApiService');
-      dev.log('📥 [API MULTIPART RESPONSE] Body: ${response.body}', name: 'ApiService');
-
-      if (response.statusCode == 401) {
-        unawaited(AuthService.handleSessionExpired());
-      }
-
-      final decoded = jsonDecode(response.body);
-      return decoded;
-    } catch (e) {
-      dev.log('❌ [API MULTIPART ERROR] Network request failed: $e', name: 'ApiService');
-      rethrow;
-    }
+    return response.data;
   }
 }

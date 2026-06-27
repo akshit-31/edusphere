@@ -92,6 +92,24 @@ const createFeePayment = asyncHandler(async (req, res) => {
     amount: payment.amount,
     paymentDate: payment.paymentDate
   }, 'ACCOUNTANT');
+
+  // Emit to student user room
+  const prisma = require('../config/database');
+  prisma.studentProfile.findUnique({
+    where: { id: payment.studentId },
+    select: { userId: true }
+  }).then(student => {
+    if (student && student.userId) {
+      emitEvent('FEE_UPDATED', {
+        id: payment.id,
+        studentId: payment.studentId,
+        amount: payment.amount,
+        status: payment.status
+      }, `user_${student.userId}`);
+    }
+  }).catch(err => {
+    console.error("Error emitting FEE_UPDATED event on payment:", err);
+  });
 });
 
 // Get student fee status
@@ -129,6 +147,36 @@ const approveAdjustment = asyncHandler(async (req, res) => {
     message: `Adjustment ${req.body.status.toLowerCase()}`,
     adjustment,
   });
+
+  if (req.body.status === 'APPROVED') {
+    const prisma = require('../config/database');
+    prisma.feeAdjustment.findUnique({
+      where: { id: req.params.id },
+      include: {
+        ledger: {
+          select: { studentId: true }
+        }
+      }
+    }).then(adj => {
+      if (adj && adj.ledger && adj.ledger.studentId) {
+        return prisma.studentProfile.findUnique({
+          where: { id: adj.ledger.studentId },
+          select: { userId: true }
+        }).then(student => {
+          if (student && student.userId) {
+            emitEvent('FEE_UPDATED', {
+              id: adj.id,
+              studentId: adj.ledger.studentId,
+              amount: adj.amount,
+              status: 'APPROVED'
+            }, `user_${student.userId}`);
+          }
+        });
+      }
+    }).catch(err => {
+      console.error("Error emitting FEE_UPDATED event on adjustment approval:", err);
+    });
+  }
 });
 
 // Process Refund

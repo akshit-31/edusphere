@@ -16,6 +16,7 @@ import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../services/api_service.dart';
+import '../../config/api_endpoints.dart';
 class FeeLedgerScreen extends StatefulWidget {
   final RoleTheme theme;
   final bool showBackButton;
@@ -60,29 +61,32 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
   void dispose() {
     _feePollTimer?.cancel();
     try {
-      SocketService().off('FEE_UPDATED');
+      SocketService().off('FEE_UPDATED', _onFeeUpdated);
     } catch (e) {
       dev.log('Error unregistering Socket.IO events: $e', name: 'FeeLedgerScreen');
     }
     super.dispose();
   }
 
+  void _onFeeUpdated(dynamic payload) {
+    dev.log('🔥 Real-time fee event received | Data: $payload', name: 'FeeLedgerScreen');
+    if (mounted) {
+      _loadLedgerData(showLoading: false);
+    }
+  }
+
   void _connectRealTime() {
     try {
       dev.log('📡 Subscribing to Socket.IO changes for Fees Screen...', name: 'FeeLedgerScreen');
       
-      SocketService().on('FEE_UPDATED', (payload) {
-        dev.log('🔥 Real-time fee event received | Data: $payload', name: 'FeeLedgerScreen');
-        if (mounted) {
-          _loadLedgerData(showLoading: false);
-        }
-      });
+      SocketService().off('FEE_UPDATED', _onFeeUpdated);
+      SocketService().on('FEE_UPDATED', _onFeeUpdated);
     } catch (e) {
       dev.log('⚠️ Error connecting Socket.IO for Fees: $e', name: 'FeeLedgerScreen');
     }
     
     // Polling fallback
-    _feePollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _feePollTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadLedgerData(showLoading: false);
       }
@@ -104,7 +108,22 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> {
       _studentName = prefs.getString('student_name') ?? prefs.getString('user_name') ?? 'Student';
       _studentEmail = prefs.getString('student_email') ?? prefs.getString('user_email') ?? '';
 
-      final response = await ApiService.instance.get('fees/students/$_studentId/status');
+      if (_studentId.isEmpty) {
+        final profileRes = await ApiService.instance.get(ApiEndpoints.studentsMe);
+        if (profileRes != null && profileRes['success'] == true && profileRes['student'] != null) {
+          _studentId = profileRes['student']['id'] as String? ?? '';
+          if (_studentId.isNotEmpty) {
+            await prefs.setString('student_id', _studentId);
+          }
+        }
+      }
+
+      if (_studentId.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      final response = await ApiService.instance.get(ApiEndpoints.studentFeeStatus(_studentId));
       
       if (response != null && response['success'] == true) {
         final List<dynamic> ledgers = response['ledgers'] as List<dynamic>? ?? [];

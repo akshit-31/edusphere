@@ -240,7 +240,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
-    );
+    ).then((_) {
+      nameCtrl.dispose();
+      phoneCtrl.dispose();
+      addressCtrl.dispose();
+    });
   }
 
   Widget _buildEditTextField(
@@ -404,13 +408,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                 ),
-                SizedBox(height: 12.h),
+                 SizedBox(height: 12.h),
               ],
             ),
           ),
         ),
       ),
-    );
+    ).then((_) {
+      currentPasswordCtrl.dispose();
+      newPasswordCtrl.dispose();
+      confirmPasswordCtrl.dispose();
+    });
   }
 
   Widget _buildPasswordField(
@@ -841,12 +849,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildGroupCard(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: AppColors.border),
+        side: const BorderSide(color: AppColors.border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: children,
       ),

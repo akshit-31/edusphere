@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../services/academic_service.dart';
+import '../../services/attendance_service.dart';
 import '../../theme/colors.dart';
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
@@ -36,11 +38,11 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
   // ── Filters ──
   String? _selectedClass;
-  String _selectedSection = 'All Sections';
+  String _selectedSection = 'A';
   DateTime _selectedDate = DateTime.now();
 
   final List<String> _classes = [];
-  final List<String> _sections = ['All Sections'];
+  final List<String> _sections = [];
 
   // Store classes fetched directly from Supabase (with correct UUIDs)
   List<Map<String, dynamic>> _apiClasses = [];
@@ -97,7 +99,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       orElse: () => {},
     );
     _sections.clear();
-    _sections.add('All Sections');
     if (cls.isNotEmpty) {
       final classId = cls['id']?.toString();
       final secList = _allSections
@@ -105,12 +106,17 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
           .toList();
       for (var s in secList) {
         final sName = s['name']?.toString() ?? '';
-        if (sName.isNotEmpty) {
-          _sections.add('Section $sName');
+        if (sName.isNotEmpty && (sName == 'A' || sName == 'B')) {
+          _sections.add(sName);
         }
       }
     }
-    _selectedSection = 'All Sections';
+    _sections.sort();
+    if (_sections.isNotEmpty) {
+      _selectedSection = _sections.first;
+    } else {
+      _selectedSection = 'A';
+    }
   }
 
   // ── Attendance data ──
@@ -128,6 +134,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   bool _analyticsLoaded = false;
   List<Map<String, dynamic>> _analyticsStudentData = [];
   final List<Map<String, dynamic>> _createdSlots = [];
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -149,13 +156,19 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
   void _onRealtimeEvent(dynamic payload) {
     if (mounted) {
-      _loadExistingSlotsForDate();
-      _loadAnalytics();
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _loadExistingSlotsForDate();
+          _loadAnalytics();
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     try {
       SocketService().off('attendanceMarked', _onRealtimeEvent);
       SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
@@ -169,11 +182,9 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   }
 
   Future<void> _loadExistingSlotsForDate() async {
-    final localUnsubmittedSlots = _createdSlots.where((s) => s['isSubmitted'] == false).toList();
     if (mounted) {
       setState(() {
         _isLoading = true;
-        _createdSlots.clear();
       });
     }
     try {
@@ -192,107 +203,46 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
             .toList();
       }
 
-      // 2. Fetch all attendance records for the selected date
-      final response = await ApiService.instance.get('attendance/date', queryParams: {'date': dateStr});
-      final List<dynamic> attendanceList = response['attendance'] ?? [];
+      // 2. Fetch all attendance slots for this date
+      final slotsRes = await AttendanceService.instance.getSlots(date: dateStr);
+      final List<dynamic> slotsList = slotsRes['slots'] ?? [];
 
-      // Group attendance records by classId and sectionId
-      Map<String, List<Map<String, dynamic>>> groupedRecords = {};
-      for (var record in attendanceList) {
-        final student = record['student'] as Map?;
-        if (student == null) continue;
-        final classId = student['currentClassId']?.toString();
-        final sectionId = student['sectionId']?.toString() ?? 'null';
-        if (classId == null) continue;
-        final key = '$classId|$sectionId';
-        groupedRecords.putIfAbsent(key, () => []).add(record);
-      }
+      // Get teacher class IDs to filter slots
+      final teacherClassIds = _apiClasses.map((c) => c['id']?.toString()).toSet();
 
-      for (var key in groupedRecords.keys) {
-        final parts = key.split('|');
-        final classId = parts[0];
-        final sectionId = parts[1];
+      final List<Map<String, dynamic>> loadedSlots = [];
 
-        final cls = _apiClasses.firstWhere((c) => c['id']?.toString() == classId,
-            orElse: () => {});
-        if (cls.isEmpty) continue;
-        final dbClassName = cls['name']?.toString() ?? '';
+      for (var slot in slotsList) {
+        final classId = slot['classId']?.toString();
+        // Skip slots that are not in the teacher's classes
+        if (!teacherClassIds.contains(classId)) continue;
 
-        final sec = sectionId != 'null'
-            ? _allSections.firstWhere((s) => s['id']?.toString() == sectionId,
-                orElse: () => {})
-            : {};
+        final rawClass = slot['class']?['name']?.toString() ?? '';
+        final secName = slot['section']?['name']?.toString() ?? '';
+        final String displaySection = secName.isNotEmpty ? 'Section $secName' : 'All Sections';
 
-        final displayClassName = _mapClassName(dbClassName);
-        final sectionName =
-            sec.isNotEmpty ? 'Section ${sec['name']}' : 'All Sections';
+        final bool isSub = slot['status']?.toString() == 'COMPLETED';
+        final int totalCount = slot['studentCount'] as int? ?? 0;
+        final int markedCount = slot['_count']?['records'] as int? ?? 0;
 
-        final records = groupedRecords[key]!;
-
-        // Build students list and status map for this slot
-        final List<Map<String, dynamic>> studentList = [];
-        Map<String, String> statusMap = {};
-        Map<String, String> recordIdMap = {};
-        
-        bool isAnySubmitted = false;
-
-        for (var record in records) {
-          final student = record['student'] as Map? ?? {};
-          final user = student['user'] as Map? ?? {};
-          final firstName = user['firstName'] ?? '';
-          final lastName = user['lastName'] ?? '';
-          final fullName = '$firstName $lastName'.trim();
-          final email = user['email'] ?? '';
-          final admission = student['admissionNumber'] ?? '';
-
-          final sId = student['id']?.toString() ?? '';
-          if (sId.isEmpty) continue;
-
-          studentList.add({
-            'id': sId,
-            'name': fullName.isNotEmpty ? fullName : 'Unknown',
-            'email': email,
-            'class_name': displayClassName,
-            'admission_no': admission,
-          });
-
-          final attRec = record['attendance'] as Map?;
-          if (attRec != null) {
-            isAnySubmitted = true;
-            final statusVal = attRec['status']?.toString() ?? '';
-            final rId = attRec['id']?.toString() ?? '';
-
-            String localStatus = 'P';
-            if (statusVal == 'ABSENT') localStatus = 'A';
-            if (statusVal == 'LATE') localStatus = 'L';
-
-            statusMap[sId] = localStatus;
-            if (rId.isNotEmpty) recordIdMap[sId] = rId;
-          }
-        }
-        studentList.sort((a, b) => a['name'].compareTo(b['name']));
-
-        _createdSlots.add({
-          'class': dbClassName,
+        loadedSlots.add({
+          'id': slot['id']?.toString() ?? '',
+          'class': rawClass,
           'classId': classId,
-          'section': sectionName,
-          'sectionId': sectionId != 'null' ? sectionId : null,
-          'date': _selectedDate,
-          'students': studentList,
-          'attendanceStatus': statusMap,
-          'recordIds': recordIdMap,
-          'isSubmitted': isAnySubmitted,
+          'section': displaySection,
+          'sectionId': slot['sectionId']?.toString(),
+          'date': DateTime.parse(slot['date']?.toString() ?? dateStr),
+          'isSubmitted': isSub,
+          'studentCount': totalCount,
+          'markedCount': markedCount,
         });
       }
 
-      // Restore local unsubmitted slots to prevent real-time updates from wiping them out
-      for (var localSlot in localUnsubmittedSlots) {
-        final exists = _createdSlots.any((s) =>
-            s['class'] == localSlot['class'] &&
-            s['section'] == localSlot['section']);
-        if (!exists) {
-          _createdSlots.add(localSlot);
-        }
+      if (mounted) {
+        setState(() {
+          _createdSlots.clear();
+          _createdSlots.addAll(loadedSlots);
+        });
       }
     } catch (e) {
       dev.log('Error loading existing slots: $e');
@@ -601,7 +551,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                   _selectedClass = val;
                   _updateSectionsForSelectedClass();
                 });
-                _createNewSlotFromSelection();
               }
             },
           ),
@@ -701,7 +650,15 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                 items: items
                     .map((c) => DropdownMenuItem(
                           value: c,
-                          child: Text(c.replaceAll('Class', 'Grade')),
+                          child: Text(
+                            c == 'Class 8'
+                                ? '8th Grade'
+                                : c == 'Class 9'
+                                    ? '9th Grade'
+                                    : c == 'Class 10'
+                                        ? '10th Grade'
+                                        : c,
+                          ),
                         ))
                     .toList(),
                 onChanged: onChanged,
@@ -827,9 +784,9 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               itemBuilder: (context, index) {
                 final slot = _createdSlots[index];
                 final isSub = slot['isSubmitted'] as bool? ?? false;
-                final totalRecs = slot['students'] != null
-                    ? (slot['students'] as List).length
-                    : 0;
+                final totalRecs = isSub
+                    ? (slot['markedCount'] as int? ?? 0)
+                    : (slot['studentCount'] as int? ?? 0);
 
                 final rawClass = slot['class'] as String;
                 final displayClass = rawClass.replaceAll('Class', 'Grade');
@@ -841,40 +798,104 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
                 return GestureDetector(
                   onTap: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MarkAttendanceScreen(
-                          className: slot['class'] as String,
-                          classId: slot['classId'] as String?,
-                          section: slot['section'] as String,
-                          sectionId: slot['sectionId'] as String?,
-                          date: slot['date'] as DateTime,
-                          students: List<Map<String, dynamic>>.from(
-                              slot['students'] as Iterable),
-                          initialAttendanceStatus: Map<String, String>.from(
-                              slot['attendanceStatus'] as Map),
-                          initialRecordIds: Map<String, String>.from(
-                              (slot['recordIds'] ?? {}) as Map),
-                          isAlreadySubmitted: isSub,
-                        ),
+                    final String slotId = slot['id']?.toString() ?? '';
+                    if (slotId.isEmpty) return;
+
+                    // Show progress indicator while loading students
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => const Center(
+                        child: CircularProgressIndicator(color: AppColors.teacherPrimary),
                       ),
                     );
 
-                    if (result != null && result is Map<String, dynamic>) {
-                      if (result['delete'] == true) {
-                        setState(() {
-                          _createdSlots.removeAt(index);
+                    try {
+                      final slotDetail = await AttendanceService.instance.getSlotWithStudents(slotId);
+                      Navigator.pop(context); // Dismiss loading dialog
+
+                      final List<dynamic> entities = slotDetail['entities'] ?? [];
+                      final Map<String, dynamic> attendanceMap = slotDetail['attendance'] ?? {};
+
+                      final List<Map<String, dynamic>> studentList = [];
+                      final Map<String, String> statusMap = {};
+
+                      for (var item in entities) {
+                        final String sId = item['id']?.toString() ?? '';
+                        if (sId.isEmpty) continue;
+                        studentList.add({
+                          'id': sId,
+                          'name': item['name'] ?? 'Unknown',
+                          'admission_no': item['identifier'] ?? '',
                         });
-                      } else {
-                        setState(() {
-                          slot['isSubmitted'] = true;
-                          slot['attendanceStatus'] = result['attendanceStatus'];
-                          if (result['recordIds'] != null) {
-                            slot['recordIds'] = result['recordIds'];
-                          }
-                        });
+
+                        final String? statusVal = attendanceMap[sId]?.toString();
+                        if (statusVal != null) {
+                          String localStatus = 'P';
+                          if (statusVal == 'ABSENT' || statusVal == 'A') localStatus = 'A';
+                          if (statusVal == 'LATE' || statusVal == 'L') localStatus = 'L';
+                          statusMap[sId] = localStatus;
+                        }
                       }
+
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MarkAttendanceScreen(
+                            className: slot['class'] as String,
+                            classId: slot['classId'] as String?,
+                            section: slot['section'] as String,
+                            sectionId: slot['sectionId'] as String?,
+                            slotId: slotId,
+                            date: slot['date'] as DateTime,
+                            students: studentList,
+                            initialAttendanceStatus: statusMap,
+                            isAlreadySubmitted: isSub,
+                          ),
+                        ),
+                      );
+
+                      if (result != null && result is Map<String, dynamic>) {
+                        if (result['delete'] == true) {
+                          // Call delete slot API
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (ctx) => const Center(
+                              child: CircularProgressIndicator(color: AppColors.teacherPrimary),
+                            ),
+                          );
+                          try {
+                            await AttendanceService.instance.deleteSlot(slotId);
+                            Navigator.pop(context); // Dismiss loading dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Attendance slot deleted successfully!'),
+                                backgroundColor: Color(0xFF10B981),
+                              ),
+                            );
+                            _loadExistingSlotsForDate();
+                          } catch (e) {
+                            Navigator.pop(context); // Dismiss loading dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to delete slot: $e'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        } else {
+                          _loadExistingSlotsForDate();
+                        }
+                      }
+                    } catch (e) {
+                      Navigator.pop(context); // Dismiss loading dialog
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to load slot details: $e'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
                     }
                   },
                   child: Container(
@@ -990,26 +1011,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       return;
     }
 
-    final exists = _createdSlots.any((slot) =>
-        slot['class'] == _selectedClass &&
-        slot['section'] == _selectedSection &&
-        DateFormat('yyyy-MM-dd').format(slot['date'] as DateTime) ==
-            DateFormat('yyyy-MM-dd').format(_selectedDate));
-
-    if (exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Attendance slot already exists for this selection',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _isLoading = true;
     });
@@ -1041,104 +1042,42 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         }
       }
 
-      // 1. Fetch students for the class/section via REST API
-      final studentsMap = await StudentService.instance.getStudents(classId: classId, sectionId: sectionId);
-      final List<dynamic> studentsRawList = studentsMap['students'] ?? studentsMap['data'] ?? [];
-
-      // 2. Fetch all attendance records for this date via REST API
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      final response = await ApiService.instance.get('attendance/date', queryParams: {'date': dateStr});
-      final List<dynamic> attendanceRawList = response['attendance'] ?? [];
 
-      final List<Map<String, dynamic>> studentList = [];
-      final Map<String, String> statusMap = {};
-      final Map<String, String> recordIdMap = {};
-      bool alreadySubmitted = false;
+      // Call API to create slot in the database
+      final createRes = await AttendanceService.instance.createSlot(
+        date: dateStr,
+        classId: classId,
+        sectionId: sectionId,
+      );
 
-      for (var item in studentsRawList) {
-        final user = item['user'] as Map? ?? {};
-        final firstName = user['firstName'] ?? '';
-        final lastName = user['lastName'] ?? '';
-        final fullName = '$firstName $lastName'.trim();
-        final email = user['email'] ?? '';
-        final admission = item['admissionNumber'] ?? '';
-
-        final sId = item['id']?.toString() ?? '';
-        if (sId.isEmpty) continue;
-
-        studentList.add({
-          'id': sId,
-          'name': fullName.isNotEmpty
-              ? fullName
-              : (email.isNotEmpty ? email.split('@')[0] : 'Unknown'),
-          'email': email,
-          'class_name': _selectedClass!,
-          'admission_no': admission,
-        });
-      }
-
-      studentList.sort((a, b) => a['name'].compareTo(b['name']));
-
-      // Map attendance records to our students
-      for (var att in attendanceRawList) {
-        final attStudent = att['student'] as Map?;
-        final attRec = att['attendance'] as Map?;
-        if (attStudent == null || attRec == null) continue;
-
-        final sId = attStudent['id']?.toString() ?? '';
-        final rId = attRec['id']?.toString() ?? '';
-        if (sId.isNotEmpty) {
-          final isOurStudent = studentList.any((s) => s['id'] == sId);
-          if (isOurStudent) {
-            alreadySubmitted = true;
-            final statusVal = attRec['status']?.toString() ?? '';
-            String localStatus = 'P';
-            if (statusVal == 'ABSENT' || statusVal == 'A') localStatus = 'A';
-            if (statusVal == 'LATE' || statusVal == 'L') localStatus = 'L';
-            statusMap[sId] = localStatus;
-            if (rId.isNotEmpty) recordIdMap[sId] = rId;
-          }
-        }
-      }
-
-      final newSlot = {
-        'class': _selectedClass!,
-        'classId': classId,
-        'section': _selectedSection,
-        'sectionId': sectionId,
-        'date': _selectedDate,
-        'students': studentList,
-        'attendanceStatus': statusMap,
-        'recordIds': recordIdMap,
-        'isSubmitted': alreadySubmitted,
-      };
-
-      if (mounted) {
-        setState(() {
-          _createdSlots.add(newSlot);
-          _isLoading = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Text('Attendance slot created',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-              ],
+      if (createRes['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Attendance slot created',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+          );
+        }
+        // Reload all slots from database
+        await _loadExistingSlotsForDate();
+      } else {
+        throw createRes['message'] ?? 'Failed to create slot';
       }
     } catch (e) {
-      debugPrint('Error creating slot via Supabase: $e');
+      debugPrint('Error creating slot: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -2184,10 +2123,10 @@ class MarkAttendanceScreen extends StatefulWidget {
   final String? classId;
   final String section;
   final String? sectionId;
+  final String slotId;
   final DateTime date;
   final List<Map<String, dynamic>> students;
   final Map<String, String> initialAttendanceStatus;
-  final Map<String, String> initialRecordIds;
   final bool isAlreadySubmitted;
 
   const MarkAttendanceScreen({
@@ -2196,10 +2135,10 @@ class MarkAttendanceScreen extends StatefulWidget {
     this.classId,
     required this.section,
     this.sectionId,
+    required this.slotId,
     required this.date,
     required this.students,
     required this.initialAttendanceStatus,
-    required this.initialRecordIds,
     required this.isAlreadySubmitted,
   });
 
@@ -2213,7 +2152,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   late Map<String, String> _attendanceStatus;
   bool _isSubmitting = false;
   late bool _isAlreadySubmitted;
-  late Map<String, String> _currentRecordIds;
 
   @override
   void initState() {
@@ -2221,7 +2159,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     _students = List.from(widget.students);
     _attendanceStatus = Map.from(widget.initialAttendanceStatus);
     _isAlreadySubmitted = widget.isAlreadySubmitted;
-    _currentRecordIds = Map.from(widget.initialRecordIds);
 
     // Auto-mark all unmarked students as Present to save teacher time
     if (!_isAlreadySubmitted) {
@@ -2330,19 +2267,12 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         if (statusLocal == 'L') statusEnum = 'LATE';
 
         attendanceData.add({
-          'studentId': studentId,
+          'entityId': studentId,
           'status': statusEnum,
         });
       }
 
-      final payload = {
-        'date': dbDateStr,
-        'attendanceData': attendanceData,
-        if (widget.classId != null) 'classId': widget.classId,
-        if (widget.sectionId != null) 'sectionId': widget.sectionId,
-      };
-
-      await ApiService.instance.post('attendance/bulk', body: payload);
+      await AttendanceService.instance.submitSlotAttendance(widget.slotId, attendanceData);
 
       if (mounted) {
         try {
@@ -2390,8 +2320,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         );
 
         Navigator.pop(context, {
-          'attendanceStatus': _attendanceStatus,
-          'recordIds': _currentRecordIds,
+          'success': true,
         });
       }
     } catch (e) {

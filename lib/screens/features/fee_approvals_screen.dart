@@ -34,7 +34,7 @@ class _FeeApprovalsScreenState extends State<FeeApprovalsScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadApprovals();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadApprovals();
       }

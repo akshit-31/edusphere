@@ -21,6 +21,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../services/auth_service.dart';
+import '../config/api_endpoints.dart';
 import 'main_screen.dart';
 import '../config/api_config.dart';
 import '../widgets/teacher_app_bar.dart';
@@ -244,9 +245,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   @override
-  @override
   void dispose() {
     _profilePollTimer?.cancel();
+    _clearRealTimeSync();
     _nameCtrl.dispose();
     _designCtrl.dispose();
     _empIdCtrl.dispose();
@@ -268,7 +269,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // 1. Fetch Attendance Records
     try {
       final attRes =
-          await ApiService.instance.get('students/$studentId/attendance');
+          await ApiService.instance.get(ApiEndpoints.studentAttendance(studentId));
       if (attRes != null && attRes['success'] == true && mounted) {
         setState(() {
           _attendanceRecords =
@@ -282,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // 2. Fetch Fee Ledger and Payments
     try {
       final feeRes =
-          await ApiService.instance.get('fees/students/$studentId/status');
+          await ApiService.instance.get(ApiEndpoints.studentFeeStatus(studentId));
       if (feeRes != null && feeRes['hasLedger'] == true && mounted) {
         final ledgers = feeRes['ledgers'] as List<dynamic>? ?? [];
         final recentPayments = (feeRes['recentPayments'] ?? feeRes['payments'])
@@ -302,7 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (sectionId != null) {
       try {
         final timetableRes =
-            await ApiService.instance.get('timetable/student/$sectionId');
+            await ApiService.instance.get(ApiEndpoints.studentTimetable(sectionId));
         if (timetableRes != null &&
             timetableRes['success'] == true &&
             mounted) {
@@ -343,7 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // 4. Fetch Documents
     try {
       final docRes =
-          await ApiService.instance.get('students/$studentId/documents');
+          await ApiService.instance.get(ApiEndpoints.studentDocuments(studentId));
       if (docRes != null && docRes['success'] == true && mounted) {
         final docsList = docRes['documents'] as List<dynamic>? ?? [];
         setState(() {
@@ -445,8 +446,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           '🔍 API Student Profile request initiated. Student ID: ${widget.studentId}');
 
       final response = widget.studentId != null
-          ? await ApiService.instance.get('students/${widget.studentId}')
-          : await ApiService.instance.get('students/me');
+          ? await ApiService.instance.get(ApiEndpoints.studentProfile(widget.studentId!))
+          : await ApiService.instance.get(ApiEndpoints.studentsMe);
 
       if (response == null ||
           response['success'] != true ||
@@ -591,7 +592,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (userMap['id'] != null) {
         try {
           final qrRes =
-              await ApiService.instance.get('users/${userMap['id']}/qr');
+              await ApiService.instance.get(ApiEndpoints.userQrCode(userMap['id']?.toString() ?? ''));
           if (qrRes != null &&
               qrRes['success'] == true &&
               qrRes['qrCode'] != null) {
@@ -610,8 +611,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final studentId = studentResMap['id'] as String;
       await prefs.setString('student_id', studentId);
-
       final String? sectionId = studentResMap['sectionId'] as String?;
+      if (sectionId != null) {
+        await prefs.setString('student_section_id', sectionId);
+      }
+      final String? classId = studentResMap['currentClassId'] as String?;
+      if (classId != null) {
+        await prefs.setString('student_class_id', classId);
+      }
       _loadAllTabDetails(studentId, sectionId);
       _connectRealTimeSync();
 
@@ -723,10 +730,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Timer? _profilePollTimer;
 
+  void _onStudentUpdated(dynamic data) {
+    if (!mounted) return;
+    try {
+      final String? updatedStudentId =
+          data?['id']?.toString() ?? data?['studentId']?.toString();
+      debugPrint(
+          '📡 Socket.IO STUDENT_UPDATED received. Updated Student ID: $updatedStudentId, Current Viewed ID: ${widget.studentId}');
+      if (widget.studentId != null &&
+          updatedStudentId == widget.studentId) {
+        debugPrint(
+            '🔄 Socket.IO student matches viewed student. Reloading...');
+        _loadStudentDataFromSupabase();
+      } else if (widget.studentId == null && widget.role == 'student') {
+        _loadStudentDataFromSupabase();
+      }
+    } catch (e) {
+      debugPrint('Error handling Socket.IO update: $e');
+    }
+  }
+
+  void _onFeeUpdated(dynamic data) {
+    if (!mounted) return;
+    try {
+      final String? updatedStudentId =
+          data?['id']?.toString() ?? data?['studentId']?.toString();
+      if (widget.role == 'student') {
+        _loadStudentDataFromSupabase();
+      } else if (widget.studentId != null &&
+          updatedStudentId == widget.studentId) {
+        _loadStudentDataFromSupabase();
+      }
+    } catch (e) {
+      debugPrint('Error handling Socket.IO FEE_UPDATED: $e');
+    }
+  }
+
+  void _clearRealTimeSync() {
+    SocketService().off('STUDENT_UPDATED', _onStudentUpdated);
+    SocketService().off('FEE_UPDATED', _onFeeUpdated);
+  }
+
   void _connectRealTimeSync() {
     try {
       _profilePollTimer?.cancel();
-      _profilePollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _profilePollTimer = Timer.periodic(const Duration(minutes: 5), (_) {
         if (mounted) {
           if (widget.role == 'student') {
             _loadStudentDataFromSupabase();
@@ -736,42 +784,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       });
 
-      // Socket.IO event updates
-      SocketService().on('STUDENT_UPDATED', (data) {
-        if (!mounted) return;
-        try {
-          final String? updatedStudentId =
-              data?['id']?.toString() ?? data?['studentId']?.toString();
-          debugPrint(
-              '📡 Socket.IO STUDENT_UPDATED received. Updated Student ID: $updatedStudentId, Current Viewed ID: ${widget.studentId}');
-          if (widget.studentId != null &&
-              updatedStudentId == widget.studentId) {
-            debugPrint(
-                '🔄 Socket.IO student matches viewed student. Reloading...');
-            _loadStudentDataFromSupabase();
-          } else if (widget.studentId == null && widget.role == 'student') {
-            _loadStudentDataFromSupabase();
-          }
-        } catch (e) {
-          debugPrint('Error handling Socket.IO update: $e');
-        }
-      });
+      _clearRealTimeSync();
 
-      SocketService().on('FEE_UPDATED', (data) {
-        if (!mounted) return;
-        try {
-          final String? updatedStudentId =
-              data?['id']?.toString() ?? data?['studentId']?.toString();
-          if (widget.role == 'student') {
-            _loadStudentDataFromSupabase();
-          } else if (widget.studentId != null &&
-              updatedStudentId == widget.studentId) {
-            _loadStudentDataFromSupabase();
-          }
-        } catch (e) {
-          debugPrint('Error handling Socket.IO FEE_UPDATED: $e');
-        }
-      });
+      // Socket.IO event updates
+      SocketService().on('STUDENT_UPDATED', _onStudentUpdated);
+      SocketService().on('FEE_UPDATED', _onFeeUpdated);
     } catch (e) {
       debugPrint('⚠️ Error connecting Realtime in ProfileScreen: $e');
     }
@@ -821,7 +838,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       };
 
       if (widget.studentId != null) {
-        await ApiService.instance.put('students/${widget.studentId}', body: updatePayload);
+        await ApiService.instance.put(ApiEndpoints.studentProfile(widget.studentId!), body: updatePayload);
       } else {
         await ApiService.instance.put('users/me', body: updatePayload);
       }
@@ -952,7 +969,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
         withData: true,
@@ -2258,15 +2275,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: EdgeInsets.only(left: 4.w, bottom: 8.h),
           child: Text('🔔 Notification Preferences', style: GoogleFonts.inter(fontSize: 14.sp, fontWeight: FontWeight.w900, color: AppColors.textDark)),
         ),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 10.h),
-          decoration: BoxDecoration(
-            color: Colors.white, 
-            borderRadius: BorderRadius.circular(24.r), 
-            border: Border.all(color: AppColors.border),
+        Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24.r),
+            side: const BorderSide(color: AppColors.border),
           ),
-          child: Column(
-            children: [
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 10.h),
+            child: Column(
+              children: [
               SwitchListTile(
                 value: _pushNotifications,
                 onChanged: _togglePushNotifications,
@@ -2285,6 +2304,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+      ),
       ],
     );
   }
@@ -4242,7 +4262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickAndUploadAvatar() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
         withData: true,
       );

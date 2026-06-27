@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../config/api_endpoints.dart';
 
 class StudentTimetableScreen extends StatefulWidget {
   const StudentTimetableScreen({super.key});
@@ -65,7 +66,7 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
       }
 
       final response =
-          await ApiService.instance.get('timetable/student/$sectionId');
+          await ApiService.instance.get(ApiEndpoints.studentTimetable(sectionId));
       if (response != null && response['success'] == true) {
         final rawSchedule = response['schedule'] as List<dynamic>? ?? [];
         final Map<int, String> weekdayToName = {

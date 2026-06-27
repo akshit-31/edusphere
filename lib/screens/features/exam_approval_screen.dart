@@ -259,7 +259,9 @@ class _ExamApprovalScreenState extends State<ExamApprovalScreen>
           ],
         );
       },
-    );
+    ).then((_) {
+      commentController.dispose();
+    });
   }
 
   Widget _dialogInfoRow(String label, String value) {

@@ -37,6 +37,12 @@ class _LessonPlanScreenState extends State<LessonPlanScreen>
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundGrey,

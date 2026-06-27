@@ -36,12 +36,19 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     _connectRealTime();
   }
 
+  void _onAssignmentEvent(dynamic payload) {
+    dev.log('🔥 Real-time assignment/submission event received | Data: $payload', name: 'AssignmentsScreen');
+    if (mounted) {
+      _loadAssignmentsData(showLoading: false);
+    }
+  }
+
   @override
   void dispose() {
     try {
-      SocketService().off('ASSIGNMENT_CREATED');
-      SocketService().off('ASSIGNMENT_UPDATED');
-      SocketService().off('SUBMISSION_UPDATED');
+      SocketService().off('ASSIGNMENT_CREATED', _onAssignmentEvent);
+      SocketService().off('ASSIGNMENT_UPDATED', _onAssignmentEvent);
+      SocketService().off('SUBMISSION_UPDATED', _onAssignmentEvent);
     } catch (e) {
       dev.log('Error unregistering Socket.IO events: $e', name: 'AssignmentsScreen');
     }
@@ -52,15 +59,13 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     try {
       dev.log('📡 Subscribing to Socket.IO changes for Assignments...', name: 'AssignmentsScreen');
       
-      final events = ['ASSIGNMENT_CREATED', 'ASSIGNMENT_UPDATED', 'SUBMISSION_UPDATED'];
-      for (var event in events) {
-        SocketService().on(event, (payload) {
-          dev.log('🔥 Real-time event received: $event | Data: $payload', name: 'AssignmentsScreen');
-          if (mounted) {
-            _loadAssignmentsData(showLoading: false);
-          }
-        });
-      }
+      SocketService().off('ASSIGNMENT_CREATED', _onAssignmentEvent);
+      SocketService().off('ASSIGNMENT_UPDATED', _onAssignmentEvent);
+      SocketService().off('SUBMISSION_UPDATED', _onAssignmentEvent);
+
+      SocketService().on('ASSIGNMENT_CREATED', _onAssignmentEvent);
+      SocketService().on('ASSIGNMENT_UPDATED', _onAssignmentEvent);
+      SocketService().on('SUBMISSION_UPDATED', _onAssignmentEvent);
     } catch (e) {
       dev.log('⚠️ Error connecting Socket.IO for Assignments: $e', name: 'AssignmentsScreen');
     }
@@ -929,7 +934,7 @@ class _AdvancedAssignmentModalState extends State<AdvancedAssignmentModal>
                 GestureDetector(
                   onTap: () async {
                     try {
-                      final result = await FilePicker.platform.pickFiles();
+                      final result = await FilePicker.pickFiles();
                       if (result != null && result.files.isNotEmpty) {
                         setState(() {
                           selectedFile = result.files.first;

@@ -361,6 +361,90 @@ const getMyClasses = asyncHandler(async (req, res) => {
   });
 });
 
+// Get current teacher profile
+const getMeTeacher = asyncHandler(async (req, res) => {
+  const teacher = await prisma.teacher.findUnique({
+    where: { userId: req.user.userId },
+    include: {
+      user: true,
+      subjects: {
+        include: {
+          subject: {
+            include: {
+              class: true,
+            },
+          },
+        },
+      },
+      assignedClass: {
+        include: {
+          sections: true,
+        },
+      },
+      rfidCard: true,
+    },
+  });
+
+  if (!teacher) {
+    return res.status(404).json({
+      success: false,
+      message: 'Teacher profile not found'
+    });
+  }
+
+  res.json({
+    success: true,
+    teacher
+  });
+});
+
+// Update current teacher profile
+const updateMeTeacher = asyncHandler(async (req, res) => {
+  const teacher = await prisma.teacher.findUnique({
+    where: { userId: req.user.userId }
+  });
+
+  if (!teacher) {
+    return res.status(404).json({
+      success: false,
+      message: 'Teacher profile not found'
+    });
+  }
+
+  const { firstName, lastName, phone, qualification, experience, specialization } = req.body;
+  const userUpdates = {};
+  const teacherUpdates = {};
+
+  if (firstName !== undefined) userUpdates.firstName = firstName;
+  if (lastName !== undefined) userUpdates.lastName = lastName;
+  if (phone !== undefined) userUpdates.phone = phone;
+
+  if (qualification !== undefined) teacherUpdates.qualification = qualification;
+  if (experience !== undefined) teacherUpdates.experience = experience ? parseInt(experience) : null;
+  if (specialization !== undefined) teacherUpdates.specialization = specialization;
+
+  const updated = await prisma.teacher.update({
+    where: { id: teacher.id },
+    data: {
+      ...teacherUpdates,
+      ...(Object.keys(userUpdates).length > 0 && {
+        user: {
+          update: userUpdates
+        }
+      })
+    },
+    include: {
+      user: true
+    }
+  });
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    teacher: updated
+  });
+});
+
 module.exports = {
   getTeachers,
   getTeacher,
@@ -369,4 +453,6 @@ module.exports = {
   assignSubject,
   getMySchedule,
   getMyClasses,
+  getMeTeacher,
+  updateMeTeacher,
 };

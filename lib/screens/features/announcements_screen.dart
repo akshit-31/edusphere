@@ -172,12 +172,44 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
   }
 
+  void _onAnnouncementCreated(dynamic payload) {
+    dev.log('🔥 Real-time event received: ANNOUNCEMENT_CREATED | Data: $payload', name: 'AnnouncementsScreen');
+    if (mounted) {
+      final title = payload?['title'] ?? 'New Announcement';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded, color: Colors.white),
+              SizedBox(width: 8.w),
+              Expanded(
+                  child: Text('New: $title',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
+            ],
+          ),
+          backgroundColor: const Color(0xFF2563EB),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      _loadAnnouncements(showLoading: false);
+    }
+  }
+
+  void _onAnnouncementUpdatedOrDeleted(dynamic payload) {
+    dev.log('🔥 Real-time event received: update/delete | Data: $payload', name: 'AnnouncementsScreen');
+    if (mounted) {
+      _loadAnnouncements(showLoading: false);
+    }
+  }
+
   @override
   void dispose() {
     try {
-      SocketService().off('ANNOUNCEMENT_CREATED');
-      SocketService().off('ANNOUNCEMENT_UPDATED');
-      SocketService().off('ANNOUNCEMENT_DELETED');
+      SocketService().off('ANNOUNCEMENT_CREATED', _onAnnouncementCreated);
+      SocketService().off('ANNOUNCEMENT_UPDATED', _onAnnouncementUpdatedOrDeleted);
+      SocketService().off('ANNOUNCEMENT_DELETED', _onAnnouncementUpdatedOrDeleted);
     } catch (e) {
       dev.log('Error unregistering Socket.IO events: $e', name: 'AnnouncementsScreen');
     }
@@ -188,35 +220,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     try {
       dev.log('📡 Subscribing to Socket.IO changes for Announcements...', name: 'AnnouncementsScreen');
       
-      final events = ['ANNOUNCEMENT_CREATED', 'ANNOUNCEMENT_UPDATED', 'ANNOUNCEMENT_DELETED'];
-      for (var event in events) {
-        SocketService().on(event, (payload) {
-          dev.log('🔥 Real-time event received: $event | Data: $payload', name: 'AnnouncementsScreen');
-          if (mounted) {
-            if (event == 'ANNOUNCEMENT_CREATED') {
-              final title = payload?['title'] ?? 'New Announcement';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.notifications_active_rounded, color: Colors.white),
-                      SizedBox(width: 8.w),
-                      Expanded(
-                          child: Text('New: $title',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.w700))),
-                    ],
-                  ),
-                  backgroundColor: const Color(0xFF2563EB),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                  duration: const Duration(seconds: 4),
-                ),
-              );
-            }
-            _loadAnnouncements(showLoading: false);
-          }
-        });
-      }
+      SocketService().off('ANNOUNCEMENT_CREATED', _onAnnouncementCreated);
+      SocketService().off('ANNOUNCEMENT_UPDATED', _onAnnouncementUpdatedOrDeleted);
+      SocketService().off('ANNOUNCEMENT_DELETED', _onAnnouncementUpdatedOrDeleted);
+
+      SocketService().on('ANNOUNCEMENT_CREATED', _onAnnouncementCreated);
+      SocketService().on('ANNOUNCEMENT_UPDATED', _onAnnouncementUpdatedOrDeleted);
+      SocketService().on('ANNOUNCEMENT_DELETED', _onAnnouncementUpdatedOrDeleted);
     } catch (e) {
       dev.log('⚠️ Error connecting Socket.IO for Announcements: $e', name: 'AnnouncementsScreen');
     }

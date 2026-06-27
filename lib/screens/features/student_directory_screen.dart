@@ -161,6 +161,10 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
 
   void _connectRealtime() {
     try {
+      SocketService().off('STUDENT_UPDATED', _handleStudentUpdated);
+      SocketService().off('STUDENT_ADDED', _handleStudentUpdated);
+      SocketService().off('STUDENT_DELETED', _handleStudentUpdated);
+
       SocketService().on('STUDENT_UPDATED', _handleStudentUpdated);
       SocketService().on('STUDENT_ADDED', _handleStudentUpdated);
       SocketService().on('STUDENT_DELETED', _handleStudentUpdated);
@@ -168,6 +172,8 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
       debugPrint('Error subscribing to Socket.IO student updates: $e');
     }
   }
+
+
 
   void _handleStudentUpdated(dynamic data) {
     if (mounted) _fetchStudents();

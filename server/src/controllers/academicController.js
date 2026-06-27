@@ -115,6 +115,15 @@ const getClasses = asyncHandler(async (req, res) => {
         }
       });
 
+      // 3. Always include Class 8, Class 9, and Class 10 (as per user requirement)
+      const defaultClasses = await prisma.class.findMany({
+        where: {
+          name: { in: ['Class 8', 'Class 9', 'Class 10'] }
+        },
+        select: { id: true }
+      });
+      defaultClasses.forEach(c => assignedClassIds.add(c.id));
+
       // If no assignments found, ensure they see nothing instead of everything
       if (assignedClassIds.size === 0) {
         where.id = 'none'; // Will result in empty array

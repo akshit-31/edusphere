@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../theme/colors.dart';
@@ -363,12 +365,33 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
                     backgroundColor: const Color(0xFFE2E8F0),
                     child: (_photoPath != null && _photoPath!.isNotEmpty)
                         ? ClipOval(
-                            child: Image.file(
-                              File(_photoPath!),
-                              width: 96.r,
-                              height: 96.r,
-                              fit: BoxFit.cover,
-                            ),
+                            child: (_photoPath!.startsWith('http') || _photoPath!.startsWith('blob:'))
+                                ? Image.network(
+                                    _photoPath!,
+                                    width: 96.r,
+                                    height: 96.r,
+                                    fit: BoxFit.cover,
+                                  )
+                                : (_photoPath!.startsWith('data:image')
+                                    ? Image.memory(
+                                        base64Decode(_photoPath!.split(',').last),
+                                        width: 96.r,
+                                        height: 96.r,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : (kIsWeb
+                                        ? Image.network(
+                                            _photoPath!,
+                                            width: 96.r,
+                                            height: 96.r,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.file(
+                                            File(_photoPath!),
+                                            width: 96.r,
+                                            height: 96.r,
+                                            fit: BoxFit.cover,
+                                          ))),
                           )
                         : Icon(Icons.person_rounded,
                             size: 48.sp, color: const Color(0xFF94A3B8)),
@@ -669,7 +692,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
               GestureDetector(
                 onTap: () async {
                   FilePickerResult? result =
-                      await FilePicker.platform.pickFiles();
+                      await FilePicker.pickFiles();
                   if (result != null) {
                     final file = result.files.single;
                     setState(() {

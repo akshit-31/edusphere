@@ -129,7 +129,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   GestureDetector(
                     onTap: () async {
                       try {
-                        final result = await FilePicker.platform.pickFiles();
+                        final result = await FilePicker.pickFiles();
                         if (!context.mounted) return;
                         if (result != null && result.files.isNotEmpty) {
                           setState(() => _attachedFile = result.files.first);

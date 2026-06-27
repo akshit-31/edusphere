@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -263,7 +265,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
       if (raw.isNotEmpty) {
         final loaded = raw.map<CommunityPostModel>((e) {
-          final author = e['createdBy'] as Map? ?? {};
+          final rawCreatedBy = e['createdBy'];
+          final author = rawCreatedBy is Map ? rawCreatedBy : {};
           final firstName = author['firstName'] as String? ?? '';
           final lastName = author['lastName'] as String? ?? '';
           final authorName = '$firstName $lastName'.trim().isEmpty
@@ -691,7 +694,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           '⚠️ Camera capture failed or unsupported on this platform, falling back to image picker: $e',
           name: 'MessagesScreen');
       try {
-        final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        final FilePickerResult? result = await FilePicker.pickFiles(
           type: FileType.image,
         );
         if (result != null && result.files.isNotEmpty) {
@@ -720,7 +723,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Future<void> _pickFile() async {
     try {
-      final FilePickerResult? result = await FilePicker.platform.pickFiles();
+      final FilePickerResult? result = await FilePicker.pickFiles();
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
         String filePath = file.name;
@@ -3132,10 +3135,61 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
                 if (isImage) {
                   final imgPath = m.text.substring('[Image] '.length);
-                  final fileExists = File(imgPath).existsSync();
-                  bubbleContent = ClipRRect(
-                    borderRadius: BorderRadius.circular(8.r),
-                    child: fileExists
+                  Widget imgWidget;
+                  if (imgPath.startsWith('http') || imgPath.startsWith('blob:')) {
+                    imgWidget = Image.network(
+                      imgPath,
+                      width: 220.w,
+                      height: 160.h,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 220.w,
+                        height: 160.h,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(Icons.image_rounded,
+                              color: Colors.grey, size: 40),
+                        ),
+                      ),
+                    );
+                  } else if (imgPath.startsWith('data:image')) {
+                    imgWidget = Image.memory(
+                      base64Decode(imgPath.split(',').last),
+                      width: 220.w,
+                      height: 160.h,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 220.w,
+                        height: 160.h,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(Icons.image_rounded,
+                              color: Colors.grey, size: 40),
+                        ),
+                      ),
+                    );
+                  } else if (kIsWeb) {
+                    imgWidget = Image.network(
+                      imgPath,
+                      width: 220.w,
+                      height: 160.h,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 220.w,
+                        height: 160.h,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(Icons.image_rounded,
+                              color: Colors.grey, size: 40),
+                        ),
+                      ),
+                    );
+                  } else {
+                    bool exists = false;
+                    try {
+                      exists = File(imgPath).existsSync();
+                    } catch (_) {}
+                    imgWidget = exists
                         ? Image.file(
                             File(imgPath),
                             width: 220.w,
@@ -3150,7 +3204,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               child: Icon(Icons.image_rounded,
                                   color: Colors.grey, size: 40),
                             ),
-                          ),
+                          );
+                  }
+                  bubbleContent = ClipRRect(
+                    borderRadius: BorderRadius.circular(8.r),
+                    child: imgWidget,
                   );
                 } else if (isFile) {
                   final filePath = m.text.substring('[File] '.length);
@@ -3249,14 +3307,35 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                   child: InteractiveViewer(
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12.r),
-                                      child: File(imgPath).existsSync()
-                                          ? Image.file(File(imgPath))
-                                          : Container(
+                                      child: (() {
+                                        if (imgPath.startsWith('http') || imgPath.startsWith('blob:')) {
+                                          return Image.network(imgPath);
+                                        } else if (imgPath.startsWith('data:image')) {
+                                          return Image.memory(base64Decode(imgPath.split(',').last));
+                                        } else if (kIsWeb) {
+                                          return Image.network(
+                                            imgPath,
+                                            errorBuilder: (_, __, ___) => Container(
                                               padding: EdgeInsets.all(20.r),
                                               color: Colors.white,
-                                              child: const Text(
-                                                  'Image file not found locally'),
+                                              child: const Text('Image load failed'),
                                             ),
+                                          );
+                                        } else {
+                                          bool exists = false;
+                                          try {
+                                            exists = File(imgPath).existsSync();
+                                          } catch (_) {}
+                                          return exists
+                                              ? Image.file(File(imgPath))
+                                              : Container(
+                                                  padding: EdgeInsets.all(20.r),
+                                                  color: Colors.white,
+                                                  child: const Text(
+                                                      'Image file not found locally'),
+                                                );
+                                        }
+                                      })(),
                                     ),
                                   ),
                                 ),

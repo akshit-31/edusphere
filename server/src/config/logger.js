@@ -43,18 +43,16 @@ const logger = winston.createLogger({
     ],
 });
 
-// 3. If we're not in production then log to the `console` with a simpler format
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize({ all: true }),
-                winston.format.printf(
-                    (info) => `${info.timestamp} ${info.level}: ${info.message}${info.stack ? '\n' + info.stack : ''}`
-                )
-            ),
-        })
-    );
-}
+// 3. Always log to the console in all environments so cloud services like Render capture logs properly
+logger.add(
+    new winston.transports.Console({
+        format: winston.format.combine(
+            winston.format.colorize({ all: true }),
+            winston.format.printf(
+                (info) => `${info.timestamp} ${info.level}: ${info.message}${info.stack ? '\n' + info.stack : ''}`
+            )
+        ),
+    })
+);
 
 module.exports = logger;

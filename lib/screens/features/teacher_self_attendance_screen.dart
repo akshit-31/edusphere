@@ -100,8 +100,14 @@ class _TeacherPersonalAttendanceScreenState
     }
   }
 
+
+
   void _connectRealTime() {
     try {
+      SocketService().off('attendanceMarked', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_UPDATED', _onRealtimeEvent);
+
       SocketService().on('attendanceMarked', _onRealtimeEvent);
       SocketService().on('ATTENDANCE_MARKED', _onRealtimeEvent);
       SocketService().on('ATTENDANCE_UPDATED', _onRealtimeEvent);
@@ -110,7 +116,8 @@ class _TeacherPersonalAttendanceScreenState
           name: 'TeacherPersonalAttendance');
     }
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadAttendance(showLoading: false);
       }

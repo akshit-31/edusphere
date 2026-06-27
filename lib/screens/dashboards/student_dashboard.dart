@@ -71,20 +71,10 @@ class _StudentDashboardState extends State<StudentDashboard>
     WidgetsBinding.instance.removeObserver(this);
     _dashboardPollTimer?.cancel();
 
-    // Clean up Socket.IO listeners
+    // Clean up Socket.IO listeners cleanly
     try {
-      final socketEvents = [
-        'STUDENT_UPDATED',
-        'ATTENDANCE_UPDATED',
-        'ATTENDANCE_MARKED',
-        'attendanceMarked',
-        'FEE_UPDATED',
-        'RESULT_UPDATED',
-        'CALENDAR_UPDATED',
-        'DASHBOARD_STATS_CHANGED'
-      ];
-      for (var event in socketEvents) {
-        SocketService().off(event);
+      for (var event in _studentSocketEvents) {
+        SocketService().off(event, _onRealtimeEvent);
       }
     } catch (e) {
       dev.log('Error unregistering Socket.IO events: $e',
@@ -102,37 +92,42 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
+  final List<String> _studentSocketEvents = [
+    'STUDENT_UPDATED',
+    'ATTENDANCE_UPDATED',
+    'ATTENDANCE_MARKED',
+    'attendanceMarked',
+    'FEE_UPDATED',
+    'RESULT_UPDATED',
+    'EXAM_RESULT_PUBLISHED',
+    'CALENDAR_UPDATED',
+    'DASHBOARD_STATS_CHANGED'
+  ];
+
+  void _onRealtimeEvent(dynamic data) {
+    dev.log('⚡ Socket.IO event received on Student Dashboard', name: 'StudentDashboard');
+    if (mounted) {
+      _loadStudentData();
+    }
+  }
+
+
+
   void _connectRealTime() {
     // Connect Socket.IO events
     try {
-      final socketEvents = [
-        'STUDENT_UPDATED',
-        'ATTENDANCE_UPDATED',
-        'ATTENDANCE_MARKED',
-        'attendanceMarked',
-        'FEE_UPDATED',
-        'RESULT_UPDATED',
-        'CALENDAR_UPDATED',
-        'DASHBOARD_STATS_CHANGED'
-      ];
-
-      for (var event in socketEvents) {
-        SocketService().on(event, (data) {
-          dev.log(
-              '⚡ [SOCKET.IO EVENT] Realtime event received: $event | Data: $data',
-              name: 'StudentDashboard');
-          if (mounted) {
-            _loadStudentData();
-          }
-        });
+      for (var event in _studentSocketEvents) {
+        SocketService().off(event, _onRealtimeEvent);
+        SocketService().on(event, _onRealtimeEvent);
       }
     } catch (e) {
       dev.log('Error registering Socket.IO events: $e',
           name: 'StudentDashboard');
     }
 
-    // Polling fallback every 30 seconds
-    _dashboardPollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    // Polling fallback every 5 minutes
+    _dashboardPollTimer?.cancel();
+    _dashboardPollTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadStudentData();
       }

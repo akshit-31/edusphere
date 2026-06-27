@@ -59,7 +59,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     super.initState();
     _loadFilterData();
     _loadExams();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadExams();
       }

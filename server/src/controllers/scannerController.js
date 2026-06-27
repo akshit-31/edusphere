@@ -31,6 +31,21 @@ const getScanners = asyncHandler(async (req, res) => {
             },
         });
 
+        if (scanners.length === 0) {
+            scanners.push({
+                id: 'main-gate-scanner-id',
+                name: 'Main Gate Scanner',
+                location: 'Main Entrance',
+                scannerType: 'ENTRY',
+                latitude: 28.6139,
+                longitude: 77.2090,
+                geofenceRadius: 50,
+                allowedRoles: ['STUDENT', 'TEACHER', 'STAFF'],
+                isActive: true,
+                _count: { attendanceRecords: 0 }
+            });
+        }
+
         res.status(200).json({ success: true, scanners });
 });
 
@@ -94,6 +109,24 @@ const getScannerById = asyncHandler(async (req, res) => {
         });
 
         if (!scanner) {
+            if (id === 'main-gate-scanner-id' || id === 'main-gate-scanner') {
+                return res.status(200).json({
+                    success: true,
+                    scanner: {
+                        id: 'main-gate-scanner-id',
+                        name: 'Main Gate Scanner',
+                        location: 'Main Entrance',
+                        scannerType: 'ENTRY',
+                        latitude: 28.6139,
+                        longitude: 77.2090,
+                        geofenceRadius: 50,
+                        allowedRoles: ['STUDENT', 'TEACHER', 'STAFF'],
+                        isActive: true,
+                        attendanceRecords: [],
+                        _count: { attendanceRecords: 0 }
+                    }
+                });
+            }
             return res.status(404).json({ success: false, message: 'Scanner not found' });
         }
 

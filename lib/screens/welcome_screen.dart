@@ -6,9 +6,12 @@ import '../widgets/ai_chatbot_overlay.dart';
 import '../services/api_service.dart';
 import 'dart:developer' as dev;
 import 'package:edusphere/theme/typography.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key});
+  final bool fromLogout;
+  const WelcomeScreen({super.key, this.fromLogout = false});
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -25,12 +28,61 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void initState() {
     super.initState();
     _warmUpBackend();
+    _checkAutoLogin();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AIChatbotOverlay.visible.value = false;
     });
   }
 
+  void _checkAutoLogin() async {
+    if (widget.fromLogout) {
+      dev.log('WelcomeScreen: Skipped auto-login because user just logged out.', name: 'WelcomeScreen');
+      return;
+    }
+    try {
+      if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) return;
+    } catch (_) {}
+
+    final prefs = CacheService.instance.prefs;
+    final token = prefs.getString('api_token');
+    final role = prefs.getString('user_role');
+    if (token != null && token.isNotEmpty && role != null && role.isNotEmpty) {
+      dev.log('🔑 Cached session found. Attempting auto-login for role: $role', name: 'WelcomeScreen');
+      if (mounted) setState(() => _loading = true);
+      try {
+        await ApiService.instance.init();
+        final dynamic profileRes;
+        if (role == 'student') {
+          profileRes = await ApiService.instance.get('students/me');
+        } else if (role == 'teacher') {
+          profileRes = await ApiService.instance.get('teachers');
+        } else {
+          profileRes = null;
+        }
+
+        if (profileRes != null && profileRes['success'] == true) {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MainScreen(role: role),
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        dev.log('⚠️ Auto-login validation failed: $e', name: 'WelcomeScreen');
+      }
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   void _warmUpBackend() async {
+    try {
+      if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) return;
+    } catch (_) {}
+
     try {
       dev.log('📡 Warming up backend server...', name: 'WelcomeScreen');
       await ApiService.instance.get('health');
@@ -205,7 +257,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           });
           return;
         }
-        await prefs.setString('student_id', resolvedStudentId);
+         await prefs.setString('student_id', resolvedStudentId);
+        final classIdVal = classMap['id']?.toString() ?? studentMap['currentClassId']?.toString() ?? '';
+        final sectionIdVal = sectionMap['id']?.toString() ?? studentMap['sectionId']?.toString() ?? '';
+        await prefs.setString('student_class_id', classIdVal);
+        await prefs.setString('student_section_id', sectionIdVal);
         await prefs.setString(
             'student_name', studentFullName);
         await prefs.setString('student_email', email);

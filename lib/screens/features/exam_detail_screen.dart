@@ -63,7 +63,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         _loadData();
       }
@@ -431,7 +431,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
   Future<void> _pickAndUploadFile() async {
     setState(() => _isUploading = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         withData: true,
         allowedExtensions: ['csv', 'xlsx'],

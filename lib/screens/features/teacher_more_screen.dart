@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/colors.dart';
 import '../welcome_screen.dart';
+import '../../services/auth_service.dart';
 import 'package:edusphere/theme/typography.dart';
 
 class TeacherMoreScreen extends StatefulWidget {
@@ -147,12 +148,9 @@ class _TeacherMoreScreenState extends State<TeacherMoreScreen> {
                     _buildMenuItem(
                       icon: Icons.logout_rounded,
                       label: 'Logout',
-                      onTap: () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const WelcomeScreen()),
-                        (route) => false,
-                      ),
+                      onTap: () async {
+                        await AuthService.logout(context);
+                      },
                     ),
 
                     // Profile Card at the bottom

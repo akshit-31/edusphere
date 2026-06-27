@@ -29,6 +29,12 @@ class _AIGeneratorScreenState extends State<AIGeneratorScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _topicController.dispose();
+    super.dispose();
+  }
+
   void _handleGenerate() async {
     if (_topicController.text.isEmpty) return;
     setState(() {

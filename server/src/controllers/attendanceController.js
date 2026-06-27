@@ -244,6 +244,29 @@ const submitSlotAttendance = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { attendanceData } = req.body;
   const result = await AttendanceService.submitSlotAttendance(id, attendanceData, req.user.userId);
+  
+  // Emit Socket.IO events for live student updates
+  try {
+    for (const record of attendanceData) {
+      emitEvent('attendanceMarked', {
+        studentId: record.entityId,
+        status: record.status,
+        slotId: id
+      });
+      emitEvent('ATTENDANCE_MARKED', {
+        studentId: record.entityId,
+        status: record.status,
+        slotId: id
+      });
+    }
+    emitEvent('ATTENDANCE_UPDATED', {
+      slotId: id,
+      count: result.count
+    });
+  } catch (err) {
+    console.error("Error emitting socket events in submitSlotAttendance:", err);
+  }
+
   res.status(200).json({
     success: true,
     message: `Attendance saved for ${result.count} entries`,

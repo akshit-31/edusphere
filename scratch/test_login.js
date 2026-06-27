@@ -14,7 +14,7 @@ async function login() {
     } else {
       console.log('Login failed:', data);
     }
-  } catch(e) {
+  } catch (e) {
     console.error(e);
   }
 }

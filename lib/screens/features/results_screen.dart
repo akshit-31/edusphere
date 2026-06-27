@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../config/api_endpoints.dart';
 
 class GroupedExam {
   final String id;
@@ -135,7 +136,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
       }
 
       // ── 2. Fetch ExamResults from REST API ────────────────────────────────
-      final response = await ApiService.instance.get('exams/students/$_studentId/results');
+      final response = await ApiService.instance.get(ApiEndpoints.studentExamResults(_studentId));
       final List<GroupedExam> parsedExams = [];
 
       if (response != null && response['success'] == true) {

@@ -49,7 +49,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
     _loadTeacherName();
     _loadAllData();
     _loadAcademicData();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _pollTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (mounted) _loadAllData(showLoading: false);
     });
   }
@@ -1180,8 +1180,7 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                               GestureDetector(
                                 onTap: () async {
                                   try {
-                                    final result = await FilePicker.platform
-                                        .pickFiles(
+                                    final result = await FilePicker.pickFiles(
                                             type: FileType.any,
                                             allowMultiple: false);
                                     if (result != null &&

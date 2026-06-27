@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -87,7 +88,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
         if (mounted) {
           setState(() {
             _posts = List<Map<String, dynamic>>.from(raw.map((e) {
-              final author = e['createdBy'] as Map? ?? {};
+              final rawCreatedBy = e['createdBy'];
+              final author = rawCreatedBy is Map ? rawCreatedBy : {};
               final firstName = author['firstName'] as String? ?? '';
               final lastName = author['lastName'] as String? ?? '';
               final authorName = '$firstName $lastName'.trim().isEmpty
@@ -1307,11 +1309,23 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           8.r),
-                                                  child: Image.file(
-                                                      File(file.path),
-                                                      width: 64.w,
-                                                      height: 64.w,
-                                                      fit: BoxFit.cover),
+                                                  child: (kIsWeb ||
+                                                          file.path.startsWith(
+                                                              'blob:') ||
+                                                          file.path.startsWith(
+                                                              'http'))
+                                                      ? Image.network(
+                                                          file.path,
+                                                          width: 64.w,
+                                                          height: 64.w,
+                                                          fit: BoxFit.cover,
+                                                        )
+                                                      : Image.file(
+                                                          File(file.path),
+                                                          width: 64.w,
+                                                          height: 64.w,
+                                                          fit: BoxFit.cover,
+                                                        ),
                                                 ),
                                                 Positioned(
                                                   right: -6.w,

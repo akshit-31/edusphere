@@ -50,6 +50,11 @@ const createStudent = asyncHandler(async (req, res) => {
     name: `${student.user?.firstName || ''} ${student.user?.lastName || ''}`,
     class: student.currentClass?.name
   }, 'ADMIN');
+  emitEvent('STUDENT_ADDED', {
+    studentId: student.id,
+    name: `${student.user?.firstName || ''} ${student.user?.lastName || ''}`,
+    class: student.currentClass?.name
+  });
 });
 
 /**
@@ -64,6 +69,12 @@ const updateStudent = asyncHandler(async (req, res) => {
     message: 'Student updated successfully',
     student,
   });
+
+  emitEvent('STUDENT_UPDATED', {
+    studentId: student.id,
+    name: `${student.user?.firstName || ''} ${student.user?.lastName || ''}`,
+    class: student.currentClass?.name
+  });
 });
 
 /**
@@ -76,6 +87,10 @@ const deleteStudent = asyncHandler(async (req, res) => {
   res.status(200).json({ 
     success: true,
     message: 'Student deleted successfully' 
+  });
+
+  emitEvent('STUDENT_DELETED', {
+    studentId: req.params.id
   });
 });
 
@@ -123,6 +138,11 @@ const registerStudent = asyncHandler(async (req, res) => {
     name: `${result.student?.user?.firstName || ''} ${result.student?.user?.lastName || ''}`,
     class: result.student?.currentClass?.name
   }, 'ADMIN');
+  emitEvent('STUDENT_ADDED', {
+    studentId: result.student?.id,
+    name: `${result.student?.user?.firstName || ''} ${result.student?.user?.lastName || ''}`,
+    class: result.student?.currentClass?.name
+  });
 });
 
 /**

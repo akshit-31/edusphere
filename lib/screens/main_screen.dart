@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 import '../services/academic_service.dart';
+import '../services/auth_service.dart';
 import '../theme/colors.dart';
 
 import '../services/socket_service.dart';
@@ -146,7 +148,7 @@ class _MainScreenState extends State<MainScreen> {
         case 2:
           return 'Assignments';
         case 3:
-          return 'scm-history-item:c%3A%5CUsers%5Chp%5COneDrive%5CDesktop%5Cfinal%20edusphere%5Cedusphere?%7B%22repositoryId%22%3A%22scm0%22%2C%22historyItemId%22%3A%22598be8cad62891438122368ea27d5ed01b94c219%22%2C%22historyItemParentId%22%3A%22cdf6c2f25e4d874f77162dd5376efcfb4758b165%22%2C%22historyItemDisplayId%22%3A%22598be8c%22%7DAcademic';
+          return 'Academic';
         case 4:
           return 'Fees';
         case 5:
@@ -196,14 +198,7 @@ class _MainScreenState extends State<MainScreen> {
       MainScreen._activeState = null;
     }
     try {
-      SocketService().off('NEW_NOTIFICATION');
-      SocketService().off('attendance:qr-scan');
-      SocketService().off('ATTENDANCE_MARKED');
-      SocketService().off('ATTENDANCE_UPDATED');
-      SocketService().off('attendanceMarked');
-      SocketService().off('ANNOUNCEMENT_CREATED');
-      SocketService().off('ANNOUNCEMENT_UPDATED');
-      SocketService().off('ANNOUNCEMENT_DELETED');
+      _clearSocketListeners();
       SocketService().disconnect();
     } catch (_) {}
     super.dispose();
@@ -292,88 +287,103 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  void _setupSocketListeners() {
-    // 1. Listen for NEW_NOTIFICATION
-    SocketService().on('NEW_NOTIFICATION', (data) {
-      if (!mounted) return;
-      dev.log('🔔 Real-time notification: $data', name: 'MainScreen');
+  void _onNotificationEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('🔔 Real-time notification: $data', name: 'MainScreen');
 
-      final title = data['title'] as String? ?? 'Notification';
-      final message = data['message'] as String? ?? 'You have a new update';
+    final title = data['title'] as String? ?? 'Notification';
+    final message = data['message'] as String? ?? 'You have a new update';
 
-      showToast(
-        context,
-        '📣 $title: $message',
-      );
+    showToast(
+      context,
+      '📣 $title: $message',
+    );
+  }
+
+  void _onQrScanEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('🟢 Attendance QR Scan: $data', name: 'MainScreen');
+
+    final action = data['action'] as String? ?? 'checkin';
+    final user = data['user'] as Map? ?? {};
+    final userName =
+        '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+
+    showToast(
+      context,
+      '🚨 Live Scan! $userName marked ${action.toUpperCase()}',
+    );
+  }
+
+  void _onAttendanceEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('🟢 Real-time Attendance event received: $data', name: 'MainScreen');
+
+    final studentName = data['studentName'] as String? ?? 'Student';
+    final status = data['status'] as String? ?? data['attendanceStatus']?.toString() ?? 'Marked';
+
+    showToast(
+      context,
+      '📅 Attendance: $studentName marked $status',
+    );
+  }
+
+  void _onAnnouncementCreatedEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('📣 Real-time Announcement: $data', name: 'MainScreen');
+    setState(() {
+      _latestAnnouncements.insert(0, Map<String, dynamic>.from(data));
+      _latestAnnouncements.sort((a, b) =>
+          (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
     });
+    showToast(context, '📣 New Announcement: ${data['title']}');
+  }
 
-    // 2. Listen for attendance:qr-scan
-    SocketService().on('attendance:qr-scan', (data) {
-      if (!mounted) return;
-      dev.log('🟢 Attendance QR Scan: $data', name: 'MainScreen');
-
-      final action = data['action'] as String? ?? 'checkin';
-      final user = data['user'] as Map? ?? {};
-      final userName =
-          '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
-
-      showToast(
-        context,
-        '🚨 Live Scan! $userName marked ${action.toUpperCase()}',
-      );
-    });
-
-    // 3. Listen for ATTENDANCE_MARKED / ATTENDANCE_UPDATED / attendanceMarked
-    final attendanceCallback = (data) {
-      if (!mounted) return;
-      dev.log('🟢 Real-time Attendance event received: $data', name: 'MainScreen');
-
-      final studentName = data['studentName'] as String? ?? 'Student';
-      final status = data['status'] as String? ?? data['attendanceStatus']?.toString() ?? 'Marked';
-
-      showToast(
-        context,
-        '📅 Attendance: $studentName marked $status',
-      );
-    };
-
-    SocketService().on('ATTENDANCE_MARKED', attendanceCallback);
-    SocketService().on('ATTENDANCE_UPDATED', attendanceCallback);
-    SocketService().on('attendanceMarked', attendanceCallback);
-
-    SocketService().on('ANNOUNCEMENT_CREATED', (data) {
-      if (!mounted) return;
-      dev.log('📣 Real-time Announcement: $data', name: 'MainScreen');
-      setState(() {
-        _latestAnnouncements.insert(0, Map<String, dynamic>.from(data));
+  void _onAnnouncementUpdatedEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('📣 Real-time Announcement Updated: $data', name: 'MainScreen');
+    setState(() {
+      final id = data['id'];
+      final idx = _latestAnnouncements.indexWhere((element) => element['id'] == id);
+      if (idx != -1) {
+        _latestAnnouncements[idx] = Map<String, dynamic>.from(data);
         _latestAnnouncements.sort((a, b) =>
             (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
-      });
-      showToast(context, '📣 New Announcement: ${data['title']}');
+      }
     });
+  }
 
-    SocketService().on('ANNOUNCEMENT_UPDATED', (data) {
-      if (!mounted) return;
-      dev.log('📣 Real-time Announcement Updated: $data', name: 'MainScreen');
-      setState(() {
-        final id = data['id'];
-        final idx = _latestAnnouncements.indexWhere((element) => element['id'] == id);
-        if (idx != -1) {
-          _latestAnnouncements[idx] = Map<String, dynamic>.from(data);
-          _latestAnnouncements.sort((a, b) =>
-              (b['createdAt'] ?? '').compareTo(a['createdAt'] ?? ''));
-        }
-      });
+  void _onAnnouncementDeletedEvent(dynamic data) {
+    if (!mounted) return;
+    dev.log('📣 Real-time Announcement Deleted: $data', name: 'MainScreen');
+    setState(() {
+      final id = data['id'];
+      _latestAnnouncements.removeWhere((element) => element['id'] == id);
     });
+  }
 
-    SocketService().on('ANNOUNCEMENT_DELETED', (data) {
-      if (!mounted) return;
-      dev.log('📣 Real-time Announcement Deleted: $data', name: 'MainScreen');
-      setState(() {
-        final id = data['id'];
-        _latestAnnouncements.removeWhere((element) => element['id'] == id);
-      });
-    });
+  void _setupSocketListeners() {
+    _clearSocketListeners();
+
+    SocketService().on('NEW_NOTIFICATION', _onNotificationEvent);
+    SocketService().on('attendance:qr-scan', _onQrScanEvent);
+    SocketService().on('ATTENDANCE_MARKED', _onAttendanceEvent);
+    SocketService().on('ATTENDANCE_UPDATED', _onAttendanceEvent);
+    SocketService().on('attendanceMarked', _onAttendanceEvent);
+    SocketService().on('ANNOUNCEMENT_CREATED', _onAnnouncementCreatedEvent);
+    SocketService().on('ANNOUNCEMENT_UPDATED', _onAnnouncementUpdatedEvent);
+    SocketService().on('ANNOUNCEMENT_DELETED', _onAnnouncementDeletedEvent);
+  }
+
+  void _clearSocketListeners() {
+    SocketService().off('NEW_NOTIFICATION', _onNotificationEvent);
+    SocketService().off('attendance:qr-scan', _onQrScanEvent);
+    SocketService().off('ATTENDANCE_MARKED', _onAttendanceEvent);
+    SocketService().off('ATTENDANCE_UPDATED', _onAttendanceEvent);
+    SocketService().off('attendanceMarked', _onAttendanceEvent);
+    SocketService().off('ANNOUNCEMENT_CREATED', _onAnnouncementCreatedEvent);
+    SocketService().off('ANNOUNCEMENT_UPDATED', _onAnnouncementUpdatedEvent);
+    SocketService().off('ANNOUNCEMENT_DELETED', _onAnnouncementDeletedEvent);
   }
 
   Future<void> _loadUserName() async {
@@ -962,69 +972,7 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(13.r),
-                              child: (_profilePhotoUrl != null &&
-                                      _profilePhotoUrl!.isNotEmpty)
-                                  ? (_profilePhotoUrl!.startsWith('http')
-                                      ? Image.network(
-                                          _profilePhotoUrl!,
-                                          fit: BoxFit.cover,
-                                          width: 24.w,
-                                          height: 24.h,
-                                          errorBuilder: (_, __, ___) =>
-                                              CircleAvatar(
-                                            radius: 12.r,
-                                            backgroundColor:
-                                                const Color(0xFFE2E8F0),
-                                            child: Icon(Icons.person_rounded,
-                                                size: 14.sp,
-                                                color: const Color(0xFF64748B)),
-                                          ),
-                                        )
-                                      : (_profilePhotoUrl!
-                                              .startsWith('data:image')
-                                          ? Image.memory(
-                                              base64Decode(_profilePhotoUrl!
-                                                  .split(',')
-                                                  .last),
-                                              fit: BoxFit.cover,
-                                              width: 24.w,
-                                              height: 24.h,
-                                              errorBuilder: (_, __, ___) =>
-                                                  CircleAvatar(
-                                                radius: 12.r,
-                                                backgroundColor:
-                                                    const Color(0xFFE2E8F0),
-                                                child: Icon(
-                                                    Icons.person_rounded,
-                                                    size: 14.sp,
-                                                    color: const Color(
-                                                        0xFF64748B)),
-                                              ),
-                                            )
-                                          : Image.file(
-                                              File(_profilePhotoUrl!),
-                                              fit: BoxFit.cover,
-                                              width: 24.w,
-                                              height: 24.h,
-                                              errorBuilder: (_, __, ___) =>
-                                                  CircleAvatar(
-                                                radius: 12.r,
-                                                backgroundColor:
-                                                    const Color(0xFFE2E8F0),
-                                                child: Icon(
-                                                    Icons.person_rounded,
-                                                    size: 14.sp,
-                                                    color: const Color(
-                                                        0xFF64748B)),
-                                              ),
-                                            )))
-                                  : CircleAvatar(
-                                      radius: 12.r,
-                                      backgroundColor: const Color(0xFFE2E8F0),
-                                      child: Icon(Icons.person_rounded,
-                                          size: 14.sp,
-                                          color: const Color(0xFF64748B)),
-                                    ),
+                              child: _renderProfileAvatar(_profilePhotoUrl, width: 24, height: 24),
                             ),
                           ),
                           label: 'My Profile',
@@ -1076,69 +1024,7 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(13.r),
-                              child: (_profilePhotoUrl != null &&
-                                      _profilePhotoUrl!.isNotEmpty)
-                                  ? (_profilePhotoUrl!.startsWith('http')
-                                      ? Image.network(
-                                          _profilePhotoUrl!,
-                                          fit: BoxFit.cover,
-                                          width: 24.w,
-                                          height: 24.h,
-                                          errorBuilder: (_, __, ___) =>
-                                              CircleAvatar(
-                                            radius: 12.r,
-                                            backgroundColor:
-                                                const Color(0xFFE2E8F0),
-                                            child: Icon(Icons.person_rounded,
-                                                size: 14.sp,
-                                                color: const Color(0xFF64748B)),
-                                          ),
-                                        )
-                                      : (_profilePhotoUrl!
-                                              .startsWith('data:image')
-                                          ? Image.memory(
-                                              base64Decode(_profilePhotoUrl!
-                                                  .split(',')
-                                                  .last),
-                                              fit: BoxFit.cover,
-                                              width: 24.w,
-                                              height: 24.h,
-                                              errorBuilder: (_, __, ___) =>
-                                                  CircleAvatar(
-                                                radius: 12.r,
-                                                backgroundColor:
-                                                    const Color(0xFFE2E8F0),
-                                                child: Icon(
-                                                    Icons.person_rounded,
-                                                    size: 14.sp,
-                                                    color: const Color(
-                                                        0xFF64748B)),
-                                              ),
-                                            )
-                                          : Image.file(
-                                              File(_profilePhotoUrl!),
-                                              fit: BoxFit.cover,
-                                              width: 24.w,
-                                              height: 24.h,
-                                              errorBuilder: (_, __, ___) =>
-                                                  CircleAvatar(
-                                                radius: 12.r,
-                                                backgroundColor:
-                                                    const Color(0xFFE2E8F0),
-                                                child: Icon(
-                                                    Icons.person_rounded,
-                                                    size: 14.sp,
-                                                    color: const Color(
-                                                        0xFF64748B)),
-                                              ),
-                                            )))
-                                  : CircleAvatar(
-                                      radius: 12.r,
-                                      backgroundColor: const Color(0xFFE2E8F0),
-                                      child: Icon(Icons.person_rounded,
-                                          size: 14.sp,
-                                          color: const Color(0xFF64748B)),
-                                    ),
+                              child: _renderProfileAvatar(_profilePhotoUrl, width: 24, height: 24),
                             ),
                           ),
                           label: 'My Profile',
@@ -1383,11 +1269,9 @@ class _MainScreenState extends State<MainScreen> {
                 IconButton(
                     icon: Icon(Icons.logout_rounded,
                         color: AppColors.error, size: 20.sp),
-                    onPressed: () => Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const WelcomeScreen()),
-                        (r) => false)),
+                    onPressed: () async {
+                      await AuthService.logout(context);
+                    }),
               ],
             ),
           ),
@@ -1752,56 +1636,7 @@ class _TeacherBottomNavBarState extends State<TeacherBottomNavBar> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(13.r),
-                    child: (displayPhotoUrl != null &&
-                            displayPhotoUrl.isNotEmpty)
-                        ? (displayPhotoUrl.startsWith('http')
-                            ? Image.network(
-                                displayPhotoUrl,
-                                fit: BoxFit.cover,
-                                width: 24.w,
-                                height: 24.h,
-                                errorBuilder: (_, __, ___) => CircleAvatar(
-                                  radius: 12.r,
-                                  backgroundColor: const Color(0xFFE2E8F0),
-                                  child: Icon(Icons.person_rounded,
-                                      size: 14.sp,
-                                      color: const Color(0xFF64748B)),
-                                ),
-                              )
-                            : (displayPhotoUrl.startsWith('data:image')
-                                ? Image.memory(
-                                    base64Decode(
-                                        displayPhotoUrl.split(',').last),
-                                    fit: BoxFit.cover,
-                                    width: 24.w,
-                                    height: 24.h,
-                                    errorBuilder: (_, __, ___) => CircleAvatar(
-                                      radius: 12.r,
-                                      backgroundColor: const Color(0xFFE2E8F0),
-                                      child: Icon(Icons.person_rounded,
-                                          size: 14.sp,
-                                          color: const Color(0xFF64748B)),
-                                    ),
-                                  )
-                                : Image.file(
-                                    File(displayPhotoUrl),
-                                    fit: BoxFit.cover,
-                                    width: 24.w,
-                                    height: 24.h,
-                                    errorBuilder: (_, __, ___) => CircleAvatar(
-                                      radius: 12.r,
-                                      backgroundColor: const Color(0xFFE2E8F0),
-                                      child: Icon(Icons.person_rounded,
-                                          size: 14.sp,
-                                          color: const Color(0xFF64748B)),
-                                    ),
-                                  )))
-                        : CircleAvatar(
-                            radius: 12.r,
-                            backgroundColor: const Color(0xFFE2E8F0),
-                            child: Icon(Icons.person_rounded,
-                                size: 14.sp, color: const Color(0xFF64748B)),
-                          ),
+                    child: _renderProfileAvatar(displayPhotoUrl, width: 24, height: 24),
                   ),
                 ),
                 label: 'My Profile',
@@ -2148,12 +1983,8 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
               inactiveIcon: const Color(0xFF4A6FA5),
               inactiveText: const Color(0xFF35526B),
               forceInactive: true,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-                  (route) => false,
-                );
+              onTap: () async {
+                await AuthService.logout(context);
               },
             ),
             Container(
@@ -2204,3 +2035,107 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
     );
   }
 }
+
+Widget _renderProfileAvatar(String? url, {double width = 24, double height = 24}) {
+  if (url == null || url.isEmpty) {
+    return CircleAvatar(
+      radius: (width / 2).r,
+      backgroundColor: const Color(0xFFE2E8F0),
+      child: Icon(Icons.person_rounded,
+          size: (width * 0.58).sp,
+          color: const Color(0xFF64748B)),
+    );
+  }
+  
+  if (url.startsWith('http') || url.startsWith('blob:')) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      width: width.w,
+      height: height.h,
+      errorBuilder: (_, __, ___) => CircleAvatar(
+        radius: (width / 2).r,
+        backgroundColor: const Color(0xFFE2E8F0),
+        child: Icon(Icons.person_rounded,
+            size: (width * 0.58).sp,
+            color: const Color(0xFF64748B)),
+      ),
+    );
+  } else if (url.startsWith('data:image')) {
+    try {
+      return Image.memory(
+        base64Decode(url.split(',').last),
+        fit: BoxFit.cover,
+        width: width.w,
+        height: height.h,
+        errorBuilder: (_, __, ___) => CircleAvatar(
+          radius: (width / 2).r,
+          backgroundColor: const Color(0xFFE2E8F0),
+          child: Icon(Icons.person_rounded,
+              size: (width * 0.58).sp,
+              color: const Color(0xFF64748B)),
+        ),
+      );
+    } catch (_) {
+      return CircleAvatar(
+        radius: (width / 2).r,
+        backgroundColor: const Color(0xFFE2E8F0),
+        child: Icon(Icons.person_rounded,
+            size: (width * 0.58).sp,
+            color: const Color(0xFF64748B)),
+      );
+    }
+  } else {
+    if (kIsWeb) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        width: width.w,
+        height: height.h,
+        errorBuilder: (_, __, ___) => CircleAvatar(
+          radius: (width / 2).r,
+          backgroundColor: const Color(0xFFE2E8F0),
+          child: Icon(Icons.person_rounded,
+              size: (width * 0.58).sp,
+              color: const Color(0xFF64748B)),
+        ),
+      );
+    } else {
+      return Image.file(
+        File(url),
+        fit: BoxFit.cover,
+        width: width.w,
+        height: height.h,
+        errorBuilder: (_, __, ___) => CircleAvatar(
+          radius: (width / 2).r,
+          backgroundColor: const Color(0xFFE2E8F0),
+          child: Icon(Icons.person_rounded,
+              size: (width * 0.58).sp,
+              color: const Color(0xFF64748B)),
+        ),
+      );
+    }
+  }
+}
+
+// Static references to prevent tree-shaking of dynamically resolved icons in release builds
+// ignore: unused_element
+const List<IconData> _preservedIconsToPreventTreeShaking = [
+  Icons.grid_view_rounded,
+  Icons.event_available_rounded,
+  Icons.qr_code_scanner_rounded,
+  Icons.person_rounded,
+  Icons.home_rounded,
+  Icons.school_rounded,
+  Icons.group_outlined,
+  Icons.chat_bubble_rounded,
+  Icons.calendar_month_outlined,
+  Icons.people_outline_rounded,
+  Icons.check_box_outlined,
+  Icons.description_outlined,
+  Icons.access_time_rounded,
+  Icons.notifications_none_rounded,
+  Icons.menu_book_outlined,
+];
+
+

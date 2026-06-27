@@ -2,6 +2,7 @@ import 'dart:developer' as dev;
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:edusphere/config/api_config.dart';
+import 'package:edusphere/services/cache_service.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -11,6 +12,7 @@ class SocketService {
   socket_io.Socket? _socket;
   String? _userId;
   String? _role;
+  String? _token;
   bool _isConnected = false;
 
   // Custom callbacks list
@@ -30,11 +32,27 @@ class SocketService {
 
     final url = customUrl ?? defaultServerUrl;
 
+    final prefs = CacheService.instance.prefs;
+    final token = prefs.getString('api_token') ?? '';
+
+    if (_socket != null && _userId == userId && _role == role && _token == token) {
+      if (_socket!.connected) {
+        dev.log('🔌 Socket already connected for user $userId ($role), skipping connection.', name: 'SocketService');
+        _isConnected = true;
+        return;
+      } else {
+        dev.log('🔌 Socket already initialized but not connected, attempting to connect...', name: 'SocketService');
+        _socket!.connect();
+        return;
+      }
+    }
+
     if (_socket != null) {
-      dev.log('🔌 Socket already initialized, reconnecting with new configs...',
-          name: 'SocketService');
+      dev.log('🔌 Socket active with different configuration or token, disconnecting and reconnecting...', name: 'SocketService');
       disconnect();
     }
+
+    _token = token;
 
     dev.log('🔌 Initializing socket connection to: $url',
         name: 'SocketService');
@@ -44,6 +62,8 @@ class SocketService {
           url,
           socket_io.OptionBuilder()
               .setTransports(['websocket', 'polling'])
+              .setAuth({'token': token})
+              .setExtraHeaders({'Authorization': 'Bearer $token'})
               .enableAutoConnect()
               .enableForceNew()
               .setReconnectionDelay(2000)
@@ -117,6 +137,10 @@ class SocketService {
     if (!_listeners.containsKey(event)) {
       _listeners[event] = [];
     }
+    if (_listeners[event]!.contains(callback)) {
+      dev.log('⚠️ Callback already registered for event [$event], skipping duplicate registration.', name: 'SocketService');
+      return;
+    }
     _listeners[event]!.add(callback);
     dev.log('➕ Registered callback for event [$event]', name: 'SocketService');
   }
@@ -176,6 +200,8 @@ class SocketService {
       _socket!.close();
       _socket = null;
       _isConnected = false;
+      _token = null;
+      _listeners.clear(); // Clear all listeners to prevent memory leaks!
     }
   }
 }

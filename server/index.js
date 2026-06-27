@@ -69,7 +69,7 @@ app.use(helmet({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : true,
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()) : true,
   credentials: true,
 };
 app.use(cors(corsOptions));
@@ -121,6 +121,18 @@ app.get('/health', (req, res) => {
 
 // API Routes
 const apiRouter = express.Router();
+
+apiRouter.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    service: 'EduSphere School ERP',
+    schoolId: process.env.SCHOOL_ID,
+    schoolName: process.env.SCHOOL_NAME,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+  });
+});
+
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/students', studentRoutes);
 apiRouter.use('/teachers', teacherRoutes);
@@ -147,6 +159,7 @@ apiRouter.use('/assignments', assignmentRoutes);
 apiRouter.use('/transport', transportRoutes);
 apiRouter.use('/calendar', calendarRoutes);
 apiRouter.use('/timetables', timetableRoutes);
+apiRouter.use('/timetable', timetableRoutes);
 apiRouter.use('/admin/backups', backupRoutes);
 apiRouter.use('/ai', aiRoutes);
 apiRouter.use('/notifications', notificationRoutes);

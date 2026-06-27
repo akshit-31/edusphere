@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/socket_service.dart';
 import '../services/student_service.dart';
 import '../services/academic_service.dart';
+import '../services/auth_service.dart';
 import 'dart:developer' as dev;
 import 'package:intl/intl.dart' as intl;
 import '../theme/colors.dart';
@@ -23,6 +24,7 @@ import 'features/announcements_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/common_widgets.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../config/api_endpoints.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Academic Screen — supports student Academic Overview & teacher Academic Management
@@ -299,24 +301,43 @@ class _AcademicScreenState extends State<AcademicScreen> {
           'student1@demoschool.com';
       _studentEmail = savedEmail;
 
-      // 1. Fetch Student profile via REST API
-      final profileRes = await StudentService.instance.getStudentProfile();
-      final student = profileRes['student'];
-      if (student != null) {
-        _studentId = student['id'] ?? '';
-        final user = student['user'] ?? {};
-        _studentName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
-        _classId = student['currentClassId'] ?? '';
-        _sectionId = student['sectionId'] ?? '';
-        if (student['currentClass'] != null) {
-          _className = student['currentClass']['name'] ?? 'Grade 1';
-        }
+      final cachedId = prefs.getString('student_id') ?? '';
+      final cachedName = prefs.getString('student_name') ?? '';
+      final cachedClassId = prefs.getString('student_class_id') ?? '';
+      final cachedSectionId = prefs.getString('student_section_id') ?? '';
+      final cachedClassName = prefs.getString('student_class') ?? '';
+
+      if (cachedId.isNotEmpty && cachedSectionId.isNotEmpty) {
+        _studentId = cachedId;
+        _studentName = cachedName;
+        _classId = cachedClassId;
+        _sectionId = cachedSectionId;
+        _className = cachedClassName;
       } else {
-        // Fallback for demo student if no database record exists
-        if (_studentEmail == 'student1@demoschool.com') {
-          _studentId = 'demo-1';
-          _studentName = 'Priya Singh';
-          _className = 'Grade 10';
+        // 1. Fetch Student profile via REST API
+        final profileRes = await StudentService.instance.getStudentProfile();
+        final student = profileRes['student'];
+        if (student != null) {
+          _studentId = student['id'] ?? '';
+          final user = student['user'] ?? {};
+          _studentName = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+          _classId = student['currentClassId'] ?? '';
+          _sectionId = student['sectionId'] ?? '';
+          if (student['currentClass'] != null) {
+            _className = student['currentClass']['name'] ?? 'Grade 1';
+          }
+          await prefs.setString('student_id', _studentId);
+          await prefs.setString('student_name', _studentName);
+          await prefs.setString('student_class_id', _classId);
+          await prefs.setString('student_section_id', _sectionId);
+          await prefs.setString('student_class', _className);
+        } else {
+          // Fallback for demo student if no database record exists
+          if (_studentEmail == 'student1@demoschool.com') {
+            _studentId = 'demo-1';
+            _studentName = 'Priya Singh';
+            _className = 'Grade 10';
+          }
         }
       }
 
@@ -329,7 +350,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
 
       // 3. Fetch Timetable slots for their section/class via REST API
       if (_sectionId.isNotEmpty) {
-        final timetableRes = await ApiService.instance.get('timetables/student/$_sectionId');
+        final timetableRes = await ApiService.instance.get(ApiEndpoints.studentTimetable(_sectionId));
         if (timetableRes['success'] == true) {
           _timetableSlots = List<Map<String, dynamic>>.from(timetableRes['schedule'] ?? []);
         }
@@ -338,7 +359,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
       // 4. Fetch Attendance records via REST API
       if (_studentId.isNotEmpty) {
         try {
-          final attendanceRes = await ApiService.instance.get('students/$_studentId/attendance');
+          final attendanceRes = await ApiService.instance.get(ApiEndpoints.studentAttendance(_studentId));
           if (attendanceRes['success'] == true) {
             _attendanceRate = (attendanceRes['stats']?['percentage'] ?? 100.0).toDouble();
             _hasAttendanceData = true;
@@ -416,8 +437,14 @@ class _AcademicScreenState extends State<AcademicScreen> {
     }
   }
 
+
+
   void _connectRealTime() {
     try {
+      SocketService().off('attendanceMarked', _onRealtimeEvent);
+      SocketService().off('ATTENDANCE_MARKED', _onRealtimeEvent);
+      SocketService().off('TIMETABLE_UPDATE', _onRealtimeEvent);
+
       SocketService().on('attendanceMarked', _onRealtimeEvent);
       SocketService().on('ATTENDANCE_MARKED', _onRealtimeEvent);
       SocketService().on('TIMETABLE_UPDATE', _onRealtimeEvent);
@@ -425,8 +452,9 @@ class _AcademicScreenState extends State<AcademicScreen> {
       dev.log('⚠️ Error connecting Socket.IO for Academic Screen: $e', name: 'AcademicScreen');
     }
 
-    // Polling fallback every 30 seconds
-    _realtimePollTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    // Polling fallback every 5 minutes
+    _realtimePollTimer?.cancel();
+    _realtimePollTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (mounted) {
         if (widget.role == 'student') {
           _loadStudentOverviewData(showLoading: false);
@@ -3144,12 +3172,8 @@ class _AcademicScreenState extends State<AcademicScreen> {
               inactiveIcon: const Color(0xFF4A6FA5),
               inactiveText: const Color(0xFF35526B),
               forceInactive: true,
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-                  (route) => false,
-                );
+              onTap: () async {
+                await AuthService.logout(context);
               },
             ),
 
