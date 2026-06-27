@@ -29,6 +29,8 @@ import 'features/fee_ledger_screen.dart';
 import 'features/transport_screen.dart';
 import 'features/services_screen.dart';
 import 'features/scanner_feature_wrapper.dart';
+import 'features/digital_library_screen.dart';
+import 'features/inventory_requests_screen.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../services/cache_service.dart';
@@ -74,6 +76,7 @@ class _MainScreenState extends State<MainScreen> {
   int _idx = 0;
   final Set<int> _visitedIndices = {};
   DateTime? _lastSeenAnnouncementTime;
+  bool _isMuted = false;
 
   String _getLabelForIndex(int index, bool isDesktop) {
     if (widget.role == 'teacher') {
@@ -103,6 +106,8 @@ class _MainScreenState extends State<MainScreen> {
             return 'Community';
           case 12:
             return 'My Profile';
+          case 13:
+            return 'Library';
           default:
             return 'Dashboard';
         }
@@ -134,6 +139,8 @@ class _MainScreenState extends State<MainScreen> {
             return 'Community';
           case 13:
             return 'My Profile';
+          case 14:
+            return 'Library';
           default:
             return 'Dashboard';
         }
@@ -392,7 +399,9 @@ class _MainScreenState extends State<MainScreen> {
     if (timeStr != null) {
       _lastSeenAnnouncementTime = DateTime.tryParse(timeStr);
     }
+    final muted = prefs.getBool('notifications_muted') ?? false;
     setState(() {
+      _isMuted = muted;
       _userName = prefs.getString('${widget.role}_name') ??
           (widget.role == 'teacher' ? prefs.getString('teacher_name') : null) ??
           (widget.role == 'student' ? prefs.getString('student_name') : null) ??
@@ -478,6 +487,8 @@ class _MainScreenState extends State<MainScreen> {
                   onAvatarUpdated: (url) =>
                       setState(() => _profilePhotoUrl = url),
                 ), // Index 12: My Profile
+                DigitalLibraryScreen(theme: _theme, showAppBar: false), // Index 13: Library
+                InventoryRequestsScreen(theme: _theme, showAppBar: false), // Index 14: Inventory Requests
               ]
             : [
                 _dashboard(), // Index 0: Dashboard
@@ -534,6 +545,8 @@ class _MainScreenState extends State<MainScreen> {
                   onAvatarUpdated: (url) =>
                       setState(() => _profilePhotoUrl = url),
                 ), // Index 13: My Profile
+                DigitalLibraryScreen(theme: _theme, showAppBar: false), // Index 14: Library
+                InventoryRequestsScreen(theme: _theme, showAppBar: false), // Index 15: Inventory Requests
               ])
         : [
             _dashboard(),
@@ -602,17 +615,25 @@ class _MainScreenState extends State<MainScreen> {
                               color: const Color(0xFF0F172A))),
                       actions: [
                         IconButton(
-                          icon: Icon(Icons.notifications_off_outlined,
-                              size: 28.sp),
+                          icon: Icon(
+                            _isMuted
+                                ? Icons.notifications_off_outlined
+                                : Icons.notifications_active_outlined,
+                            color: _isMuted ? const Color(0xFFEF4444) : const Color(0xFF0F172A),
+                            size: 28.sp,
+                          ),
                           onPressed: () {
                             showDialog(
                               context: context,
                               builder: (context) => AlertDialog(
-                                title: Text('Mute Notifications',
+                                title: Text(
+                                    _isMuted ? 'Unmute Notifications' : 'Mute Notifications',
                                     style: GoogleFonts.inter(
                                         fontWeight: FontWeight.bold)),
                                 content: Text(
-                                    'Are you sure you want to mute notifications?',
+                                    _isMuted
+                                        ? 'Are you sure you want to unmute notifications?'
+                                        : 'Are you sure you want to mute notifications?',
                                     style: GoogleFonts.inter()),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16.r)),
@@ -626,17 +647,26 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFEF4444),
+                                      backgroundColor: _isMuted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(8.r)),
                                       elevation: 0,
                                     ),
-                                    onPressed: () {
+                                    onPressed: () async {
                                       Navigator.pop(context);
-                                      showToast(context, 'Notifications muted');
+                                      final prefs = CacheService.instance.prefs;
+                                      final newMuted = !_isMuted;
+                                      await prefs.setBool('notifications_muted', newMuted);
+                                      setState(() {
+                                        _isMuted = newMuted;
+                                      });
+                                      showToast(
+                                        context,
+                                        newMuted ? 'Notifications muted' : 'Notifications unmuted',
+                                      );
                                     },
-                                    child: Text('Mute',
+                                    child: Text(_isMuted ? 'Unmute' : 'Mute',
                                         style: GoogleFonts.inter(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w600)),
@@ -1238,6 +1268,20 @@ class _MainScreenState extends State<MainScreen> {
                         selected: _idx == 12,
                         color: _theme.primary,
                         onTap: () => _navigateTo(12)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(
+                        icon: Icons.local_library_rounded,
+                        label: 'Library',
+                        selected: _idx == 13,
+                        color: _theme.primary,
+                        onTap: () => _navigateTo(13)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(
+                        icon: Icons.inventory_2_rounded,
+                        label: 'Inventory Requests',
+                        selected: _idx == 14,
+                        color: _theme.primary,
+                        onTap: () => _navigateTo(14)),
                   ],
                 ],
               ),
@@ -1898,6 +1942,24 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
                             inactiveText: inactiveText,
                             onTap: () => MainScreen.navigateTo(
                                 context, isDesktop ? 12 : 13),
+                          ),
+                          _drawerItem(
+                            icon: Icons.local_library_rounded,
+                            label: 'Library',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(
+                                context, isDesktop ? 13 : 14),
+                          ),
+                          _drawerItem(
+                            icon: Icons.inventory_2_rounded,
+                            label: 'Inventory Requests',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(
+                                context, isDesktop ? 14 : 15),
                           ),
                         ]
                       : [

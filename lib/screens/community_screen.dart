@@ -99,7 +99,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 'id': e['id']?.toString() ?? '',
                 'title': e['title'] ?? 'Announcement',
                 'content': e['content'] ?? '',
-                'category': e['targetAudience'] ?? 'General',
+                'category': 'Announcement',
                 'authorName': authorName,
                 'createdAt': e['createdAt'] ?? DateTime.now().toIso8601String(),
                 'likesCount': 0,

@@ -138,6 +138,16 @@ class _TeacherMoreScreenState extends State<TeacherMoreScreen> {
                       label: 'My Profile',
                       onTap: () => widget.onNavigate(13),
                     ),
+                    _buildMenuItem(
+                      icon: Icons.local_library_rounded,
+                      label: 'Library',
+                      onTap: () => widget.onNavigate(14),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.inventory_2_rounded,
+                      label: 'Inventory Requests',
+                      onTap: () => widget.onNavigate(15),
+                    ),
 
                     Padding(
                       padding:

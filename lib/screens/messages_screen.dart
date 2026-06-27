@@ -275,7 +275,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
           return CommunityPostModel(
             id: e['id'] as String? ?? '',
             authorName: authorName,
-            authorRole: e['targetAudience'] as String? ?? 'All',
+            authorRole: (e['targetAudience'] is List)
+                ? (e['targetAudience'] as List).join(', ')
+                : e['targetAudience']?.toString() ?? 'All',
             timeAgo: 'Recently',
             category: 'ANNOUNCEMENT',
             content: e['content'] as String? ?? e['title'] as String? ?? '',
