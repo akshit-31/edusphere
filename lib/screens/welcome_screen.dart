@@ -44,7 +44,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     } catch (_) {}
 
     final prefs = CacheService.instance.prefs;
-    final token = prefs.getString('api_token');
+    final token = await CacheService.instance.getToken();
     final role = prefs.getString('user_role');
     if (token != null && token.isNotEmpty && role != null && role.isNotEmpty) {
       dev.log('🔑 Cached session found. Attempting auto-login for role: $role', name: 'WelcomeScreen');

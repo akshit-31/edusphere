@@ -19,6 +19,7 @@ import 'academic_screen.dart';
 import 'features/teacher_more_screen.dart';
 import 'features/academic_calendar_screen.dart';
 import 'features/student_directory_screen.dart';
+import 'features/student_profile_details_screen.dart';
 import 'features/create_assignment_screen.dart';
 import 'features/schedule_screen.dart';
 import 'features/announcements_screen.dart';
@@ -585,12 +586,7 @@ class _MainScreenState extends State<MainScreen> {
               onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
             ),
             ServicesScreen(theme: _theme),
-            ProfileScreen(
-              role: widget.role,
-              theme: _theme,
-              onBack: () => setState(() => _idx = 0),
-              showAppBar: isDesktop,
-              onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+            StudentProfileDetailsScreen(
               onAvatarUpdated: (url) {
                 AppStateNotifier.userProfilePhotoUrl.value = url;
                 setState(() => _profilePhotoUrl = url);

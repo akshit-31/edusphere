@@ -6,6 +6,7 @@ import 'dart:developer' as dev;
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import 'auth_service.dart';
+import 'cache_service.dart';
 
 class ApiService {
   ApiService._privateConstructor() {
@@ -25,8 +26,7 @@ class ApiService {
 
   Future<void> init() async {
     if (_initialized) return;
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('api_token');
+    _token = await CacheService.instance.getToken();
     _initialized = true;
     dev.log(
         '🔑 ApiService initialized with token: ${_token != null ? "FOUND" : "NOT FOUND"}',
@@ -34,17 +34,16 @@ class ApiService {
   }
 
   Dio get dio => _dio;
+  String? get token => _token;
 
   Future<void> setToken(String token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('api_token', token);
+    await CacheService.instance.saveToken(token);
   }
 
   Future<void> clearToken() async {
     _token = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('api_token');
+    await CacheService.instance.removeToken();
   }
 
   String _cleanPath(String endpoint) {

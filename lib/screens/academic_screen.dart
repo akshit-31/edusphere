@@ -3153,7 +3153,7 @@ class _AcademicScreenState extends State<AcademicScreen> {
                                 context,
                                 MaterialPageRoute(
                                     builder: (_) => const MainScreen(
-                                        role: 'student', initialIndex: 9)),
+                                        role: 'student', initialIndex: 10)),
                                 (r) => false,
                               );
                             },

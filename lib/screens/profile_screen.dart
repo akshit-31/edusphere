@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart';
@@ -194,8 +195,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _casteGroup = 'GENERAL';
   String _nationality = 'INDIAN';
 
+  String _studentStatus = 'ACTIVE';
+  String _studentCity = '—';
+  String _studentState = '—';
+  String _studentPincode = '—';
+  String _studentCountry = 'INDIA';
+  String _emergencyContactName = '—';
+  String _medicalConditions = 'No critical conditions logged';
+  String _allergies = 'None reported';
+  String _fatherPhone = '—';
+  String _motherPhone = '—';
+
   bool _pushNotifications = true;
   bool _inAppNotifications = true;
+  bool _emailNotifications = true;
+  bool _smsNotifications = true;
 
   bool _isUploadingDoc = false;
   List<Map<String, String>> _uploadedDocuments = [];
@@ -254,6 +268,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _profilePollTimer?.cancel();
+    _qrRefreshTimer?.cancel();
     _clearRealTimeSync();
     _nameCtrl.dispose();
     _designCtrl.dispose();
@@ -546,6 +561,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _religion = studentResMap['religion'] as String? ?? '—';
         _casteGroup = studentResMap['caste'] as String? ?? '—';
         _nationality = studentResMap['nationality'] as String? ?? '—';
+        _studentStatus = studentResMap['status'] as String? ?? 'ACTIVE';
+        _studentCity = studentResMap['city'] as String? ?? '—';
+        _studentState = studentResMap['state'] as String? ?? '—';
+        _studentPincode = studentResMap['pincode'] as String? ?? '—';
+        _studentCountry = studentResMap['country'] as String? ?? 'INDIA';
+        _emergencyContactName = studentResMap['emergencyContact'] as String? ?? '—';
+        _medicalConditions = studentResMap['medicalConditions'] as String? ?? 'No critical conditions logged';
+        _allergies = studentResMap['allergies'] as String? ?? 'None reported';
         _dbQrCode = userMap['qrCode'] as String?;
 
         final rawAvatar = userMap['avatar'] ??
@@ -630,12 +653,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       _loadAllTabDetails(studentId, sectionId);
       _connectRealTimeSync();
+      _startQrRefreshTimer();
 
       try {
         final parentsList = studentResMap['parents'] as List<dynamic>? ?? [];
         if (parentsList.isNotEmpty) {
           String father = '—';
           String mother = '—';
+          String fatherPhone = '—';
+          String motherPhone = '—';
           String guardianPhone = '—';
 
           for (var sp in parentsList) {
@@ -650,9 +676,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final pPhone = parentObj['phone'] as String? ?? '—';
               if (rel == 'FATHER') {
                 father = pFullName;
+                fatherPhone = pPhone;
                 if (guardianPhone == '—') guardianPhone = pPhone;
               } else if (rel == 'MOTHER') {
                 mother = pFullName;
+                motherPhone = pPhone;
                 if (guardianPhone == '—') guardianPhone = pPhone;
               } else {
                 if (guardianPhone == '—') guardianPhone = pPhone;
@@ -663,6 +691,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             _fatherName = father;
             _motherName = mother;
+            _fatherPhone = fatherPhone;
+            _motherPhone = motherPhone;
             _guardianPhone = guardianPhone;
           });
         }
@@ -738,6 +768,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Timer? _profilePollTimer;
+  Timer? _qrRefreshTimer;
+
+  void _startQrRefreshTimer() {
+    _qrRefreshTimer?.cancel();
+    _qrRefreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      final prefs = CacheService.instance.prefs;
+      final userId = _studentUserId ?? prefs.getString('user_id');
+      if (userId != null && mounted) {
+        try {
+          final qrRes = await ApiService.instance.get(ApiEndpoints.userQrCode(userId));
+          if (qrRes != null && qrRes['success'] == true && qrRes['qrCode'] != null) {
+            final qr = qrRes['qrCode'] as String?;
+            if (qr != null && qr.isNotEmpty && mounted) {
+              setState(() {
+                _dbQrCode = qr;
+              });
+              await prefs.setString('student_qrcode', qr);
+            }
+          }
+        } catch (e) {
+          debugPrint('Periodic QR Code refresh error: $e');
+        }
+      }
+    });
+  }
 
   void _onStudentUpdated(dynamic data) {
     if (!mounted) return;
@@ -895,6 +950,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _pushNotifications = prefs.getBool('push_notifications_enabled') ?? true;
       _inAppNotifications =
           prefs.getBool('in_app_notifications_enabled') ?? true;
+      _emailNotifications = prefs.getBool('email_notifications_enabled') ?? true;
+      _smsNotifications = prefs.getBool('sms_notifications_enabled') ?? true;
 
       final docsJson = prefs.getString('student_uploaded_documents');
       if (docsJson != null) {
@@ -938,6 +995,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     await prefs.setBool('push_notifications_enabled', _pushNotifications);
     await prefs.setBool('in_app_notifications_enabled', _inAppNotifications);
+    await prefs.setBool('email_notifications_enabled', _emailNotifications);
+    await prefs.setBool('sms_notifications_enabled', _smsNotifications);
 
     final encoded = json.encode(_uploadedDocuments);
     await prefs.setString('student_uploaded_documents', encoded);
@@ -949,6 +1008,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('push_notifications_enabled', val);
+    if (mounted) showToast(context, 'Notification preferences updated!');
   }
 
   void _toggleInAppNotifications(bool val) async {
@@ -957,6 +1017,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('in_app_notifications_enabled', val);
+    if (mounted) showToast(context, 'Notification preferences updated!');
+  }
+
+  void _toggleEmailNotifications(bool val) async {
+    setState(() {
+      _emailNotifications = val;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('email_notifications_enabled', val);
+    if (mounted) showToast(context, 'Notification preferences updated!');
+  }
+
+  void _toggleSMSNotifications(bool val) async {
+    setState(() {
+      _smsNotifications = val;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sms_notifications_enabled', val);
+    if (mounted) showToast(context, 'Notification preferences updated!');
+  }
+
+  Future<void> _removeDocumentSilently(int index) async {
+    final docId = _uploadedDocuments[index]['id'];
+    if (docId != null && docId.isNotEmpty) {
+      try {
+        await StudentService.instance.deleteStudentDocument(docId);
+      } catch (_) {}
+    }
+    setState(() {
+      _uploadedDocuments.removeAt(index);
+    });
   }
 
   void _simulateDocumentUpload() async {
@@ -987,8 +1078,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (result != null) {
         final platformFile = result.files.single;
         final String docName = platformFile.name;
+        final int fileSize = platformFile.size;
         final String ext = platformFile.extension?.toUpperCase() ?? 'PDF';
         final fileBytes = platformFile.bytes;
+
+        // Size check (5MB)
+        if (fileSize > 5 * 1024 * 1024) {
+          if (mounted) {
+            showToast(context, 'File too large. Maximum allowed size is 5MB.');
+          }
+          setState(() {
+            _isUploadingDoc = false;
+          });
+          return;
+        }
+
+        // Duplicate Check
+        final existingIdx = _uploadedDocuments.indexWhere((doc) => doc['name'] == docName);
+        if (existingIdx != -1) {
+          final replace = await _showConfirmDialog(
+            'Duplicate Document',
+            'A document named "$docName" already exists. Would you like to replace it?'
+          );
+          if (replace != true) {
+            setState(() {
+              _isUploadingDoc = false;
+            });
+            return;
+          }
+          await _removeDocumentSilently(existingIdx);
+        }
 
         if (fileBytes != null) {
           final response = await StudentService.instance.uploadStudentDocument(
@@ -1012,7 +1131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 });
               });
               
-              _saveStudentData(); // Persist locally just in case
+              _saveStudentData();
 
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -1771,7 +1890,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Back Button
-            if (widget.onBack != null)
+            if (widget.onBack != null && widget.studentId != null)
               GestureDetector(
                 onTap: widget.onBack,
                 child: Row(
@@ -2152,11 +2271,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _healthItem('MEDICAL NOTES', 'No critical conditions logged'),
+              _healthItem('MEDICAL NOTES', _medicalConditions),
               SizedBox(height: 16.h),
-              _healthItem('ALLERGIES', 'None reported'),
+              _healthItem('ALLERGIES', _allergies),
               SizedBox(height: 16.h),
-              _healthItem('EMERGENCY CONTACT', 'Guardian - $_guardianPhone', color: const Color(0xFFEF4444)),
+              _healthItem('EMERGENCY CONTACT', '$_emergencyContactName - $_emergencyInfo', color: const Color(0xFFEF4444)),
             ],
           ),
         ),
@@ -2190,9 +2309,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: Column(
             children: [
-              _guardianSection('Father', _fatherName, _guardianPhone),
+              _guardianSection('Father', _fatherName, _fatherPhone),
               _divider(),
-              _guardianSection('Mother', _motherName, '—'),
+              _guardianSection('Mother', _motherName, _motherPhone),
             ],
           ),
         ),
@@ -2255,6 +2374,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onChanged: _toggleInAppNotifications,
                 title: Text('In-App Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 subtitle: Text('Show popups and badge counts inside the app', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
+                activeThumbColor: const Color(0xFF1A6FDB),
+              ),
+              _divider(),
+              SwitchListTile(
+                value: _emailNotifications,
+                onChanged: _toggleEmailNotifications,
+                title: Text('Email Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                subtitle: Text('Receive daily summaries and fee invoices via email', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
+                activeThumbColor: const Color(0xFF1A6FDB),
+              ),
+              _divider(),
+              SwitchListTile(
+                value: _smsNotifications,
+                onChanged: _toggleSMSNotifications,
+                title: Text('SMS Notifications', style: GoogleFonts.inter(fontSize: 13.sp, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                subtitle: Text('Receive emergency alerts and attendance logs on phone', style: GoogleFonts.inter(fontSize: 11.sp, color: AppColors.textMedium)),
                 activeThumbColor: const Color(0xFF1A6FDB),
               ),
             ],
@@ -2546,7 +2681,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(width: 20.w),
                 Expanded(
                     child: _buildHeaderItem(Icons.phone_outlined, 'Phone',
-                        _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A')),
+                        _phone.isNotEmpty && _phone != '—' ? _phone : 'N/A')),
                 SizedBox(width: 20.w),
                 Expanded(
                     child: _buildHeaderItem(
@@ -2572,7 +2707,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(
                   width: 145.w,
                   child: _buildHeaderItem(Icons.phone_outlined, 'Phone',
-                      _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A'),
+                      _phone.isNotEmpty && _phone != '—' ? _phone : 'N/A'),
                 ),
                 SizedBox(
                   width: 145.w,
@@ -2760,7 +2895,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : _admissionNo;
       final userName = widget.role == 'teacher' ? _userName : _studentName;
       final userRole = widget.role;
-      final userId = widget.role == 'teacher' ? _employeeId : _admissionNo;
+      final userId = widget.role == 'teacher' ? _employeeId : (_studentUserId ?? _admissionNo);
 
       pw.MemoryImage? qrImageProvider;
       if (_dbQrCode != null && _dbQrCode!.startsWith('data:image')) {
@@ -2771,13 +2906,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         } catch (_) {}
       }
 
+      pw.MemoryImage? avatarImageProvider;
+      if (_avatarUrl != null && _avatarUrl!.startsWith('data:image')) {
+        try {
+          final base64Str = _avatarUrl!.split(',').last;
+          final bytes = base64Decode(base64Str);
+          avatarImageProvider = pw.MemoryImage(bytes);
+        } catch (_) {}
+      }
+
+      final issueDate = DateTime.now().toLocal().toString().split(' ').first;
+      final genTime = DateTime.now().toLocal().toString().split(' ')[1].substring(0, 5);
+
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           build: (pw.Context context) {
             return pw.Center(
               child: pw.Container(
-                width: 320,
+                width: 360,
                 padding: const pw.EdgeInsets.all(24),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.blue900, width: 2),
@@ -2789,32 +2936,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Text(
-                      'EDUSPHERE ERP',
+                      'EDUSPHERE INTERNATIONAL SCHOOL',
                       style: pw.TextStyle(
-                        fontSize: 22,
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'DIGITAL ATTENDANCE PASS',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    pw.SizedBox(height: 12),
+                    pw.Container(height: 1, color: PdfColors.grey300),
+                    pw.SizedBox(height: 16),
+                    if (avatarImageProvider != null) ...[
+                      pw.ClipOval(
+                        child: pw.Image(avatarImageProvider, width: 80, height: 80, fit: pw.BoxFit.cover),
+                      ),
+                      pw.SizedBox(height: 12),
+                    ],
+                    pw.Text(
+                      userName,
+                      style: pw.TextStyle(
+                        fontSize: 18,
                         fontWeight: pw.FontWeight.bold,
                         color: PdfColors.blue900,
                       ),
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
-                      'DIGITAL ATTENDANCE PASS',
+                      'Role: ${userRole.toUpperCase()}',
                       style: pw.TextStyle(
-                        fontSize: 12,
-                        color: PdfColors.grey700,
-                        letterSpacing: 1.0,
+                        fontSize: 11,
+                        color: PdfColors.grey600,
                       ),
                     ),
                     pw.SizedBox(height: 16),
                     pw.Container(
-                      height: 1,
-                      color: PdfColors.grey300,
-                    ),
-                    pw.SizedBox(height: 24),
-                    pw.Container(
-                      width: 180,
-                      height: 180,
-                      padding: const pw.EdgeInsets.all(12),
+                      width: 160,
+                      height: 160,
+                      padding: const pw.EdgeInsets.all(8),
                       decoration: pw.BoxDecoration(
                         border: pw.Border.all(color: PdfColors.grey300),
                         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
@@ -2827,51 +2995,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               drawText: false,
                             ),
                     ),
-                    pw.SizedBox(height: 24),
-                    pw.Text(
-                      userName,
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue900,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.blue100,
-                        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-                      ),
-                      child: pw.Text(
-                        userRole.toUpperCase(),
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blue700,
+                    pw.SizedBox(height: 16),
+                    pw.Table(
+                      columnWidths: {
+                        0: const pw.FixedColumnWidth(100),
+                        1: const pw.FixedColumnWidth(180),
+                      },
+                      children: [
+                        pw.TableRow(
+                          children: [
+                            pw.Text('Admission No:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                            pw.Text(_admissionNo, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          ],
                         ),
-                      ),
+                        pw.TableRow(
+                          children: [
+                            pw.Text('Student ID:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                            pw.Text(userId, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          ],
+                        ),
+                        pw.TableRow(
+                          children: [
+                            pw.Text('Class & Section:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                            pw.Text('$_studentClass - $_section', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          ],
+                        ),
+                        pw.TableRow(
+                          children: [
+                            pw.Text('Issue Date:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                            pw.Text('$issueDate $genTime', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 16),
+                    pw.Container(height: 1, color: PdfColors.grey300),
+                    pw.SizedBox(height: 12),
+                    pw.Text(
+                      'VERIFICATION STATEMENT',
+                      style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'This QR Code is cryptographically signed and authorized for campus access verification.',
+                      style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'SECURITY DISCLAIMER: DO NOT SHARE. For individual student use only. Screenshot reproduction is strictly prohibited and violates school policy.',
+                      style: pw.TextStyle(fontSize: 7, color: PdfColors.red700, fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
                     ),
                     pw.SizedBox(height: 12),
                     pw.Text(
-                      'ID: $userId',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        color: PdfColors.grey600,
-                      ),
-                    ),
-                    pw.SizedBox(height: 16),
-                    pw.Container(
-                      height: 1,
-                      color: PdfColors.grey300,
-                    ),
-                    pw.SizedBox(height: 16),
-                    pw.Text(
-                      'ISSUED BY EDUSPHERE SCHOOL SYSTEM',
-                      style: pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColors.grey500,
-                      ),
+                      'EduSphere ERP Secure Digital Pass',
+                      style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
                     ),
                   ],
                 ),
@@ -3022,8 +3201,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Blood Group',
                 _studentBloodGroup != '—' ? _studentBloodGroup : 'N/A'),
             SizedBox(height: 16.h),
-            _buildGridRow('Roll Number', _rollNo.isNotEmpty ? _rollNo : 'N/A',
-                'Admission Number', _admissionNo),
+            _buildGridRow(
+                'Roll Number', 
+                _rollNo.isNotEmpty ? _rollNo : 'N/A',
+                'Admission Number', 
+                _admissionNo),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Admission Date',
+                _studentJoinedDate != '—' ? _studentJoinedDate : 'N/A',
+                'Status',
+                _studentStatus.isNotEmpty ? _studentStatus : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Batch (Academic Year)',
+                _batch.isNotEmpty ? _batch : 'N/A',
+                'Medium',
+                _medium.isNotEmpty ? _medium : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'House',
+                'Green House',
+                'Category',
+                'General'),
           ],
         ),
       );
@@ -3078,10 +3278,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _motherName.isNotEmpty ? _motherName : 'N/A'),
             SizedBox(height: 16.h),
             _buildGridRow(
-                'Guardian Phone',
-                _guardianPhone.isNotEmpty ? _guardianPhone : 'N/A',
+                'Father Phone',
+                _fatherPhone.isNotEmpty ? _fatherPhone : 'N/A',
+                'Mother Phone',
+                _motherPhone.isNotEmpty ? _motherPhone : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Emergency Contact Name',
+                _emergencyContactName.isNotEmpty ? _emergencyContactName : 'N/A',
                 'Emergency Phone',
                 _emergencyInfo != 'UNSET' ? _emergencyInfo : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Medical Notes',
+                _medicalConditions.isNotEmpty ? _medicalConditions : 'N/A',
+                'Allergies',
+                _allergies.isNotEmpty ? _allergies : 'N/A'),
+          ],
+        ),
+      );
+
+      final addressCard = Container(
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: const Color(0xFFE2EAF4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Address Info',
+                style: AppTypography.small
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 20.h),
+            Text('Address',
+                style: AppTypography.caption
+                    .copyWith(color: const Color(0xFF64748B))),
+            SizedBox(height: 4.h),
+            Text(
+                _address.isNotEmpty && _address != 'No location registered' ? _address : 'No registered address available',
+                style: AppTypography.caption
+                    .copyWith(color: const Color(0xFF0F2547))),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'City',
+                _studentCity.isNotEmpty ? _studentCity : 'N/A',
+                'State',
+                _studentState.isNotEmpty ? _studentState : 'N/A'),
+            SizedBox(height: 16.h),
+            _buildGridRow(
+                'Country',
+                _studentCountry.isNotEmpty ? _studentCountry : 'N/A',
+                'PIN Code',
+                _studentPincode.isNotEmpty ? _studentPincode : 'N/A'),
           ],
         ),
       );
@@ -3103,36 +3353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Expanded(child: guardianCard),
                 SizedBox(width: 20.w),
-                Expanded(
-                  child: Container(
-                    padding: EdgeInsets.all(20.r),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16.r),
-                      border: Border.all(color: const Color(0xFFE2EAF4)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Address Info',
-                            style: AppTypography.small
-                                .copyWith(color: const Color(0xFF0F2547))),
-                        SizedBox(height: 20.h),
-                        Text('Address',
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF64748B))),
-                        SizedBox(height: 4.h),
-                        Text(
-                            _address.isNotEmpty &&
-                                    _address != 'No location registered'
-                                ? _address
-                                : 'No registered address available',
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF0F2547))),
-                      ],
-                    ),
-                  ),
-                ),
+                Expanded(child: addressCard),
               ],
             ),
           ],
@@ -3146,35 +3367,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(height: 16.h),
             guardianCard,
             SizedBox(height: 16.h),
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(20.r),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: const Color(0xFFE2EAF4)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Address Info',
-                      style: AppTypography.small
-                          .copyWith(color: const Color(0xFF0F2547))),
-                  SizedBox(height: 20.h),
-                  Text('Address',
-                      style: AppTypography.caption
-                          .copyWith(color: const Color(0xFF64748B))),
-                  SizedBox(height: 4.h),
-                  Text(
-                      _address.isNotEmpty &&
-                              _address != 'No location registered'
-                          ? _address
-                          : 'No registered address available',
-                      style: AppTypography.caption
-                          .copyWith(color: const Color(0xFF0F2547))),
-                ],
-              ),
-            ),
+            addressCard,
           ],
         );
       }
@@ -3831,106 +4024,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ignore: unused_element
   // ignore: unused_element
   Widget _buildMockAttendanceList() {
-    final List<Map<String, String>> mockData = [
-      {
-        'date': '2026-06-08',
-        'status': 'PRESENT',
-        'remarks': 'Scanned at Library Gate'
-      },
-      {
-        'date': '2026-06-05',
-        'status': 'PRESENT',
-        'remarks': 'Scanned at Main Entry Gate'
-      },
-      {
-        'date': '2026-06-04',
-        'status': 'ABSENT',
-        'remarks': 'Absent (No scan detected)'
-      },
-      {
-        'date': '2026-06-03',
-        'status': 'PRESENT',
-        'remarks': 'Scanned at Classroom Gate'
-      },
-    ];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: mockData.length,
-      itemBuilder: (ctx, idx) {
-        final r = mockData[idx];
-        return _buildAttendanceRow(r['date']!, r['status']!, r['remarks']!);
-      },
-    );
-  }
-
-  Widget _buildFeePaymentRow(
-      String receipt, double amount, String dateStr, String mode) {
-    String formattedDate = dateStr;
-    try {
-      final dateObj = DateTime.parse(dateStr);
-      formattedDate = '${dateObj.day}/${dateObj.month}/${dateObj.year}';
-    } catch (_) {}
-
     return Container(
-      margin: EdgeInsets.only(bottom: 8.h),
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(color: const Color(0xFFE2EAF4)),
+      padding: EdgeInsets.symmetric(vertical: 20.h),
+      alignment: Alignment.center,
+      child: Text(
+        'No attendance records found',
+        style: AppTypography.caption.copyWith(color: const Color(0xFF868E96)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Receipt #$receipt',
-                  style: AppTypography.caption
-                      .copyWith(color: const Color(0xFF0F2547))),
-              SizedBox(height: 2.h),
-              Text('Paid on $formattedDate via $mode',
-                  style: AppTypography.caption
-                      .copyWith(color: const Color(0xFF868E96))),
-            ],
-          ),
-          Text(
-            '₹${amount.toStringAsFixed(2)}',
-            style:
-                AppTypography.caption.copyWith(color: const Color(0xFF10B981)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  // ignore: unused_element
-  Widget _buildMockFeePayments() {
-    final List<Map<String, dynamic>> mockData = [
-      {
-        'receipt': 'RCPT-2026-9081',
-        'amount': 15000.0,
-        'date': '2026-05-10',
-        'mode': 'UPI'
-      },
-      {
-        'receipt': 'RCPT-2026-4402',
-        'amount': 15000.0,
-        'date': '2026-04-12',
-        'mode': 'CASH'
-      },
-    ];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: mockData.length,
-      itemBuilder: (ctx, idx) {
-        final p = mockData[idx];
-        return _buildFeePaymentRow(
-            p['receipt']!, p['amount']!, p['date']!, p['mode']!);
-      },
     );
   }
 
@@ -4636,78 +4736,219 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickAndUploadAvatar() async {
+    final prefs = CacheService.instance.prefs;
+    final userId = _currentUserId ?? prefs.getString('user_id');
+
+    if (userId == null) {
+      if (mounted) showToast(context, 'Not logged in. Cannot upload avatar.');
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.r))),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16.r),
+                child: Text('Update Profile Photo', style: GoogleFonts.inter(fontSize: 16.sp, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+              ),
+              ListTile(
+                leading: Icon(Icons.camera_alt_rounded, color: const Color(0xFF1A6FDB), size: 22.sp),
+                title: Text('Take Photo', style: GoogleFonts.inter(fontSize: 14.sp, color: AppColors.textDark)),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _processPickedImage(ImageSource.camera, userId);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_library_rounded, color: const Color(0xFF1A6FDB), size: 22.sp),
+                title: Text('Choose from Gallery', style: GoogleFonts.inter(fontSize: 14.sp, color: AppColors.textDark)),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _processPickedImage(ImageSource.gallery, userId);
+                },
+              ),
+              if (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                ListTile(
+                  leading: Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22.sp),
+                  title: Text('Remove Photo', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.red)),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    final confirm = await _showConfirmDialog('Remove Photo', 'Are you sure you want to remove your profile photo?');
+                    if (confirm == true) {
+                      await _deleteAvatar(userId);
+                    }
+                  },
+                ),
+              ListTile(
+                leading: Icon(Icons.close_rounded, color: Colors.grey, size: 22.sp),
+                title: Text('Cancel', style: GoogleFonts.inter(fontSize: 14.sp, color: Colors.grey)),
+                onTap: () => Navigator.pop(sheetCtx),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _processPickedImage(ImageSource source, String userId) async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        withData: true,
+      final picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 600,
+        maxHeight: 600,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final platformFile = result.files.single;
-        final bytes = platformFile.bytes;
-        final extension = platformFile.extension?.toLowerCase() ?? 'png';
+      if (pickedFile == null) return;
 
-        if (bytes == null) {
-          if (mounted) showToast(context, 'Failed to read image data.');
-          return;
-        }
+      final bytes = await pickedFile.readAsBytes();
+      final extension = pickedFile.path.split('.').last.toLowerCase();
 
-        final prefs = CacheService.instance.prefs;
-        final userId = _currentUserId ?? prefs.getString('user_id');
-
-        if (userId == null) {
-          if (mounted) {
-            showToast(context, 'Not logged in. Cannot upload avatar.');
-          }
-          return;
-        }
-
-        if (mounted) showToast(context, 'Uploading avatar...');
-
-        // Optimistically update UI using base64 memory image
-        final base64String = base64Encode(bytes);
-        final base64DataUrl = 'data:image/$extension;base64,$base64String';
-        if (mounted) {
-          setState(() {
-            _avatarUrl = base64DataUrl;
-          });
-        }
-
-        try {
-          final res = await ApiService.instance.multipartRequest(
-            'PATCH',
-            'users/$userId/avatar',
-            fileKey: 'avatar',
-            fileBytes: bytes,
-            fileName: '$userId.$extension',
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (dialogCtx) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+            title: Text('Preview Photo', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 150.r,
+                  height: 150.r,
+                  decoration: const BoxDecoration(shape: BoxShape.circle),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.memory(bytes, fit: BoxFit.cover),
+                ),
+                SizedBox(height: 12.h),
+                Text('Do you want to upload this photo?', style: GoogleFonts.inter(fontSize: 12.sp, color: AppColors.textMedium)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1A6FDB),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                ),
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  _uploadAvatarBytes(bytes, extension, userId);
+                },
+                child: Text('Upload', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
           );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+      if (mounted) showToast(context, 'Error selecting image: $e');
+    }
+  }
 
-          if (res != null && res['success'] == true) {
-            final publicUrl = res['user']?['avatar'] as String? ?? base64DataUrl;
-            await prefs.setString('${widget.role}_photo_url', publicUrl);
+  Future<void> _uploadAvatarBytes(List<int> bytes, String extension, String userId) async {
+    if (mounted) showToast(context, 'Uploading avatar...');
+    try {
+      final res = await ApiService.instance.multipartRequest(
+        'PATCH',
+        'users/$userId/avatar',
+        fileKey: 'avatar',
+        fileBytes: bytes,
+        fileName: '$userId.$extension',
+      );
 
-            if (widget.onAvatarUpdated != null) {
-              widget.onAvatarUpdated!(publicUrl);
-            }
-
-            if (mounted) {
-              setState(() {
-                _avatarUrl = publicUrl;
-              });
-              showToast(context, 'Avatar updated successfully!');
-            }
-          } else {
-            throw Exception(res?['message'] ?? 'Upload failed');
+      if (res != null && res['success'] == true) {
+        final publicUrl = res['user']?['avatar'] as String?;
+        final prefs = CacheService.instance.prefs;
+        if (publicUrl != null) {
+          await prefs.setString('${widget.role}_photo_url', publicUrl);
+          if (widget.onAvatarUpdated != null) {
+            widget.onAvatarUpdated!(publicUrl);
           }
-        } catch (storageErr) {
-          debugPrint('Backend upload failed: $storageErr');
-          if (mounted) showToast(context, 'Failed to update avatar: $storageErr');
+          if (mounted) {
+            setState(() {
+              _avatarUrl = publicUrl;
+            });
+            showToast(context, 'Avatar updated successfully!');
+          }
         }
+      } else {
+        throw Exception(res?['message'] ?? 'Upload failed');
       }
     } catch (e) {
-      debugPrint('Avatar upload error: $e');
-      if (mounted) showToast(context, 'Failed to update avatar: $e');
+      debugPrint('Avatar upload failed: $e');
+      if (mounted) showToast(context, 'Upload failed: $e');
     }
+  }
+
+  Future<void> _deleteAvatar(String userId) async {
+    if (mounted) showToast(context, 'Removing avatar...');
+    try {
+      final updatePayload = {
+        'avatar': null,
+      };
+      
+      final url = widget.studentId != null
+          ? ApiEndpoints.studentProfile(widget.studentId!)
+          : 'users/me';
+      
+      final res = await ApiService.instance.put(url, body: updatePayload);
+      if (res != null && res['success'] == true) {
+        final prefs = CacheService.instance.prefs;
+        await prefs.remove('${widget.role}_photo_url');
+        if (widget.onAvatarUpdated != null) {
+          widget.onAvatarUpdated!('');
+        }
+        if (mounted) {
+          setState(() {
+            _avatarUrl = null;
+          });
+          showToast(context, 'Avatar removed successfully!');
+        }
+      } else {
+        throw Exception('Delete failed');
+      }
+    } catch (e) {
+      debugPrint('Avatar removal failed: $e');
+      if (mounted) showToast(context, 'Failed to remove avatar: $e');
+    }
+  }
+
+  Future<bool?> _showConfirmDialog(String title, String desc) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        title: Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text(desc, style: GoogleFonts.inter(fontSize: 13.sp, color: AppColors.textMedium)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirm', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildTeacherProfile() {

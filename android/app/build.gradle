@@ -11,17 +11,16 @@ android {
 
     compileOptions {
         coreLibraryDesugaringEnabled true
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11
+        jvmTarget = '17'
     }
 
     signingConfigs {
         release {
-            // Check if key.properties is present for production signing
             def keystorePropertiesFile = rootProject.file('key.properties')
             if (keystorePropertiesFile.exists()) {
                 def keystoreProperties = new Properties()
@@ -30,6 +29,8 @@ android {
                 keyPassword keystoreProperties['keyPassword']
                 storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
                 storePassword keystoreProperties['storePassword']
+            } else {
+                throw new GradleException("Could not find key.properties for signing the release build!")
             }
         }
     }
@@ -44,8 +45,8 @@ android {
 
     buildTypes {
         release {
-            // Sign using release keys if configured, else fallback to debug keys
-            signingConfig = rootProject.file('key.properties').exists() ? signingConfigs.release : signingConfigs.debug
+            // Strictly sign with release keys, removing all debug fallbacks
+            signingConfig signingConfigs.release
             
             // Enable R8 minification, optimization, and resource shrinking
             minifyEnabled true

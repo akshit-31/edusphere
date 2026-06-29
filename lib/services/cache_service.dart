@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class CacheService {
   CacheService._privateConstructor();
@@ -7,6 +8,8 @@ class CacheService {
 
   static const String _tokenKey = 'api_token';
   static const String _userKey = 'cached_user';
+  
+  static const _secureStorage = FlutterSecureStorage();
 
   late final SharedPreferences _sharedPrefs;
 
@@ -16,22 +19,33 @@ class CacheService {
 
   SharedPreferences get prefs => _sharedPrefs;
 
-  // Save the JWT token
+  // Save the JWT token securely using FlutterSecureStorage
   Future<bool> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.setString(_tokenKey, token);
+    try {
+      await _secureStorage.write(key: _tokenKey, value: token);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  // Get the JWT token
+  // Get the JWT token securely from FlutterSecureStorage
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    try {
+      return await _secureStorage.read(key: _tokenKey);
+    } catch (_) {
+      return null;
+    }
   }
 
-  // Remove the JWT token (for logout)
+  // Remove the JWT token (for logout) securely
   Future<bool> removeToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.remove(_tokenKey);
+    try {
+      await _secureStorage.delete(key: _tokenKey);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // Save the complete User object
@@ -65,6 +79,9 @@ class CacheService {
 
   // Clear all cache (useful for logout)
   Future<void> clearAll() async {
+    try {
+      await _secureStorage.delete(key: _tokenKey);
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
@@ -97,6 +114,9 @@ class CacheService {
   }
 
   Future<bool> clear() async {
+    try {
+      await _secureStorage.deleteAll();
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     return prefs.clear();
   }

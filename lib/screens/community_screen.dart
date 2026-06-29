@@ -127,51 +127,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   void _loadMockPosts() {
-    final now = DateTime.now();
     setState(() {
-      _posts = [
-        {
-          'id': 'post_1',
-          'title': 'Annual Sports Day',
-          'content': '📢 Annual Sports Day will be held on 20th June. All students are encouraged to participate. Register with your house captain before 15th June.',
-          'category': 'Announcement',
-          'authorName': 'Principal Sharma',
-          'createdAt': now.subtract(const Duration(hours: 2)).toIso8601String(),
-          'likesCount': 42,
-          'commentsCount': 2,
-          'isLiked': false,
-          'comments': [
-            {
-              'id': 'c1',
-              'authorName': 'Aryan Mehta',
-              'authorRole': 'Student',
-              'content': 'Looking forward to this!',
-              'timeAgo': '1h ago',
-            },
-            {
-              'id': 'c2',
-              'authorName': 'Riya Gupta',
-              'authorRole': 'Student',
-              'content': 'Are house captains announced yet?',
-              'timeAgo': '30m ago',
-            }
-          ],
-          'pollOptions': [],
-        },
-        {
-          'id': 'post_2',
-          'title': 'Science Project Reminder',
-          'content': '📝 Reminder: Science project submissions are due this Friday. Please upload your reports to the assignment portal before 5 PM.',
-          'category': 'Resource',
-          'authorName': 'Mrs. Priya Nair',
-          'createdAt': now.subtract(const Duration(hours: 5)).toIso8601String(),
-          'likesCount': 29,
-          'commentsCount': 0,
-          'isLiked': false,
-          'comments': [],
-          'pollOptions': [],
-        },
-      ];
+      _posts = [];
     });
   }
 

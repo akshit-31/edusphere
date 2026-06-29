@@ -306,65 +306,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   List<CommunityPostModel> _buildMockCommunityPosts() {
-    final now = DateTime.now();
-    return [
-      CommunityPostModel(
-        id: 'post_1',
-        authorName: 'Principal Sharma',
-        authorRole: 'Principal',
-        timeAgo: '2h ago',
-        category: 'ANNOUNCEMENT',
-        content:
-            '📢 Annual Sports Day will be held on 20th June. All students are encouraged to participate. Register with your house captain before 15th June.',
-        likes: 42,
-        insightfuls: 18,
-        commentsCount: 7,
-        comments: [],
-        createdAt: now.subtract(const Duration(hours: 2)),
-      ),
-      CommunityPostModel(
-        id: 'post_2',
-        authorName: 'Mrs. Priya Nair',
-        authorRole: 'Teacher • Science',
-        timeAgo: '5h ago',
-        category: 'UPDATE',
-        content:
-            '📝 Reminder: Science project submissions are due this Friday. Please upload your reports to the assignment portal before 5 PM.',
-        likes: 29,
-        insightfuls: 11,
-        commentsCount: 3,
-        comments: [],
-        createdAt: now.subtract(const Duration(hours: 5)),
-      ),
-      CommunityPostModel(
-        id: 'post_3',
-        authorName: 'Student Council',
-        authorRole: 'Student Body',
-        timeAgo: '1d ago',
-        category: 'EVENT',
-        content:
-            '🎉 Congratulations to Class 10-A for winning the inter-class debate competition! Special mention to Aryan Mehta and Riya Gupta for outstanding performance.',
-        likes: 87,
-        insightfuls: 34,
-        commentsCount: 15,
-        comments: [],
-        createdAt: now.subtract(const Duration(days: 1)),
-      ),
-      CommunityPostModel(
-        id: 'post_4',
-        authorName: 'Library Department',
-        authorRole: 'Administration',
-        timeAgo: '2d ago',
-        category: 'ANNOUNCEMENT',
-        content:
-            '📚 New books have been added to the school library! Genre highlights: Science Fiction, History, and Engineering. Visit the library during lunch hours to explore.',
-        likes: 21,
-        insightfuls: 9,
-        commentsCount: 2,
-        comments: [],
-        createdAt: now.subtract(const Duration(days: 2)),
-      ),
-    ];
+    return [];
   }
 
   // ignore: unused_element
@@ -456,38 +398,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   List<Map<String, String>> _buildMockContacts() {
-    return [
-      {
-        'id': 'mock_teacher_1',
-        'name': 'Mr. Rajesh Kumar',
-        'role': 'Teacher • Physics',
-        'email': 'rajesh@edusphere.com'
-      },
-      {
-        'id': 'mock_teacher_2',
-        'name': 'Mrs. Priya Nair',
-        'role': 'Teacher • Science',
-        'email': 'priya@edusphere.com'
-      },
-      {
-        'id': 'mock_teacher_3',
-        'name': 'Dr. Arun Sharma',
-        'role': 'Teacher • Mathematics',
-        'email': 'arun@edusphere.com'
-      },
-      {
-        'id': 'mock_student_1',
-        'name': 'Aryan Mehta',
-        'role': 'Student • Class 10-A',
-        'email': 'aryan@edusphere.com'
-      },
-      {
-        'id': 'mock_student_2',
-        'name': 'Riya Gupta',
-        'role': 'Student • Class 10-B',
-        'email': 'riya@edusphere.com'
-      },
-    ];
+    return [];
   }
 
   // Messages are in-memory only — no backend messages API exists yet.
@@ -824,42 +735,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               role.contains(_searchQuery);
                         }).toList();
 
-                        final display = filtered.isNotEmpty
-                            ? filtered
-                            : (_availableContacts.isEmpty
-                                ? [
-                                    {
-                                      'id': 'mock_harrison',
-                                      'name': 'Prof. Harrison',
-                                      'role': 'Physics'
-                                    },
-                                    {
-                                      'id': 'mock_sarah',
-                                      'name': 'Mrs. Sarah',
-                                      'role': 'Mathematics'
-                                    },
-                                    {
-                                      'id': 'mock_thompson',
-                                      'name': 'Mr. Thompson',
-                                      'role': 'English'
-                                    },
-                                    {
-                                      'id': 'mock_class_group',
-                                      'name': 'Class 12-A Group',
-                                      'role': '48 members'
-                                    },
-                                    {
-                                      'id': 'mock_physics_group',
-                                      'name': 'Physics Study Group',
-                                      'role': '24 members'
-                                    },
-                                    {
-                                      'id': 'mock_admin',
-                                      'name': 'Admin Office',
-                                      'role': 'School Admin'
-                                    },
-                                  ]
-                                : filtered);
+                        final display = filtered;
 
                         if (display.isEmpty) {
                           return Center(

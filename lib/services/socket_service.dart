@@ -3,6 +3,7 @@ import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:edusphere/config/api_config.dart';
 import 'package:edusphere/services/cache_service.dart';
+import 'package:edusphere/services/api_service.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -32,8 +33,7 @@ class SocketService {
 
     final url = customUrl ?? defaultServerUrl;
 
-    final prefs = CacheService.instance.prefs;
-    final token = prefs.getString('api_token') ?? '';
+    final token = ApiService.instance.token ?? '';
 
     if (_socket != null && _userId == userId && _role == role && _token == token) {
       if (_socket!.connected) {
