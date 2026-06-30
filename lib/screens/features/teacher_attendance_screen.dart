@@ -136,6 +136,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   DateTime _analyticsToDate = DateTime.now();
   bool _analyticsLoaded = false;
   List<Map<String, dynamic>> _analyticsStudentData = [];
+  Map<String, dynamic>? _analyticsSummary;
   final List<Map<String, dynamic>> _createdSlots = [];
   Timer? _debounceTimer;
 
@@ -264,10 +265,24 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   String get _dateStr => DateFormat('dd-MM-yyyy').format(_selectedDate);
 
   Future<void> _loadAnalytics() async {
+    if (_isAnalyticsLoading) return;
+
+    if (_analyticsFromDate.isAfter(_analyticsToDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('From Date cannot be after To Date.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isAnalyticsLoading = true;
       _analyticsLoaded = false;
+      _analyticsSummary = null;
     });
+
     try {
       String? classId;
       String? sectionId;
@@ -277,47 +292,85 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         classId = cls['id']?.toString();
       }
 
+      if (_analyticsSection != 'All Sections' && classId != null) {
+        final secName = _analyticsSection.replaceAll('Section ', '').trim();
+        final sec = _allSections.firstWhere(
+          (s) => s['classId']?.toString() == classId && s['name']?.toString() == secName,
+          orElse: () => {},
+        );
+        if (sec.isNotEmpty) {
+          sectionId = sec['id']?.toString();
+        }
+      }
+
       final queryParams = {
         if (classId != null) 'classId': classId,
+        if (sectionId != null) 'sectionId': sectionId,
         'startDate': DateFormat('yyyy-MM-dd').format(_analyticsFromDate),
         'endDate': DateFormat('yyyy-MM-dd').format(_analyticsToDate),
+        'attendeeType': 'STUDENT',
       };
 
       final response = await ApiService.instance.get('attendance/analytics', queryParams: queryParams);
 
       if (response['success'] == true) {
-        final List<dynamic> breakdown = response['dailyBreakdown'] ?? [];
-        final List<dynamic> matrix = response['studentMatrix'] ?? [];
+        final Map<String, dynamic> data = response['data'] is Map
+            ? Map<String, dynamic>.from(response['data'] as Map)
+            : response;
+        final List<dynamic> breakdown = data['dailyBreakdown'] ?? [];
+        final List<dynamic> matrix = data['studentMatrix'] ?? [];
+        final summary = data['summary'] as Map<String, dynamic>?;
 
-        final List<Map<String, dynamic>> list = breakdown.map((d) => {
-          'date': d['date']?.toString() ?? '',
-          'className': _analyticsClass,
-          'P': d['present'] ?? 0,
-          'A': d['absent'] ?? 0,
-          'L': d['late'] ?? 0,
-          'total': d['total'] ?? 0,
+        final List<Map<String, dynamic>> list = breakdown.map((d) {
+          final String dateStr = d['date']?.toString() ?? '';
+          String label = d['dayLabel']?.toString() ?? '';
+          if (dateStr.isNotEmpty) {
+            try {
+              final dt = DateTime.parse(dateStr);
+              label = DateFormat('d MMM').format(dt);
+            } catch (_) {}
+          }
+          return {
+            'date': dateStr,
+            'dayLabel': label,
+            'dayName': d['dayName']?.toString() ?? '',
+            'isNonWorkingDay': d['isNonWorkingDay'] ?? d['isWeekend'] ?? false,
+            'marked': d['marked'] ?? false,
+            'className': _analyticsClass,
+            'P': d['present'] ?? 0,
+            'A': d['absent'] ?? 0,
+            'L': d['late'] ?? 0,
+            'total': d['total'] ?? 0,
+          };
         }).toList();
 
         final List<Map<String, dynamic>> studentList = matrix.map((s) {
           final stats = s['stats'] ?? {};
           return {
+            'studentId': s['studentId']?.toString() ?? '',
+            'admissionNumber': s['admissionNumber']?.toString() ?? '',
             'name': s['name']?.toString() ?? '',
             'class': _analyticsClass,
-            'P': stats['presentDays'] ?? 0,
-            'A': stats['absentDays'] ?? 0,
-            'L': stats['lateDays'] ?? 0,
-            'total': stats['markedDates'] ?? 0,
+            'records': s['records'] as Map<String, dynamic>? ?? {},
+            'P': stats['presentDays'] ?? s['presentDays'] ?? 0,
+            'A': stats['absentDays'] ?? s['absentDays'] ?? 0,
+            'L': stats['lateDays'] ?? s['lateDays'] ?? 0,
+            'total': stats['markedDates'] ?? s['totalDays'] ?? 0,
+            'pct': stats['attendancePct'] ?? s['attendancePct'] ?? 0,
           };
         }).toList();
 
         if (mounted) {
           setState(() {
             _analyticsData = list;
+            _analyticsStudentData = studentList;
+            _analyticsSummary = summary;
             _isAnalyticsLoading = false;
             _analyticsLoaded = true;
-            _analyticsStudentData = studentList;
           });
         }
+      } else {
+        throw response['message'] ?? 'Failed to load analytics';
       }
     } catch (e) {
       dev.log('Error loading analytics: $e');
@@ -325,9 +378,16 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         setState(() {
           _analyticsData = [];
           _analyticsStudentData = [];
+          _analyticsSummary = null;
           _isAnalyticsLoading = false;
-          _analyticsLoaded = true;
+          _analyticsLoaded = false;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to load attendance analytics. Please try again.'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
       }
     }
   }
@@ -1156,9 +1216,38 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ANALYTICS TAB — new design
-  // ═══════════════════════════════════════════════════════════════════════════
+  List<String> _getAnalyticsSectionsList() {
+    final List<String> list = ['All Sections'];
+    if (_analyticsClass == 'All Classes') {
+      final Set<String> uniqueNames = {};
+      for (var s in _allSections) {
+        final sName = s['name']?.toString() ?? '';
+        if (sName.isNotEmpty) uniqueNames.add(sName);
+      }
+      final sorted = uniqueNames.toList()..sort();
+      list.addAll(sorted);
+    } else {
+      final cls = _apiClasses.firstWhere(
+        (c) => _mapClassName(c['name']?.toString() ?? '') == _analyticsClass,
+        orElse: () => {},
+      );
+      if (cls.isNotEmpty) {
+        final classId = cls['id']?.toString();
+        final secList = _allSections
+            .where((s) => s['classId']?.toString() == classId)
+            .toList();
+        final Set<String> uniqueNames = {};
+        for (var s in secList) {
+          final sName = s['name']?.toString() ?? '';
+          if (sName.isNotEmpty) uniqueNames.add(sName);
+        }
+        final sorted = uniqueNames.toList()..sort();
+        list.addAll(sorted);
+      }
+    }
+    return list;
+  }
+
   Widget _buildAnalyticsContent() {
     const Color primary = Color(0xFF0D7DDC);
     const Color green = Color(0xFF10B981);
@@ -1166,10 +1255,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     const Color amber = Color(0xFFF59E0B);
 
     final allClasses = ['All Classes', ..._classes];
-    final allSections = [
-      'All Sections',
-      ..._sections.where((s) => s != 'All Sections')
-    ];
+    final allSections = _getAnalyticsSectionsList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1247,8 +1333,17 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         _buildAnalyticsDropdown(
                           value: _analyticsClass,
                           items: allClasses,
-                          onChanged: (v) => setState(
-                              () => _analyticsClass = v ?? 'All Classes'),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                _analyticsClass = v;
+                                final validSecs = _getAnalyticsSectionsList();
+                                if (!validSecs.contains(_analyticsSection)) {
+                                  _analyticsSection = 'All Sections';
+                                }
+                              });
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -1265,8 +1360,13 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         _buildAnalyticsDropdown(
                           value: _analyticsSection,
                           items: allSections,
-                          onChanged: (v) => setState(
-                              () => _analyticsSection = v ?? 'All Sections'),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                _analyticsSection = v;
+                              });
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -1579,7 +1679,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                       size: 48.sp, color: const Color(0xFFCBD5E1)),
                   SizedBox(height: 12.h),
                   Text(
-                    'No records found',
+                    'No attendance data available',
                     style: GoogleFonts.outfit(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w700,
@@ -1600,39 +1700,15 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // — Overall summary chips
-              _buildOverallSummary(green, red, amber),
+              _buildAnalyticsSummaryCards(),
               SizedBox(height: 16.h),
-
-              // — Date-wise breakdown heading
-              Text(
-                'Date-wise Breakdown',
-                style: GoogleFonts.outfit(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              SizedBox(height: 10.h),
-
-              // — Date cards
-              ..._analyticsData.map(
-                  (r) => _buildNewAnalyticsCard(r, green, red, amber, primary)),
-
-              // — Student matrix (if any)
-              if (_analyticsStudentData.isNotEmpty) ...[
-                SizedBox(height: 20.h),
-                Text(
-                  'Student Attendance Matrix',
-                  style: GoogleFonts.outfit(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                SizedBox(height: 10.h),
-                _buildStudentMatrix(green, red, amber),
-              ],
+              _buildDailyAttendanceChart(),
+              SizedBox(height: 16.h),
+              _buildAttendanceTrendChart(),
+              SizedBox(height: 16.h),
+              _buildDateWiseGrid(),
+              SizedBox(height: 16.h),
+              _buildStudentMatrix(green, red, amber),
             ],
           ),
       ],
@@ -1699,309 +1775,154 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     );
   }
 
-  // ── Overall summary row
-  Widget _buildOverallSummary(Color green, Color red, Color amber) {
-    int totalP = 0, totalA = 0, totalL = 0, totalAll = 0;
-    for (final r in _analyticsData) {
-      totalP += (r['P'] as int? ?? 0);
-      totalA += (r['A'] as int? ?? 0);
-      totalL += (r['L'] as int? ?? 0);
-      totalAll += (r['total'] as int? ?? 0);
-    }
-    final pct = totalAll > 0 ? (totalP / totalAll * 100).round() : 0;
-    final pctColor = pct >= 90
-        ? green
-        : pct >= 75
-            ? amber
-            : red;
+  Widget _buildAnalyticsSummaryCards() {
+    final summary = _analyticsSummary ?? {};
+    final int totalStudents = int.tryParse(summary['totalStudents']?.toString() ?? '') ?? 0;
+    final int workingDays = int.tryParse(summary['workingDays']?.toString() ?? '') ?? 0;
+    final int markedDays = int.tryParse(summary['markedDays']?.toString() ?? '') ?? 0;
+    final int avgAttendancePct = int.tryParse(summary['avgAttendancePct']?.toString() ?? '') ?? 0;
 
-    return Container(
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF0D7DDC).withValues(alpha: 0.08),
-            const Color(0xFF0D7DDC).withValues(alpha: 0.02)
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16.r),
-        border:
-            Border.all(color: const Color(0xFF0D7DDC).withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Overall Attendance',
-                    style: GoogleFonts.outfit(
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                  Text(
-                    '${_analyticsData.length} days • $totalAll total records',
-                    style: AppTypography.caption
-                        .copyWith(color: const Color(0xFF94A3B8)),
-                  ),
-                ],
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
-                decoration: BoxDecoration(
-                  color: pctColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20.r),
-                  border: Border.all(color: pctColor.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  '$pct%',
-                  style: GoogleFonts.outfit(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w900,
-                    color: pctColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 14.h),
-          Row(
-            children: [
-              _buildSumChip('Present', totalP, green),
-              SizedBox(width: 8.w),
-              _buildSumChip('Absent', totalA, red),
-              SizedBox(width: 8.w),
-              _buildSumChip('Late', totalL, amber),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        final int crossAxisCount = width > 600 ? 4 : 2;
+        const double spacing = 12.0;
 
-  Widget _buildSumChip(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 10.h),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: GoogleFonts.outfit(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+        final cards = [
+          _buildSummaryCard('TOTAL STUDENTS', '$totalStudents', null, const Color(0xFF3B82F6)),
+          _buildSummaryCard('WORKING DAYS', '$workingDays', '$markedDays marked', const Color(0xFF8B5CF6)),
+          _buildSummaryCard('DAYS MARKED', '$markedDays', null, const Color(0xFF10B981)),
+          _buildSummaryCard('AVG ATTENDANCE', '$avgAttendancePct%', null, const Color(0xFFF59E0B)),
+        ];
+
+        if (crossAxisCount == 4) {
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: cards.map((c) => Expanded(child: c)).toList(),
             ),
-            Text(
-              label,
-              style: AppTypography.caption
-                  .copyWith(color: color.withValues(alpha: 0.8)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Date-wise breakdown card (new design)
-  Widget _buildNewAnalyticsCard(
-    Map<String, dynamic> record,
-    Color green,
-    Color red,
-    Color amber,
-    Color primary,
-  ) {
-    final dateStr = record['date']?.toString() ?? '';
-    final className = record['className']?.toString() ?? '';
-    final present = record['P'] as int? ?? 0;
-    final absent = record['A'] as int? ?? 0;
-    final late = record['L'] as int? ?? 0;
-    final total = record['total'] as int? ?? 0;
-    final pct = total > 0 ? (present / total * 100).round() : 0;
-    final pctColor = pct >= 90
-        ? green
-        : pct >= 75
-            ? amber
-            : red;
-
-    String fmtDate = dateStr;
-    try {
-      fmtDate = DateFormat('EEE, dd MMM yyyy').format(DateTime.parse(dateStr));
-    } catch (_) {}
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 10.h),
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14.r),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          );
+        } else {
+          return Column(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(7.r),
-                    decoration: BoxDecoration(
-                      color: primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    child: Icon(Icons.calendar_today_rounded,
-                        size: 14.sp, color: primary),
-                  ),
-                  SizedBox(width: 10.w),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        fmtDate,
-                        style: AppTypography.caption
-                            .copyWith(color: const Color(0xFF0F172A)),
-                      ),
-                      if (className.isNotEmpty)
-                        Text(
-                          className,
-                          style: AppTypography.caption
-                              .copyWith(color: const Color(0xFF94A3B8)),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 5.h),
-                decoration: BoxDecoration(
-                  color: pctColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20.r),
-                  border: Border.all(color: pctColor.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  '$pct%',
-                  style: AppTypography.caption.copyWith(color: pctColor),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12.h),
-
-          // Stacked horizontal bar
-          if (total > 0) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6.r),
-              child: SizedBox(
-                height: 8.h,
+              IntrinsicHeight(
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (present > 0)
-                      Flexible(
-                        flex: present,
-                        child: Container(color: green),
-                      ),
-                    if (late > 0)
-                      Flexible(
-                        flex: late,
-                        child: Container(color: amber),
-                      ),
-                    if (absent > 0)
-                      Flexible(
-                        flex: absent,
-                        child: Container(color: red),
-                      ),
-                    if (total - present - absent - late > 0)
-                      Flexible(
-                        flex: total - present - absent - late,
-                        child: Container(color: const Color(0xFFE2E8F0)),
-                      ),
+                    Expanded(child: cards[0]),
+                    const SizedBox(width: spacing),
+                    Expanded(child: cards[1]),
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: 10.h),
-          ],
-
-          // Stats row
-          Row(
-            children: [
-              _buildStatPill('Present', present, green),
-              SizedBox(width: 8.w),
-              _buildStatPill('Absent', absent, red),
-              SizedBox(width: 8.w),
-              _buildStatPill('Late', late, amber),
-              SizedBox(width: 8.w),
-              _buildStatPill('Total', total, const Color(0xFF6366F1)),
+              const SizedBox(height: spacing),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: cards[2]),
+                    const SizedBox(width: spacing),
+                    Expanded(child: cards[3]),
+                  ],
+                ),
+              ),
             ],
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildSummaryCard(String label, String value, String? subtitle, Color indicatorColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4.0,
+            offset: const Offset(0, 2.0),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildStatPill(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 7.h),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(8.r),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: GoogleFonts.outfit(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w900,
-                color: color,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11.0),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4.0,
+                color: indicatorColor,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              label,
-              style: AppTypography.caption
-                  .copyWith(color: color.withValues(alpha: 0.75)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                          fontSize: 10.0,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6.0),
+                      Text(
+                        value,
+                        style: const TextStyle(
+                          fontFamily: 'Outfit',
+                          fontSize: 22.0,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        subtitle ?? '',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: subtitle != null ? const Color(0xFF94A3B8) : Colors.transparent,
+                          fontSize: 10.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ── Student matrix
-  Widget _buildStudentMatrix(Color green, Color red, Color amber) {
+  Widget _buildDailyAttendanceChart() {
+    final chartData = _analyticsData.where((d) => d['marked'] == true).toList();
+    final displayData = chartData.isNotEmpty ? chartData : _analyticsData;
+
+    int maxStudents = 0;
+    for (var d in displayData) {
+      final int total = int.tryParse(d['total']?.toString() ?? '') ?? 0;
+      if (total > maxStudents) maxStudents = total;
+    }
+    if (maxStudents == 0) maxStudents = 10;
+
+    final double chartHeight = 160.h;
+    final double barWidth = 32.w;
+    final double spacing = 16.w;
+
     return Container(
+      padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
@@ -2010,166 +1931,653 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Table header
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(16.r),
-                topRight: Radius.circular(16.r),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Text('Student',
-                      style: AppTypography.caption
-                          .copyWith(color: const Color(0xFF475569))),
-                ),
-                SizedBox(
-                  width: 44.w,
-                  child: Center(
-                      child: Text('P',
-                          style: AppTypography.caption.copyWith(color: green))),
-                ),
-                SizedBox(
-                  width: 44.w,
-                  child: Center(
-                      child: Text('A',
-                          style: AppTypography.caption.copyWith(color: red))),
-                ),
-                SizedBox(
-                  width: 44.w,
-                  child: Center(
-                      child: Text('L',
-                          style: AppTypography.caption.copyWith(color: amber))),
-                ),
-                SizedBox(
-                  width: 44.w,
-                  child: Center(
-                      child: Text('%',
-                          style: AppTypography.caption
-                              .copyWith(color: const Color(0xFF6366F1)))),
-                ),
-              ],
+          Text(
+            'Daily Attendance — Present / Absent',
+            style: GoogleFonts.outfit(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
             ),
           ),
-
-          // Rows — limit to 20 for perf
-          ...(_analyticsStudentData
-              .take(20)
-              .toList()
-              .asMap()
-              .entries
-              .map((entry) {
-            final i = entry.key;
-            final s = entry.value;
-            final p = s['P'] as int? ?? 0;
-            final a = s['A'] as int? ?? 0;
-            final l = s['L'] as int? ?? 0;
-            final tot = s['total'] as int? ?? 0;
-            final pct = tot > 0 ? (p / tot * 100).round() : 0;
-            final pctColor = pct >= 90
-                ? green
-                : pct >= 75
-                    ? amber
-                    : red;
-            final name = (s['name'] as String? ?? '').isNotEmpty
-                ? s['name'] as String
-                : 'Student';
-
-            return Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-              decoration: BoxDecoration(
-                color: i.isEven ? Colors.white : const Color(0xFFFAFAFC),
-                border: Border(
-                  bottom: BorderSide(
-                      color: const Color(0xFFF1F5F9),
-                      width: i < _analyticsStudentData.length - 1 ? 1 : 0),
+          Text(
+            'Bar chart across selected date range',
+            style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
+          ),
+          SizedBox(height: 20.h),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: chartHeight,
+                width: 30.w,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(5, (index) {
+                    final val = (maxStudents * (4 - index) ~/ 4);
+                    return Text(
+                      '$val',
+                      style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8), fontSize: 10.sp),
+                    );
+                  }),
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 14.r,
-                          backgroundColor: const Color(0xFFE0E7FF),
-                          child: Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF6366F1)),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
+                        alignment: Alignment.bottomLeft,
+                        children: [
+                          SizedBox(
+                            height: chartHeight,
+                            width: displayData.length * (barWidth + spacing) + spacing,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: List.generate(5, (_) => const Divider(height: 1, color: Color(0xFFF1F5F9), thickness: 1)),
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 8.w),
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: AppTypography.caption
-                                .copyWith(color: const Color(0xFF0F172A)),
-                            overflow: TextOverflow.ellipsis,
+                          Padding(
+                            padding: EdgeInsets.only(left: spacing / 2),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: displayData.map((d) {
+                                final int present = int.tryParse(d['P']?.toString() ?? '') ?? 0;
+                                final int absent = int.tryParse(d['A']?.toString() ?? '') ?? 0;
+                                final int total = int.tryParse(d['total']?.toString() ?? '') ?? 0;
+                                final bool marked = d['marked'] as bool? ?? false;
+
+                                final double presentHeight = total > 0 ? (present / maxStudents) * chartHeight : 0;
+                                final double absentHeight = total > 0 ? (absent / maxStudents) * chartHeight : 0;
+
+                                return Container(
+                                  width: barWidth,
+                                  margin: EdgeInsets.only(right: spacing),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      if (marked)
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(4.r),
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              if (absentHeight > 0)
+                                                Container(
+                                                  height: absentHeight,
+                                                  width: barWidth,
+                                                  color: const Color(0xFFEF4444),
+                                                ),
+                                              if (presentHeight > 0)
+                                                Container(
+                                                  height: presentHeight,
+                                                  width: barWidth,
+                                                  color: const Color(0xFF10B981),
+                                                ),
+                                            ],
+                                          ),
+                                        )
+                                      else
+                                        SizedBox(height: chartHeight),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
-                  SizedBox(
-                    width: 44.w,
-                    child: Center(
-                      child: Text('$p',
-                          style: AppTypography.caption.copyWith(color: green)),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 44.w,
-                    child: Center(
-                      child: Text('$a',
-                          style: AppTypography.caption.copyWith(color: red)),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 44.w,
-                    child: Center(
-                      child: Text('$l',
-                          style: AppTypography.caption.copyWith(color: amber)),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 44.w,
-                    child: Center(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 6.w, vertical: 2.h),
-                        decoration: BoxDecoration(
-                          color: pctColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6.r),
-                        ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 38.w),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Padding(
+                padding: EdgeInsets.only(left: spacing / 2),
+                child: Row(
+                  children: displayData.map((d) {
+                    final String label = d['dayLabel']?.toString() ?? '';
+                    return Container(
+                      width: barWidth,
+                      margin: EdgeInsets.only(right: spacing, top: 8.h),
+                      child: Center(
                         child: Text(
-                          '$pct%',
-                          style:
-                              AppTypography.caption.copyWith(color: pctColor),
+                          label,
+                          style: AppTypography.caption.copyWith(color: const Color(0xFF64748B), fontSize: 9.sp),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                    );
+                  }).toList(),
+                ),
               ),
-            );
-          })),
+            ),
+          ),
+          SizedBox(height: 16.h),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLegendDot(const Color(0xFF10B981), 'Present'),
+              SizedBox(width: 16.w),
+              _buildLegendDot(const Color(0xFFEF4444), 'Absent'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-          // Footer note if more than 20
+  Widget _buildLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10.r,
+          height: 10.r,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        SizedBox(width: 6.w),
+        Text(label, style: AppTypography.caption.copyWith(color: const Color(0xFF475569))),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceTrendChart() {
+    final double chartHeight = 140.h;
+    final double barWidth = 32.w;
+    final double spacing = 16.w;
+
+    final chartData = _analyticsData.where((d) => d['marked'] == true).toList();
+    final displayData = chartData.isNotEmpty ? chartData : _analyticsData;
+
+    final double totalWidth = displayData.length * (barWidth + spacing) - spacing;
+
+    final List<double> percentages = [];
+    final List<bool> marked = [];
+    for (var d in displayData) {
+      final int present = int.tryParse(d['P']?.toString() ?? '') ?? 0;
+      final int absent = int.tryParse(d['A']?.toString() ?? '') ?? 0;
+      final bool isMarked = d['marked'] as bool? ?? false;
+
+      double pct = 0.0;
+      if (isMarked) {
+        final divisor = present + absent;
+        pct = divisor > 0 ? (present / divisor * 100.0) : 0.0;
+      }
+      percentages.add(pct);
+      marked.add(isMarked);
+    }
+
+    return Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Attendance % Trend',
+            style: GoogleFonts.outfit(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          Text(
+            'Percentage of students present on marked days',
+            style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
+          ),
+          SizedBox(height: 20.h),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: chartHeight,
+                width: 30.w,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(5, (index) {
+                    final val = 100 - index * 25;
+                    return Text(
+                      '$val%',
+                      style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8), fontSize: 10.sp),
+                    );
+                  }),
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Stack(
+                        children: [
+                          SizedBox(
+                            height: chartHeight,
+                            width: totalWidth + spacing,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: List.generate(5, (_) => const Divider(height: 1, color: Color(0xFFF1F5F9), thickness: 1)),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: barWidth / 2),
+                            child: SizedBox(
+                              height: chartHeight,
+                              width: totalWidth,
+                              child: CustomPaint(
+                                painter: AttendanceTrendPainter(points: percentages, marked: marked),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 38.w),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Padding(
+                padding: EdgeInsets.only(left: spacing / 2),
+                child: Row(
+                  children: displayData.map((d) {
+                    final String label = d['dayLabel']?.toString() ?? '';
+                    return Container(
+                      width: barWidth,
+                      margin: EdgeInsets.only(right: spacing, top: 8.h),
+                      child: Center(
+                        child: Text(
+                          label,
+                          style: AppTypography.caption.copyWith(color: const Color(0xFF64748B), fontSize: 9.sp),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateWiseGrid() {
+    return Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Date-Wise Status Grid',
+            style: GoogleFonts.outfit(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            'Green = marked & present majority • Red = marked & absent majority • Grey = not marked • Faded = weekend',
+            style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
+          ),
+          SizedBox(height: 20.h),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: _analyticsData.map((d) {
+              final String dateStr = d['date']?.toString() ?? '';
+              final bool isNonWorkingDay = d['isNonWorkingDay'] ?? false;
+              final bool marked = d['marked'] ?? false;
+              final int present = d['P'] as int? ?? 0;
+              final int absent = d['A'] as int? ?? 0;
+
+              final int pct = (present + absent) > 0 ? (present * 100 ~/ (present + absent)) : 0;
+
+              String dayLabel = '';
+              String dayNum = '';
+              try {
+                final dt = DateTime.parse(dateStr);
+                dayLabel = DateFormat('E').format(dt);
+                dayNum = DateFormat('dd').format(dt);
+              } catch (_) {}
+
+              Color bgColor;
+              Color borderColor;
+              Color textColor;
+              String pctLabel;
+
+              if (isNonWorkingDay) {
+                bgColor = const Color(0xFFF8FAFC);
+                borderColor = const Color(0xFFE2E8F0);
+                textColor = const Color(0xFF94A3B8);
+                pctLabel = 'Weekend';
+              } else if (!marked) {
+                bgColor = const Color(0xFFF1F5F9);
+                borderColor = const Color(0xFFE2E8F0);
+                textColor = const Color(0xFF64748B);
+                pctLabel = 'Not Marked';
+              } else {
+                if (pct >= 75) {
+                  bgColor = const Color(0xFFDCFCE7);
+                  borderColor = const Color(0xFF86EFAC);
+                  textColor = const Color(0xFF16A34A);
+                } else if (pct >= 50) {
+                  bgColor = const Color(0xFFFEF3C7);
+                  borderColor = const Color(0xFFFDE68A);
+                  textColor = const Color(0xFFD97706);
+                } else {
+                  bgColor = const Color(0xFFFEE2E2);
+                  borderColor = const Color(0xFFFCA5A5);
+                  textColor = const Color(0xFFDC2626);
+                }
+                pctLabel = '$pct%';
+              }
+
+              return Container(
+                width: 58.w,
+                padding: EdgeInsets.symmetric(vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(8.r),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      dayLabel,
+                      style: AppTypography.caption.copyWith(color: textColor.withValues(alpha: 0.7), fontSize: 9.sp),
+                    ),
+                    Text(
+                      dayNum,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w800,
+                        color: textColor,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      pctLabel,
+                      style: AppTypography.caption.copyWith(color: textColor, fontSize: 8.sp, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          SizedBox(height: 16.h),
+          Wrap(
+            spacing: 12.w,
+            runSpacing: 6.h,
+            children: [
+              _buildLegendDot(const Color(0xFFDCFCE7), '≥75% Present'),
+              _buildLegendDot(const Color(0xFFFEF3C7), '50–74%'),
+              _buildLegendDot(const Color(0xFFFEE2E2), '<50%'),
+              _buildLegendDot(const Color(0xFFF1F5F9), 'Not Marked'),
+              _buildLegendDot(const Color(0xFFF8FAFC), 'Weekend'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentMatrix(Color green, Color red, Color amber) {
+    final double studentColWidth = 110.w;
+    final double admColWidth = 85.w;
+    final double dateColWidth = 36.w;
+    final double pctColWidth = 55.w;
+
+    final List<Map<String, dynamic>> dates = _analyticsData;
+    final double tableWidth = studentColWidth + admColWidth + (dates.length * dateColWidth) + pctColWidth;
+
+    return Container(
+      padding: EdgeInsets.all(16.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Student Attendance Matrix',
+            style: GoogleFonts.outfit(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          SizedBox(height: 6.h),
+          Row(
+            children: [
+              _buildLegendDot(const Color(0xFF10B981), 'Present (P)'),
+              SizedBox(width: 12.w),
+              _buildLegendDot(const Color(0xFFEF4444), 'Absent (A)'),
+              SizedBox(width: 12.w),
+              _buildLegendDot(const Color(0xFF94A3B8), 'Not Marked'),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          SizedBox(
+            height: 380.h,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 8.h),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8FAFC),
+                          border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: studentColWidth,
+                              child: Text(
+                                'Student',
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF475569), fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            SizedBox(
+                              width: admColWidth,
+                              child: Text(
+                                'Adm.',
+                                style: AppTypography.caption.copyWith(color: const Color(0xFF475569), fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            ...dates.map((d) {
+                              final String dateStr = d['date']?.toString() ?? '';
+                              String headerText = '';
+                              try {
+                                final dt = DateTime.parse(dateStr);
+                                headerText = DateFormat('dd').format(dt);
+                              } catch (_) {}
+                              return SizedBox(
+                                width: dateColWidth,
+                                child: Center(
+                                  child: Text(
+                                    headerText,
+                                    style: AppTypography.caption.copyWith(color: const Color(0xFF475569), fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              );
+                            }),
+                            SizedBox(
+                              width: pctColWidth,
+                              child: Center(
+                                child: Text(
+                                  'Att. %',
+                                  style: AppTypography.caption.copyWith(color: const Color(0xFF475569), fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ListView.builder(
+                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: _analyticsStudentData.length,
+                        itemBuilder: (context, index) {
+                          final student = _analyticsStudentData[index];
+                          final String name = student['name']?.toString() ?? 'Student';
+                          final String admNo = student['admissionNumber']?.toString() ?? '';
+                          final Map<String, dynamic> records = student['records'] as Map<String, dynamic>? ?? {};
+                          final int pct = int.tryParse(student['pct']?.toString() ?? '') ?? 0;
+
+                          final pctColor = pct >= 75
+                              ? const Color(0xFF10B981)
+                              : pct >= 50
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFFEF4444);
+
+                          return Container(
+                            padding: EdgeInsets.symmetric(vertical: 8.h),
+                            decoration: BoxDecoration(
+                              border: Border(bottom: BorderSide(color: const Color(0xFFF1F5F9), width: 1.r)),
+                              color: index.isEven ? Colors.white : const Color(0xFFFAFAFC),
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: studentColWidth,
+                                  child: Text(
+                                    name,
+                                    style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: admColWidth,
+                                  child: Text(
+                                    admNo,
+                                    style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                ...dates.map((d) {
+                                  final String dateStr = d['date']?.toString() ?? '';
+                                  final String? status = records[dateStr]?.toString();
+
+                                  Color cellBg = const Color(0xFFF1F5F9);
+                                  Color cellText = const Color(0xFF94A3B8);
+                                  String cellLabel = '-';
+
+                                  if (status == 'PRESENT' || status == 'P') {
+                                    cellBg = const Color(0xFFDCFCE7);
+                                    cellText = const Color(0xFF16A34A);
+                                    cellLabel = 'P';
+                                  } else if (status == 'ABSENT' || status == 'A') {
+                                    cellBg = const Color(0xFFFEE2E2);
+                                    cellText = const Color(0xFFDC2626);
+                                    cellLabel = 'A';
+                                  } else if (status == 'LATE' || status == 'L') {
+                                    cellBg = const Color(0xFFFEF3C7);
+                                    cellText = const Color(0xFFD97706);
+                                    cellLabel = 'L';
+                                  }
+
+                                  return SizedBox(
+                                    width: dateColWidth,
+                                    child: Center(
+                                      child: Container(
+                                        width: 24.r,
+                                        height: 24.r,
+                                        decoration: BoxDecoration(
+                                          color: cellBg,
+                                          borderRadius: BorderRadius.circular(4.r),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            cellLabel,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.sp,
+                                              fontWeight: FontWeight.bold,
+                                              color: cellText,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                                SizedBox(
+                                  width: pctColWidth,
+                                  child: Center(
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                                      decoration: BoxDecoration(
+                                        color: pctColor.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6.r),
+                                      ),
+                                      child: Text(
+                                        '$pct%',
+                                        style: AppTypography.caption.copyWith(color: pctColor, fontWeight: FontWeight.bold, fontSize: 10.sp),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           if (_analyticsStudentData.length > 20)
             Padding(
               padding: EdgeInsets.all(12.r),
-              child: Text(
-                'Showing top 20 students by attendance rate',
-                style: AppTypography.caption
-                    .copyWith(color: const Color(0xFF94A3B8)),
-                textAlign: TextAlign.center,
+              child: Center(
+                child: Text(
+                  'Showing top 20 students by attendance rate',
+                  style: AppTypography.caption
+                      .copyWith(color: const Color(0xFF94A3B8)),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
         ],
@@ -2906,5 +3314,96 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         ),
       ),
     );
+  }
+}
+
+class AttendanceTrendPainter extends CustomPainter {
+  final List<double> points; // Percentages from 0 to 100
+  final List<bool> marked;
+  final Color lineColor;
+  final Color gradientStartColor;
+
+  AttendanceTrendPainter({
+    required this.points,
+    required this.marked,
+    this.lineColor = const Color(0xFF0D7DDC),
+    this.gradientStartColor = const Color(0xFF0D7DDC),
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+
+    final paintLine = Paint()
+      ..color = lineColor
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+
+    final double widthBetweenPoints = size.width / (points.length > 1 ? (points.length - 1) : 1);
+    final path = Path();
+    final fillPath = Path();
+
+    bool hasStarted = false;
+    double firstX = 0;
+    double lastX = size.width;
+
+    for (int i = 0; i < points.length; i++) {
+      final double x = i * widthBetweenPoints;
+      final double y = size.height - (points[i] / 100.0 * size.height);
+
+      if (!hasStarted) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+        firstX = x;
+        hasStarted = true;
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+      lastX = x;
+    }
+
+    if (hasStarted) {
+      fillPath.lineTo(lastX, size.height);
+      fillPath.close();
+
+      final rect = Offset.zero & size;
+      final gradient = LinearGradient(
+        colors: [gradientStartColor.withValues(alpha: 0.18), gradientStartColor.withValues(alpha: 0.0)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
+      final paintFill = Paint()
+        ..shader = gradient.createShader(rect)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawPath(fillPath, paintFill);
+      canvas.drawPath(path, paintLine);
+    }
+
+    final paintDotOuter = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.fill;
+    final paintDotInner = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < points.length; i++) {
+      if (marked[i]) {
+        final double x = i * widthBetweenPoints;
+        final double y = size.height - (points[i] / 100.0 * size.height);
+
+        canvas.drawCircle(Offset(x, y), 5.0, paintDotOuter);
+        canvas.drawCircle(Offset(x, y), 2.5, paintDotInner);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant AttendanceTrendPainter oldDelegate) {
+    return oldDelegate.points != points || oldDelegate.marked != marked;
   }
 }

@@ -9,6 +9,7 @@ import 'dart:developer' as dev;
 import '../main_screen.dart';
 import '../../widgets/teacher_app_bar.dart';
 import 'package:edusphere/theme/typography.dart';
+import '../../utils/download_helper.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Event model
@@ -261,11 +262,10 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
       
       final fileName = 'EduSphere_Calendar_${_focusedMonth.month}_${_focusedMonth.year}';
 
-      await FileSaver.instance.saveFile(
-        name: fileName,
-        bytes: bytes,
-        fileExtension: 'csv',
-        mimeType: MimeType.csv,
+      await downloadFile(
+        bytes,
+        fileName,
+        'csv',
       );
 
       if (mounted) {

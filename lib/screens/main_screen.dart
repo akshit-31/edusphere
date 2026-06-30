@@ -2008,6 +2008,15 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
                             onTap: () => MainScreen.navigateTo(context, 3),
                           ),
                           _drawerItem(
+                            icon: Icons.qr_code_scanner_rounded,
+                            label: 'QR Scanner',
+                            activeBlue: activeBlue,
+                            inactiveIcon: inactiveIcon,
+                            inactiveText: inactiveText,
+                            onTap: () => MainScreen.navigateTo(
+                                context, isDesktop ? 4 : 5),
+                          ),
+                          _drawerItem(
                             icon: Icons.check_box_outlined,
                             label: 'Assignments',
                             activeBlue: activeBlue,

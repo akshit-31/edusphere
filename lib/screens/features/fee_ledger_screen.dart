@@ -14,6 +14,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../services/api_service.dart';
 import '../../config/api_endpoints.dart';
+import '../../utils/download_helper.dart';
 
 class FeeLedgerScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -582,7 +583,7 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> with SingleTickerProv
 
       final pdfBytes = await pdf.save();
       final fileName = 'Receipt_$receiptNo.pdf';
-      await FileSaver.instance.saveFile(name: fileName.replaceAll('.pdf', ''), bytes: pdfBytes, fileExtension: 'pdf', mimeType: MimeType.pdf);
+      await downloadFile(pdfBytes, fileName.replaceAll('.pdf', ''), 'pdf');
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -732,7 +733,7 @@ class _FeeLedgerScreenState extends State<FeeLedgerScreen> with SingleTickerProv
 
       final pdfBytes = await pdf.save();
       final fileName = 'FeeStatement_$receiptNo.pdf';
-      await FileSaver.instance.saveFile(name: fileName.replaceAll('.pdf', ''), bytes: pdfBytes, fileExtension: 'pdf', mimeType: MimeType.pdf);
+      await downloadFile(pdfBytes, fileName.replaceAll('.pdf', ''), 'pdf');
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();

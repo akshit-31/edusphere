@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/common_widgets.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -120,6 +121,18 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
         final cls = row['class'] as Map<String, dynamic>?;
         final section = row['section'] as Map<String, dynamic>?;
         final count = row['_count']?['submissions'] ?? 0;
+        
+        // Resolve teacher name
+        String tName = _teacherName;
+        final teacherUser = row['teacher']?['user'] as Map<String, dynamic>?;
+        if (teacherUser != null) {
+          final fn = teacherUser['firstName'] as String? ?? '';
+          final ln = teacherUser['lastName'] as String? ?? '';
+          if ('$fn $ln'.trim().isNotEmpty) {
+            tName = '$fn $ln'.trim();
+          }
+        }
+        
         return {
           'id': row['id'],
           'title': row['title'] ?? 'Untitled',
@@ -131,6 +144,10 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
               : 'No Due Date',
           'submissions_count': count,
           'description': row['description'] ?? '',
+          'fileName': row['fileName'] ?? '',
+          'filePath': row['filePath'] ?? '',
+          'createdAt': row['createdAt'] ?? '',
+          'teacher_name': tName,
         };
       }).toList();
 
@@ -201,6 +218,163 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
         _isLoadingSubmissions = false;
       });
     }
+  }
+
+  Future<void> _downloadFile(String filePath, String fileName) async {
+    try {
+      final uri = Uri.parse(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        showToast(context, 'Could not open file URL', isError: true);
+      }
+    } catch (e) {
+      showToast(context, 'Error opening file: $e', isError: true);
+    }
+  }
+
+  void _showAssignmentDetailsBottomSheet(BuildContext context, Map<String, dynamic> a) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+        ),
+        padding: EdgeInsets.fromLTRB(18.w, 14.h, 18.w, 30.h),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40.w,
+                height: 5.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+              ),
+            ),
+            SizedBox(height: 20.h),
+            Text(
+              a['title'] ?? 'Untitled Assignment',
+              style: AppTypography.small.copyWith(
+                color: const Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 18.sp,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            if (a['description'] != null && a['description'].toString().isNotEmpty) ...[
+              Text(
+                a['description'],
+                style: AppTypography.caption.copyWith(
+                  color: const Color(0xFF475569),
+                  height: 1.4,
+                ),
+              ),
+              SizedBox(height: 16.h),
+            ],
+            const Divider(color: Color(0xFFE2E8F0)),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.class_outlined, 'Class', a['class_name'] ?? 'N/A'),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.layers_outlined, 'Section', a['section'] ?? 'All'),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.book_outlined, 'Subject', a['subject'] ?? 'General'),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.calendar_today_outlined, 'Due Date', a['due_date'] ?? 'No Due Date'),
+            SizedBox(height: 12.h),
+            _buildDetailRow(
+              Icons.create_new_folder_outlined, 
+              'Creation Date', 
+              a['createdAt'] != null && a['createdAt'].toString().isNotEmpty
+                  ? _formatDueDate(a['createdAt'] as String)
+                  : 'N/A'
+            ),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.person_outline_rounded, 'Teacher', a['teacher_name'] ?? 'Emma Johnson'),
+            SizedBox(height: 12.h),
+            _buildDetailRow(
+              Icons.info_outline_rounded, 
+              'Submission Status', 
+              a['submissions_count'] > 0 ? 'Submissions Received' : 'No Submissions Yet'
+            ),
+            SizedBox(height: 12.h),
+            _buildDetailRow(Icons.people_outline_rounded, 'Student Submission Count', '${a['submissions_count']} submissions'),
+            if (a['fileName'] != null && a['fileName'].toString().isNotEmpty) ...[
+              SizedBox(height: 16.h),
+              const Divider(color: Color(0xFFE2E8F0)),
+              SizedBox(height: 12.h),
+              Text(
+                'Attachment',
+                style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF475569),
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.attach_file_rounded, color: const Color(0xFF1976D2), size: 20.sp),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        a['fileName'],
+                        style: AppTypography.caption.copyWith(
+                          color: const Color(0xFF0F172A),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    if (a['filePath'] != null && a['filePath'].toString().isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2)),
+                        onPressed: () => _downloadFile(a['filePath'], a['fileName']),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 18.sp, color: const Color(0xFF64748B)),
+        SizedBox(width: 10.w),
+        Text(
+          '$label:',
+          style: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        SizedBox(width: 6.w),
+        Expanded(
+          child: Text(
+            value,
+            style: AppTypography.caption.copyWith(
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _deleteAssignment(String assignmentId) async {
@@ -504,7 +678,10 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         GestureDetector(
-                          onTap: () => _selectAssignment(a),
+                          onTap: () {
+                            _selectAssignment(a);
+                            _showAssignmentDetailsBottomSheet(context, a);
+                          },
                           child: Container(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 8.w, vertical: 5.h),
@@ -795,18 +972,162 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     DateTime? tempDueDate;
-    Map<String, dynamic>? chosenClass;
-    Map<String, dynamic>? chosenSection;
-    Map<String, dynamic>? chosenSubject;
+    String? chosenClassId;
+    String? chosenSectionId;
+    String? chosenSubjectId;
     String? refFileName;
+
+    bool isLoadingClasses = true;
+    bool hasClassLoadError = false;
+    List<Map<String, dynamic>> teacherClassesList = [];
+    bool hasFetchedClasses = false;
+
+    String? titleError;
+    String? classError;
+    String? subjectError;
+    String? dueDateError;
+
+    bool isLoadingSections = false;
+    bool hasSectionLoadError = false;
+    List<Map<String, dynamic>> classSectionsList = [];
+
+    bool isLoadingSubjects = false;
+    bool hasSubjectLoadError = false;
+    List<Map<String, dynamic>> classSubjectsList = [];
+
+    Future<void> fetchTeacherClasses(StateSetter setDialogState) async {
+      setDialogState(() {
+        isLoadingClasses = true;
+        hasClassLoadError = false;
+        teacherClassesList = [];
+      });
+      try {
+        final classesRes = await ApiService.instance.get('academic/classes');
+        final List<dynamic> allClasses = (classesRes['classes'] ?? classesRes['data'] ?? []) as List;
+
+        final seenNames = <String>{};
+        final List<Map<String, dynamic>> uniqueClasses = [];
+        for (var c in allClasses) {
+          final cMap = Map<String, dynamic>.from(c as Map);
+          final name = cMap['name']?.toString() ?? '';
+          if (name.isNotEmpty && !seenNames.contains(name)) {
+            seenNames.add(name);
+            uniqueClasses.add(cMap);
+          }
+        }
+
+        setDialogState(() {
+          teacherClassesList = uniqueClasses;
+          isLoadingClasses = false;
+        });
+      } catch (e) {
+        dev.log('Error loading teacher classes: $e');
+        setDialogState(() {
+          hasClassLoadError = true;
+          isLoadingClasses = false;
+        });
+      }
+    }
+
+    Future<void> fetchSectionsForClass(String classId, StateSetter setDialogState) async {
+      setDialogState(() {
+        isLoadingSections = true;
+        hasSectionLoadError = false;
+        classSectionsList = [];
+        chosenSectionId = null;
+      });
+      try {
+        final res = await ApiService.instance.get('academic/sections');
+        final rawSections = (res['sections'] ?? res['data'] ?? []) as List;
+        final list = List<Map<String, dynamic>>.from(rawSections);
+        
+        final filtered = list.where((sec) => sec['classId']?.toString() == classId).toList();
+        
+        final seenNames = <String>{};
+        final deduplicated = <Map<String, dynamic>>[];
+        for (var s in filtered) {
+          final name = s['name'] as String? ?? '';
+          if (name.isNotEmpty && !seenNames.contains(name) && name != 'C') {
+            seenNames.add(name);
+            deduplicated.add(s);
+          }
+        }
+        deduplicated.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+
+        setDialogState(() {
+          classSectionsList = deduplicated;
+          isLoadingSections = false;
+        });
+      } catch (e) {
+        dev.log('Error loading sections for class: $e');
+        setDialogState(() {
+          hasSectionLoadError = true;
+          isLoadingSections = false;
+        });
+      }
+    }
+
+    Future<void> fetchSubjectsForClass(String classId, StateSetter setDialogState) async {
+      setDialogState(() {
+        isLoadingSubjects = true;
+        hasSubjectLoadError = false;
+        classSubjectsList = [];
+        chosenSubjectId = null;
+      });
+      try {
+        final res = await ApiService.instance.get('academic/subjects', queryParams: {'classId': classId});
+        final rawSubjects = (res['subjects'] ?? res['data'] ?? []) as List;
+        final list = List<Map<String, dynamic>>.from(rawSubjects);
+        
+        final seenNames = <String>{};
+        final deduplicated = <Map<String, dynamic>>[];
+        for (var s in list) {
+          final name = s['name'] as String? ?? '';
+          if (name.isNotEmpty && !seenNames.contains(name)) {
+            seenNames.add(name);
+            deduplicated.add(s);
+          }
+        }
+        
+        setDialogState(() {
+          classSubjectsList = deduplicated;
+          isLoadingSubjects = false;
+        });
+      } catch (e) {
+        dev.log('Error loading subjects for class: $e');
+        setDialogState(() {
+          hasSubjectLoadError = true;
+          isLoadingSubjects = false;
+        });
+      }
+    }
 
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          if (!hasFetchedClasses && isLoadingClasses && !hasClassLoadError) {
+            hasFetchedClasses = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              fetchTeacherClasses(setDialogState);
+            });
+          }
+          // Validate Dropdown values exist in list items to prevent assertions
+          if (chosenClassId != null && !teacherClassesList.any((c) => c['id']?.toString() == chosenClassId)) {
+            chosenClassId = null;
+            chosenSectionId = null;
+            chosenSubjectId = null;
+          }
+          if (chosenSectionId != null && !classSectionsList.any((s) => s['id']?.toString() == chosenSectionId)) {
+            chosenSectionId = null;
+          }
+          if (chosenSubjectId != null && !classSubjectsList.any((sub) => sub['id']?.toString() == chosenSubjectId)) {
+            chosenSubjectId = null;
+          }
+
           // Shared dropdown decoration
-          InputDecoration dropDeco(String hint) => InputDecoration(
+          InputDecoration dropDeco(String hint, {String? errorText}) => InputDecoration(
                 hintText: hint,
                 hintStyle: AppTypography.caption
                     .copyWith(color: const Color(0xFF94A3B8)),
@@ -816,14 +1137,14 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                     EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8.r),
-                    borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    borderSide: BorderSide(color: errorText != null ? const Color(0xFFEF4444) : const Color(0xFFCBD5E1))),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8.r),
-                    borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                    borderSide: BorderSide(color: errorText != null ? const Color(0xFFEF4444) : const Color(0xFFCBD5E1))),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8.r),
                     borderSide:
-                        const BorderSide(color: Color(0xFF1976D2), width: 1.5)),
+                        BorderSide(color: errorText != null ? const Color(0xFFEF4444) : const Color(0xFF1976D2), width: 1.5)),
               );
 
           return Dialog(
@@ -885,6 +1206,13 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                               SizedBox(height: 6.h),
                               TextFormField(
                                 controller: titleCtrl,
+                                onChanged: (val) {
+                                  if (titleError != null && val.trim().isNotEmpty) {
+                                    setDialogState(() {
+                                      titleError = null;
+                                    });
+                                  }
+                                },
                                 style: AppTypography.caption
                                     .copyWith(color: const Color(0xFF0F172A)),
                                 decoration: InputDecoration(
@@ -898,19 +1226,36 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                       horizontal: 14.w, vertical: 12.h),
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8.r),
-                                      borderSide: const BorderSide(
-                                          color: Color(0xFFCBD5E1))),
+                                      borderSide: BorderSide(
+                                          color: titleError != null
+                                              ? const Color(0xFFEF4444)
+                                              : const Color(0xFFCBD5E1))),
                                   enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8.r),
-                                      borderSide: const BorderSide(
-                                          color: Color(0xFFCBD5E1))),
+                                      borderSide: BorderSide(
+                                          color: titleError != null
+                                              ? const Color(0xFFEF4444)
+                                              : const Color(0xFFCBD5E1))),
                                   focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8.r),
-                                      borderSide: const BorderSide(
-                                          color: Color(0xFF1976D2),
+                                      borderSide: BorderSide(
+                                          color: titleError != null
+                                              ? const Color(0xFFEF4444)
+                                              : const Color(0xFF1976D2),
                                           width: 1.5)),
                                 ),
                               ),
+                              if (titleError != null) ...[
+                                SizedBox(height: 4.h),
+                                Text(
+                                  titleError!,
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFFEF4444),
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                               SizedBox(height: 14.h),
 
                               // Description
@@ -956,36 +1301,121 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                             children: [
                                           _fLabel('Class'),
                                           SizedBox(height: 6.h),
-                                          DropdownButtonFormField<
-                                              Map<String, dynamic>>(
-                                            initialValue: chosenClass,
-                                            decoration:
-                                                dropDeco('Select Class'),
-                                            style: AppTypography.caption
-                                                .copyWith(
-                                                    color: const Color(
-                                                        0xFF0F172A)),
-                                            isExpanded: true,
-                                            items: _classes
-                                                .map((cls) => DropdownMenuItem(
-                                                      value: cls,
-                                                      child: Text(
-                                                          cls['name']
-                                                                  as String? ??
-                                                              '',
-                                                          style: AppTypography
-                                                              .caption
-                                                              .copyWith(
-                                                                  color: const Color(
-                                                                      0xFF0F172A))),
-                                                    ))
-                                                .toList(),
-                                            onChanged: (val) =>
-                                                setDialogState(() {
-                                              chosenClass = val;
-                                              chosenSection = null;
-                                            }),
-                                          ),
+                                          if (isLoadingClasses)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFF1F5F9),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                               ),
+                                               child: Row(
+                                                 children: [
+                                                   SizedBox(
+                                                     width: 16.r,
+                                                     height: 16.r,
+                                                     child: const CircularProgressIndicator(
+                                                       strokeWidth: 2,
+                                                       color: Color(0xFF1976D2),
+                                                     ),
+                                                   ),
+                                                   SizedBox(width: 10.w),
+                                                   Expanded(
+                                                     child: Text('Loading classes...',
+                                                         style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                                         overflow: TextOverflow.ellipsis,
+                                                         maxLines: 1),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else if (hasClassLoadError)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFFEF2F2),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFFCA5A5)),
+                                               ),
+                                               child: Row(
+                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                 children: [
+                                                   Expanded(
+                                                     child: Text(
+                                                       'Unable to load classes.',
+                                                       style: AppTypography.caption.copyWith(color: const Color(0xFFEF4444)),
+                                                       overflow: TextOverflow.ellipsis,
+                                                     ),
+                                                   ),
+                                                   GestureDetector(
+                                                     onTap: () => fetchTeacherClasses(setDialogState),
+                                                     child: Text(
+                                                       'Retry',
+                                                       style: AppTypography.caption.copyWith(
+                                                         color: const Color(0xFF1976D2),
+                                                         fontWeight: FontWeight.bold,
+                                                       ),
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else if (teacherClassesList.isEmpty)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               alignment: Alignment.centerLeft,
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFF8FAFC),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                               ),
+                                               child: Text(
+                                                 'No classes available',
+                                                 style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                               ),
+                                             )
+                                           else
+                                             DropdownButtonFormField<String?>(
+                                               value: chosenClassId,
+                                               decoration: dropDeco('Select Class', errorText: classError),
+                                               style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                               isExpanded: true,
+                                               items: teacherClassesList
+                                                   .map((cls) => DropdownMenuItem<String?>(
+                                                         value: cls['id']?.toString(),
+                                                         child: Text(
+                                                             cls['name'] as String? ?? '',
+                                                             style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A))),
+                                                       ))
+                                                   .toList(),
+                                               onChanged: (val) => setDialogState(() {
+                                                 chosenClassId = val;
+                                                 classError = null;
+                                                 chosenSectionId = null;
+                                                 chosenSubjectId = null;
+                                                 if (val != null) {
+                                                   fetchSectionsForClass(val, setDialogState);
+                                                   fetchSubjectsForClass(val, setDialogState);
+                                                 } else {
+                                                   classSectionsList = [];
+                                                   classSubjectsList = [];
+                                                 }
+                                               }),
+                                             ),
+                                          if (classError != null) ...[
+                                            SizedBox(height: 4.h),
+                                            Text(
+                                              classError!,
+                                              style: GoogleFonts.inter(
+                                                color: const Color(0xFFEF4444),
+                                                fontSize: 11.sp,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
                                         ])),
                                     SizedBox(width: 12.w),
                                     Expanded(
@@ -995,44 +1425,96 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                             children: [
                                           _fLabel('Section (Optional)'),
                                           SizedBox(height: 6.h),
-                                          DropdownButtonFormField<
-                                              Map<String, dynamic>?>(
-                                            initialValue: chosenSection,
-                                            decoration:
-                                                dropDeco('All Sections'),
-                                            style: AppTypography.caption
-                                                .copyWith(
-                                                    color: const Color(
-                                                        0xFF0F172A)),
-                                            isExpanded: true,
-                                            items: [
-                                              DropdownMenuItem<
-                                                  Map<String, dynamic>?>(
-                                                value: null,
-                                                child: Text('All Sections',
-                                                    style: AppTypography.caption
-                                                        .copyWith(
-                                                            color: const Color(
-                                                                0xFF94A3B8))),
-                                              ),
-                                              ..._sections.map((sec) =>
-                                                  DropdownMenuItem<
-                                                      Map<String, dynamic>?>(
-                                                    value: sec,
-                                                    child: Text(
-                                                        sec['name']
-                                                                as String? ??
-                                                            '',
-                                                        style: AppTypography
-                                                            .caption
-                                                            .copyWith(
-                                                                color: const Color(
-                                                                    0xFF0F172A))),
-                                                  )),
-                                            ],
-                                            onChanged: (val) => setDialogState(
-                                                () => chosenSection = val),
-                                          ),
+                                          if (chosenClassId == null)
+                                             DropdownButtonFormField<String?>(
+                                               value: null,
+                                               decoration: dropDeco('Select Class First'),
+                                               style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
+                                               isExpanded: true,
+                                               items: const [],
+                                               onChanged: null,
+                                             )
+                                           else if (isLoadingSections)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFF1F5F9),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                               ),
+                                               child: Row(
+                                                 children: [
+                                                   SizedBox(
+                                                     width: 16.r,
+                                                     height: 16.r,
+                                                     child: const CircularProgressIndicator(
+                                                       strokeWidth: 2,
+                                                       color: Color(0xFF1976D2),
+                                                     ),
+                                                   ),
+                                                   SizedBox(width: 10.w),
+                                                   Expanded(
+                                                     child: Text('Loading sections...',
+                                                         style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                                         overflow: TextOverflow.ellipsis,
+                                                         maxLines: 1),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else if (hasSectionLoadError)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFFEF2F2),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFFCA5A5)),
+                                               ),
+                                               child: Row(
+                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                 children: [
+                                                   Expanded(
+                                                     child: Text(
+                                                       'Unable to load sections.',
+                                                       style: AppTypography.caption.copyWith(color: const Color(0xFFEF4444)),
+                                                       overflow: TextOverflow.ellipsis,
+                                                     ),
+                                                   ),
+                                                   GestureDetector(
+                                                     onTap: () => fetchSectionsForClass(chosenClassId!, setDialogState),
+                                                     child: Text(
+                                                       'Retry',
+                                                       style: AppTypography.caption.copyWith(
+                                                         color: const Color(0xFF1976D2),
+                                                         fontWeight: FontWeight.bold,
+                                                       ),
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else
+                                             DropdownButtonFormField<String?>(
+                                               value: chosenSectionId,
+                                               decoration: dropDeco('All Sections'),
+                                               style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                               isExpanded: true,
+                                               items: [
+                                                 DropdownMenuItem<String?>(
+                                                   value: null,
+                                                   child: Text('All Sections',
+                                                       style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8))),
+                                                 ),
+                                                 ...classSectionsList.map((sec) => DropdownMenuItem<String?>(
+                                                       value: sec['id']?.toString(),
+                                                       child: Text(sec['name'] as String? ?? '',
+                                                           style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A))),
+                                                     )),
+                                               ],
+                                               onChanged: (val) => setDialogState(() => chosenSectionId = val),
+                                             ),
                                         ])),
                                   ]),
                               SizedBox(height: 14.h),
@@ -1048,33 +1530,124 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                             children: [
                                           _fLabel('Subject'),
                                           SizedBox(height: 6.h),
-                                          DropdownButtonFormField<
-                                              Map<String, dynamic>>(
-                                            initialValue: chosenSubject,
-                                            decoration:
-                                                dropDeco('Select Subject'),
-                                            style: AppTypography.caption
-                                                .copyWith(
-                                                    color: const Color(
-                                                        0xFF0F172A)),
-                                            isExpanded: true,
-                                            items: _subjects
-                                                .map((s) => DropdownMenuItem(
-                                                      value: s,
-                                                      child: Text(
-                                                          s['name']
-                                                                  as String? ??
-                                                              '',
-                                                          style: AppTypography
-                                                              .caption
-                                                              .copyWith(
-                                                                  color: const Color(
-                                                                      0xFF0F172A))),
-                                                    ))
-                                                .toList(),
-                                            onChanged: (val) => setDialogState(
-                                                () => chosenSubject = val),
-                                          ),
+                                          if (chosenClassId == null)
+                                             DropdownButtonFormField<String?>(
+                                               value: null,
+                                               decoration: dropDeco('Select Class First'),
+                                               style: AppTypography.caption.copyWith(color: const Color(0xFF94A3B8)),
+                                               isExpanded: true,
+                                               items: const [],
+                                               onChanged: null,
+                                             )
+                                           else if (isLoadingSubjects)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFF1F5F9),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                               ),
+                                               child: Row(
+                                                 children: [
+                                                   SizedBox(
+                                                     width: 16.r,
+                                                     height: 16.r,
+                                                     child: const CircularProgressIndicator(
+                                                       strokeWidth: 2,
+                                                       color: Color(0xFF1976D2),
+                                                     ),
+                                                   ),
+                                                   SizedBox(width: 10.w),
+                                                   Expanded(
+                                                     child: Text('Loading subjects...',
+                                                         style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                                         overflow: TextOverflow.ellipsis,
+                                                         maxLines: 1),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else if (hasSubjectLoadError)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFFEF2F2),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFFCA5A5)),
+                                               ),
+                                               child: Row(
+                                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                 children: [
+                                                   Expanded(
+                                                     child: Text(
+                                                       'Unable to load subjects.',
+                                                       style: AppTypography.caption.copyWith(color: const Color(0xFFEF4444)),
+                                                       overflow: TextOverflow.ellipsis,
+                                                     ),
+                                                   ),
+                                                   GestureDetector(
+                                                     onTap: () => fetchSubjectsForClass(chosenClassId!, setDialogState),
+                                                     child: Text(
+                                                       'Retry',
+                                                       style: AppTypography.caption.copyWith(
+                                                         color: const Color(0xFF1976D2),
+                                                         fontWeight: FontWeight.bold,
+                                                       ),
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             )
+                                           else if (classSubjectsList.isEmpty)
+                                             Container(
+                                               height: 48.h,
+                                               padding: EdgeInsets.symmetric(horizontal: 12.w),
+                                               alignment: Alignment.centerLeft,
+                                               decoration: BoxDecoration(
+                                                 color: const Color(0xFFF8FAFC),
+                                                 borderRadius: BorderRadius.circular(8.r),
+                                                 border: Border.all(color: const Color(0xFFE2E8F0)),
+                                               ),
+                                               child: Text(
+                                                 'No subjects available for this class.',
+                                                 style: AppTypography.caption.copyWith(color: const Color(0xFF64748B)),
+                                               ),
+                                             )
+                                           else
+                                             DropdownButtonFormField<String?>(
+                                               value: chosenSubjectId,
+                                               decoration: dropDeco('Select Subject', errorText: subjectError),
+                                               style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                               isExpanded: true,
+                                               items: classSubjectsList
+                                                   .map((s) => DropdownMenuItem<String?>(
+                                                         value: s['id']?.toString(),
+                                                         child: Text(
+                                                           s['name'] as String? ?? '',
+                                                           style: AppTypography.caption.copyWith(color: const Color(0xFF0F172A)),
+                                                         ),
+                                                       ))
+                                                   .toList(),
+                                               onChanged: (val) => setDialogState(() {
+                                                 chosenSubjectId = val;
+                                                 if (val != null) {
+                                                   subjectError = null;
+                                                 }
+                                               }),
+                                             ),
+                                          if (subjectError != null) ...[
+                                            SizedBox(height: 4.h),
+                                            Text(
+                                              subjectError!,
+                                              style: GoogleFonts.inter(
+                                                color: const Color(0xFFEF4444),
+                                                fontSize: 11.sp,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
                                         ])),
                                     SizedBox(width: 12.w),
                                     Expanded(
@@ -1108,8 +1681,10 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                                 ),
                                               );
                                               if (picked != null) {
-                                                setDialogState(
-                                                    () => tempDueDate = picked);
+                                                setDialogState(() {
+                                                  tempDueDate = picked;
+                                                  dueDateError = null;
+                                                });
                                               }
                                             },
                                             child: Container(
@@ -1121,8 +1696,10 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                                 borderRadius:
                                                     BorderRadius.circular(8.r),
                                                 border: Border.all(
-                                                    color: const Color(
-                                                        0xFFCBD5E1)),
+                                                    color: dueDateError != null
+                                                        ? const Color(0xFFEF4444)
+                                                        : const Color(
+                                                            0xFFCBD5E1)),
                                               ),
                                               child: Row(children: [
                                                 Expanded(
@@ -1150,6 +1727,17 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                               ]),
                                             ),
                                           ),
+                                          if (dueDateError != null) ...[
+                                            SizedBox(height: 4.h),
+                                            Text(
+                                              dueDateError!,
+                                              style: GoogleFonts.inter(
+                                                color: const Color(0xFFEF4444),
+                                                fontSize: 11.sp,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
                                         ])),
                                   ]),
                               SizedBox(height: 14.h),
@@ -1261,45 +1849,54 @@ class _CreateAssignmentScreenState extends State<CreateAssignmentScreen> {
                                 onPressed: _isSubmitting
                                     ? null
                                     : () async {
+                                        String? tErr;
+                                        String? cErr;
+                                        String? sErr;
+                                        String? dErr;
+
                                         if (titleCtrl.text.trim().isEmpty) {
-                                          showToast(ctx, 'Please enter a title',
-                                              isError: true);
+                                          tErr = 'Title is required';
+                                        }
+                                        if (chosenClassId == null) {
+                                          cErr = 'Please select a class';
+                                        }
+                                        if (chosenSubjectId == null) {
+                                          sErr = 'Please select a subject';
+                                        }
+                                        if (tempDueDate == null) {
+                                          dErr = 'Please select a due date';
+                                        }
+
+                                        if (tErr != null || cErr != null || sErr != null || dErr != null) {
+                                          setDialogState(() {
+                                            titleError = tErr;
+                                            classError = cErr;
+                                            subjectError = sErr;
+                                            dueDateError = dErr;
+                                          });
+                                          showToast(ctx, 'Please complete all required fields before creating the assignment.', isError: true);
                                           return;
                                         }
-                                        if (chosenSubject == null) {
-                                          showToast(
-                                              ctx, 'Please select a subject',
-                                              isError: true);
-                                          return;
-                                        }
-                                        if (chosenClass == null) {
-                                          showToast(
-                                              ctx, 'Please select a class',
-                                              isError: true);
-                                          return;
-                                        }
+
                                         setDialogState(
                                             () => _isSubmitting = true);
                                         setState(() => _isSubmitting = true);
                                         try {
                                           final fmtDue = intl.DateFormat(
                                                   "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-                                              .format((tempDueDate ??
-                                                      DateTime.now().add(
-                                                          const Duration(
-                                                              days: 1)))
-                                                  .toUtc());
-                                          final result = await ApiService
-                                              .instance
-                                              .post('assignments', body: {
-                                            'title': titleCtrl.text.trim(),
-                                            'description': descCtrl.text.trim(),
-                                            'dueDate': fmtDue,
-                                            'subjectId': chosenSubject!['id'],
-                                            'classId': chosenClass!['id'],
-                                            if (chosenSection != null)
-                                              'sectionId': chosenSection!['id'],
-                                          });
+                                              .format(tempDueDate!.toUtc());
+
+                                            final result = await ApiService
+                                                .instance
+                                                .post('assignments', body: {
+                                              'title': titleCtrl.text.trim(),
+                                              'description': descCtrl.text.trim(),
+                                              'dueDate': fmtDue,
+                                              'subjectId': chosenSubjectId,
+                                              'classId': chosenClassId,
+                                              if (chosenSectionId != null)
+                                                'sectionId': chosenSectionId,
+                                            });
                                           if (ctx.mounted) {
                                             if (result['assignment'] != null ||
                                                 result['success'] == true) {

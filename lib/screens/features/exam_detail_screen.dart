@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_saver/file_saver.dart';
 import '../../utils/download_helper.dart';
+import '../../widgets/teacher_app_bar.dart';
 import '../main_screen.dart';
 import 'class_review_screen.dart';
 import 'package:edusphere/theme/typography.dart';
@@ -645,7 +646,8 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
       backgroundColor: const Color(0xFFF1F5F9),
       drawer:
           const EduSphereDrawer(role: 'teacher', activeLabel: 'Examinations'),
-      appBar: _buildAppBar(),
+      appBar: const TeacherAppBar(title: 'EduSphere'),
+      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 8),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFF2563EB)))
@@ -869,32 +871,7 @@ class _ExamDetailScreenState extends State<ExamDetailScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      leading: IconButton(
-        icon: Icon(Icons.menu, size: 28.sp, color: const Color(0xFF0F172A)),
-        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-      ),
-      title: Text(
-        'EduSphere',
-        style: GoogleFonts.outfit(
-          fontSize: 22.sp,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFF0F172A),
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.notifications_none_rounded, size: 26.sp),
-          onPressed: () {},
-        ),
-        SizedBox(width: 8.w),
-      ],
-    );
-  }
+
 
   Widget _buildTabs() {
     return SingleChildScrollView(

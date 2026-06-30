@@ -10,6 +10,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:edusphere/theme/typography.dart';
+import '../../widgets/teacher_app_bar.dart';
+import '../main_screen.dart';
 
 class TeacherProfileEditScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -277,6 +279,7 @@ class _TeacherProfileEditScreenState extends State<TeacherProfileEditScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      bottomNavigationBar: const TeacherBottomNavBar(activeIndex: 13),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,

@@ -3219,14 +3219,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      final savedPath = await FileSaver.instance.saveFile(
-        name: fileName.replaceAll('.pdf', ''),
-        bytes: pdfBytes,
-        fileExtension: 'pdf',
-        mimeType: MimeType.pdf,
+      await downloadFile(
+        pdfBytes,
+        fileName.replaceAll('.pdf', ''),
+        'pdf',
       );
 
-      debugPrint('✅ File saved to: $savedPath');
+      debugPrint('✅ Statement download completed');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

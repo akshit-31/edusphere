@@ -17,6 +17,12 @@
 # Prevent shrinking on standard serialization models
 -keep class com.edusphere.app.** { *; }
 
+# file_saver R8 preservation
+-keep class com.incrediblezayed.file_saver.** { *; }
+
+# open_file_plus R8 preservation
+-keep class com.crazecoder.openfile.** { *; }
+
 # Ignore missing Google Play Core Split / Deferred Components references
 -dontwarn com.google.android.play.core.**
 -dontwarn io.flutter.embedding.engine.deferredcomponents.**

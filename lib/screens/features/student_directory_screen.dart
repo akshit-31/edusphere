@@ -452,7 +452,7 @@ class _StudentDirectoryScreenState extends State<StudentDirectoryScreen> {
                   items: _classes
                       .map((e) => DropdownMenuItem(
                           value: e,
-                          child: Text(e.replaceAll('Class', 'Grade'))))
+                          child: Text(e == 'All Classes' ? 'All Grades' : e.replaceAll('Class', 'Grade'))))
                       .toList(),
                   onChanged: (val) {
                     if (val != null) {
