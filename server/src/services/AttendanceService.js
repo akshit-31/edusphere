@@ -1,4 +1,4 @@
-const { getSchoolDate, getStartOfDay } = require('../utils/dateUtils');
+const { getSchoolDate, getStartOfDay, getEndOfDay } = require('../utils/dateUtils');
 const { checkGeofence } = require('../utils/geoUtils');
 const { parseQRPayload } = require('../utils/qrGenerator');
 const AttendanceRepository = require('../repositories/AttendanceRepository');
@@ -143,20 +143,21 @@ class AttendanceService {
         return { message: isLate ? 'Late arrival recorded' : 'Attendance marked', attendance, student: rfidCard.student, action: 'checkin', isLate };
     }
 
-    async bulkMarkAttendance(date, attendanceData, userId) {
+    async bulkMarkAttendance(date, attendanceData = [], userId) {
         const attendanceDate = getStartOfDay(date);
+        const safeAttendance = attendanceData || [];
 
         const existingRecords = await AttendanceRepository.findAttendanceRecords({
             date: attendanceDate,
             attendeeType: ROLES.STUDENT,
-            studentId: { in: attendanceData.map(a => a.studentId) }
+            studentId: { in: safeAttendance.map(a => a.studentId) }
         });
 
         const existingMap = new Map();
         existingRecords.forEach(r => existingMap.set(r.studentId, r));
 
         const results = [];
-        for (const { studentId, status } of attendanceData) {
+        for (const { studentId, status } of safeAttendance) {
             try {
                 const existing = existingMap.get(studentId);
                 let result;
@@ -331,24 +332,29 @@ class AttendanceService {
         return AttendanceRepository.deleteAttendanceSlot(id);
     }
 
-    async submitSlotAttendance(id, attendanceData, userId) {
+    async submitSlotAttendance(id, attendanceData = [], userId) {
         const slot = await AttendanceRepository.findAttendanceSlotById(id);
         if (!slot) throw new AppError('Slot not found', 404);
 
+        const safeAttendance = attendanceData || [];
+
         await AttendanceRepository.executeTransaction(async (tx) => {
-            // Delete all existing records for these specific entities on the slot's target date
+            const start = getStartOfDay(slot.date);
+            const end = getEndOfDay(slot.date);
+
+            // Delete all existing records for these specific entities on the slot's target date range
             await tx.attendanceRecord.deleteMany({
                 where: {
-                    date: slot.date,
+                    date: { gte: start, lte: end },
                     attendeeType: slot.attendeeType,
-                    ...(slot.attendeeType === ROLES.STUDENT ? { studentId: { in: attendanceData.map(a => a.entityId) } } : {}),
-                    ...(slot.attendeeType === ROLES.TEACHER ? { teacherId: { in: attendanceData.map(a => a.entityId) } } : {}),
-                    ...(slot.attendeeType === ROLES.STAFF ? { staffId: { in: attendanceData.map(a => a.entityId) } } : {}),
+                    ...(slot.attendeeType === ROLES.STUDENT ? { studentId: { in: safeAttendance.map(a => a.entityId) } } : {}),
+                    ...(slot.attendeeType === ROLES.TEACHER ? { teacherId: { in: safeAttendance.map(a => a.entityId) } } : {}),
+                    ...(slot.attendeeType === ROLES.STAFF ? { staffId: { in: safeAttendance.map(a => a.entityId) } } : {}),
                 }
             });
 
             await tx.attendanceRecord.createMany({
-                data: attendanceData.map(({ entityId, status }) => ({
+                data: safeAttendance.map(({ entityId, status }) => ({
                     attendeeType: slot.attendeeType,
                     ...(slot.attendeeType === ROLES.STUDENT ? { studentId: entityId } : {}),
                     ...(slot.attendeeType === ROLES.TEACHER ? { teacherId: entityId } : {}),
@@ -367,7 +373,7 @@ class AttendanceService {
             });
         });
 
-        return { count: attendanceData.length };
+        return { count: safeAttendance.length };
     }
     async submitStaffAttendance(data, userId) {
         const { date, attendanceData, attendeeType } = data;

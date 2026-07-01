@@ -102,11 +102,18 @@ const bulkMarkAttendance = asyncHandler(async (req, res) => {
   const dateVal = req.body.date;
   const rawData = req.body.students || req.body.attendanceData || [];
   
-  // Convert students to the required attendanceData format
-  const attendanceData = rawData.map(s => ({
-    studentId: s.studentId,
-    status: s.status
-  }));
+  // Convert students to the required attendanceData format defensively
+  const attendanceData = (Array.isArray(rawData) ? rawData : [])
+    .map(s => {
+      if (!s) return null;
+      const sId = s.studentId || s.entityId;
+      if (!sId) return null;
+      return {
+        studentId: sId,
+        status: s.status || 'PRESENT'
+      };
+    })
+    .filter(Boolean);
 
   const result = await AttendanceService.bulkMarkAttendance(dateVal, attendanceData, req.user.userId);
   
@@ -145,7 +152,7 @@ const bulkMarkAttendance = asyncHandler(async (req, res) => {
          await require('../config/database').attendanceRecord.updateMany({
            where: {
              date: slotDate,
-             studentId: { in: attendanceData.map(a => a.studentId) }
+             studentId: { in: (attendanceData || []).map(a => a.studentId) }
            },
            data: {
              slotId: slot.id
@@ -168,7 +175,7 @@ const bulkMarkAttendance = asyncHandler(async (req, res) => {
      const records = await require('../config/database').attendanceRecord.findMany({
        where: {
          date: require('../utils/dateUtils').getStartOfDay(dateVal),
-         studentId: { in: attendanceData.map(a => a.studentId) }
+         studentId: { in: (attendanceData || []).map(a => a.studentId) }
        }
      });
      
@@ -243,11 +250,12 @@ const deleteSlot = asyncHandler(async (req, res) => {
 const submitSlotAttendance = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { attendanceData } = req.body;
-  const result = await AttendanceService.submitSlotAttendance(id, attendanceData, req.user.userId);
+  const safeAttendance = attendanceData || [];
+  const result = await AttendanceService.submitSlotAttendance(id, safeAttendance, req.user.userId);
   
   // Emit Socket.IO events for live student updates
   try {
-    for (const record of attendanceData) {
+    for (const record of safeAttendance) {
       emitEvent('attendanceMarked', {
         studentId: record.entityId,
         status: record.status,
