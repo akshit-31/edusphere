@@ -118,47 +118,63 @@ class AttendanceService {
       
       if (e is DioException) {
         final res = e.response;
-        if (res != null && res.data != null) {
-          final dataStr = res.data.toString().toLowerCase();
-          if (dataStr.contains('unique constraint') || dataStr.contains('studentid,date')) {
+        if (res != null) {
+          if (res.statusCode == 409) {
             isUniqueConstraintError = true;
+          }
+          if (res.data != null) {
+            final dataStr = res.data.toString().toLowerCase();
+            if (dataStr.contains('unique constraint') || dataStr.contains('studentid,date')) {
+              isUniqueConstraintError = true;
+            }
           }
         }
       }
       
       if (isUniqueConstraintError) {
         try {
-          // Self-healing fallback: fetch slot info and perform a bulk upsert instead
+          // Self-healing fallback: fetch slot info, filter out students with existing records not matching this slotId, and retry submit
           final slotData = await getSlotWithStudents(slotId);
-          final slot = slotData['slot'] as Map<String, dynamic>?;
-          if (slot != null) {
-            final String? classId = slot['classId']?.toString();
-            final String? sectionId = slot['sectionId']?.toString();
-            final String? date = slot['date']?.toString();
-            
-            if (classId != null && date != null) {
-              // Format date string to yyyy-MM-dd
-              String formattedDate = date;
-              try {
-                final parsedDate = DateTime.parse(date);
-                formattedDate = "${parsedDate.year}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}";
-              } catch (_) {}
-
-              final response = await ApiService.instance.post('attendance/bulk', body: {
-                'classId': classId,
-                'sectionId': sectionId,
-                'date': formattedDate,
-                'students': attendanceData.map((a) => {
-                  'studentId': a['entityId'],
-                  'status': a['status'],
-                }).toList(),
-              });
-              return {
-                'success': true,
-                'message': 'Attendance updated successfully via fallback',
-                'count': attendanceData.length,
-              };
+          
+          Map<String, dynamic> existing = {};
+          final rawAttendance = slotData['attendance'] ?? slotData['attendanceMap'];
+          if (rawAttendance is Map) {
+            existing = Map<String, dynamic>.from(rawAttendance);
+          } else {
+            final data = slotData['data'];
+            if (data is Map) {
+              final nestedAttendance = data['attendance'] ?? data['attendanceMap'];
+              if (nestedAttendance is Map) {
+                existing = Map<String, dynamic>.from(nestedAttendance);
+              }
             }
+          }
+
+          final filteredData = attendanceData.where((item) {
+            final String? entityId = item['entityId']?.toString();
+            if (entityId != null && existing.containsKey(entityId)) {
+              final record = existing[entityId];
+              if (record is Map) {
+                final String? recordSlotId = record['slotId']?.toString();
+                if (recordSlotId != slotId) {
+                  return false; // Filter out to avoid unique constraint crash
+                }
+              }
+            }
+            return true;
+          }).toList();
+
+          if (filteredData.isNotEmpty) {
+            final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
+              'attendanceData': filteredData,
+            });
+            return response as Map<String, dynamic>;
+          } else {
+            return {
+              'success': true,
+              'message': 'All students already marked',
+              'count': 0
+            };
           }
         } catch (fallbackErr) {
           rethrow;
