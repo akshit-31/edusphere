@@ -233,7 +233,7 @@ class _TeacherTopNavbarState extends State<TeacherTopNavbar> with TickerProvider
           Container(
             margin: EdgeInsets.fromLTRB(16.w, 10.h, 16.w, 0),
             padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
-            height: 64.h,
+            height: 72.h,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20.r),
@@ -249,38 +249,42 @@ class _TeacherTopNavbarState extends State<TeacherTopNavbar> with TickerProvider
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Left Hamburger Menu Button
+                // Left Blue Circular Back Button
                 GestureDetector(
-                  onTap: () => Scaffold.of(context).openDrawer(),
+                  onTap: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  },
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 32.r,
-                        height: 32.r,
+                        width: 34.r,
+                        height: 34.r,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [Color(0xFF0D7DDC), Color(0xFF1E40AF)],
+                            colors: [Color(0xFF2F80ED), Color(0xFF0056C6)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0x330D7DDC),
+                              color: Color(0x330056C6),
                               blurRadius: 6,
                               offset: Offset(0, 3),
                             ),
                           ],
                         ),
-                        child: Icon(Icons.menu_rounded, color: Colors.white, size: 16.sp),
+                        child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 18),
                       ),
                       SizedBox(height: 2.h),
                       Text(
-                        'Menu',
+                        'Back',
                         style: GoogleFonts.inter(
-                          fontSize: 9.sp,
+                          fontSize: 8.5.sp,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF64748B),
                         ),
@@ -289,35 +293,35 @@ class _TeacherTopNavbarState extends State<TeacherTopNavbar> with TickerProvider
                   ),
                 ),
 
-                // Center Logo and Title
+                // Center 3D Logo and Title
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset('assets/images/logo.png', height: 26.h, fit: BoxFit.contain),
+                    const GraduationCap3D(size: 28),
                     SizedBox(width: 8.w),
                     Text(
-                      'EduSphere',
+                      widget.title,
                       style: GoogleFonts.outfit(
                         fontSize: 18.sp,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0D7DDC),
+                        color: const Color(0xFF0056C6),
                       ),
                     ),
                   ],
                 ),
 
-                // Right Actions: Bells
+                // Right Actions: Bells & Hamburger
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Notification Bell
                     Stack(
-                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
                       children: [
                         RotationTransition(
                           turns: _shake1Animation,
                           child: IconButton(
-                            icon: Icon(Icons.notifications_rounded, size: 24.sp, color: const Color(0xFF0D7DDC)),
+                            icon: const Icon(Icons.notifications_rounded, size: 28, color: Color(0xFF0056C6)),
                             onPressed: () => _showNotificationsDropdown(context),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
@@ -325,38 +329,34 @@ class _TeacherTopNavbarState extends State<TeacherTopNavbar> with TickerProvider
                         ),
                         if (unreadNotificationsCount > 0)
                           Positioned(
-                            right: -2.w,
-                            top: -2.h,
+                            right: -4.w,
+                            top: -4.h,
                             child: Container(
-                              padding: EdgeInsets.all(2.r),
-                              decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
-                              constraints: BoxConstraints(minWidth: 14.w, minHeight: 14.h),
-                              child: Text(
-                                unreadNotificationsCount.toString(),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 8.sp, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
+                              padding: EdgeInsets.all(3.r),
+                              decoration: const BoxDecoration(color: Color(0xFF0056C6), shape: BoxShape.circle),
+                              constraints: BoxConstraints(minWidth: 16.w, minHeight: 16.h),
+                              child: Center(
+                                child: Text(
+                                  unreadNotificationsCount.toString(),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 8.5.sp, fontWeight: FontWeight.bold),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
                           ),
                       ],
                     ),
 
-                    // Vertical Divider
-                    Container(
-                      width: 1.w,
-                      height: 18.h,
-                      margin: EdgeInsets.symmetric(horizontal: 10.w),
-                      color: const Color(0xFFE2E8F0),
-                    ),
+                    SizedBox(width: 14.w),
 
                     // Announcement Bell
                     Stack(
-                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
                       children: [
                         RotationTransition(
                           turns: _shake2Animation,
                           child: IconButton(
-                            icon: Icon(Icons.notifications_active_rounded, size: 24.sp, color: const Color(0xFF0D7DDC)),
+                            icon: const Icon(Icons.notifications_active_rounded, size: 28, color: Color(0xFF0056C6)),
                             onPressed: () => _showAnnouncementsDropdown(context),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
@@ -364,20 +364,32 @@ class _TeacherTopNavbarState extends State<TeacherTopNavbar> with TickerProvider
                         ),
                         if (unreadAnnouncementsCount > 0)
                           Positioned(
-                            right: -2.w,
-                            top: -2.h,
+                            right: -4.w,
+                            top: -4.h,
                             child: Container(
-                              padding: EdgeInsets.all(2.r),
-                              decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
-                              constraints: BoxConstraints(minWidth: 14.w, minHeight: 14.h),
-                              child: Text(
-                                unreadAnnouncementsCount.toString(),
-                                style: GoogleFonts.inter(color: Colors.white, fontSize: 8.sp, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
+                              padding: EdgeInsets.all(3.r),
+                              decoration: const BoxDecoration(color: Color(0xFF0056C6), shape: BoxShape.circle),
+                              constraints: BoxConstraints(minWidth: 16.w, minHeight: 16.h),
+                              child: Center(
+                                child: Text(
+                                  unreadAnnouncementsCount.toString(),
+                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 8.5.sp, fontWeight: FontWeight.bold),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
                           ),
                       ],
+                    ),
+
+                    SizedBox(width: 14.w),
+
+                    // Hamburger Menu Button
+                    IconButton(
+                      icon: const Icon(Icons.menu_rounded, size: 30, color: Color(0xFF0056C6)),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
@@ -1308,10 +1320,10 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
   }
 
   int _getActiveModuleIndex(int currentIdx) {
-    if (currentIdx == 0) return 0;
-    if (currentIdx == 3) return 3;
-    if (currentIdx == 5) return 2;
-    if (currentIdx == 13) return 4;
+    if (currentIdx == 0) return 2; // Dashboard is center (index 2)
+    if (currentIdx == 3) return 3; // Attendance is index 3
+    if (currentIdx == 5) return 1; // QR Scanner is index 1
+    if (currentIdx == 13) return 4; // My Profile is index 4
     
     // Academic tabs check
     if (currentIdx == 1 ||
@@ -1325,17 +1337,9 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
         currentIdx == 12 ||
         currentIdx == 14 ||
         currentIdx == 15) {
-      return 1;
+      return 0; // Academic is index 0
     }
-    return 0;
-  }
-
-  List<TabItem> _getLayoutTabs(int activeModuleIndex) {
-    final List<TabItem> tabs = List.from(_allTabs);
-    final activeTab = tabs.firstWhere((t) => t.index == activeModuleIndex);
-    tabs.remove(activeTab);
-    tabs.insert(2, activeTab);
-    return tabs;
+    return 2;
   }
 
   Widget _renderProfileAvatar(String? photoUrl, {required double width, required double height}) {
@@ -1343,7 +1347,7 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
       if (photoUrl.startsWith('http')) {
         return Image.network(photoUrl, width: width.w, height: height.h, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultAvatar(width, height));
       } else {
-        return Image.file(ObjectKey(photoUrl) is File ? photoUrl as File : File(photoUrl), width: width.w, height: height.h, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultAvatar(width, height));
+        return Image.file(File(photoUrl), width: width.w, height: height.h, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultAvatar(width, height));
       }
     }
     return _defaultAvatar(width, height);
@@ -1353,7 +1357,7 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
     return Container(
       width: width.w,
       height: height.h,
-      color: const Color(0xFF0D7DDC),
+      color: const Color(0xFF0056C6),
       child: Icon(Icons.person, color: Colors.white, size: (width * 0.6).sp),
     );
   }
@@ -1371,7 +1375,6 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
       _scaleController.forward(from: 0.0);
     }
 
-    final List<TabItem> layoutTabs = _getLayoutTabs(activeModuleIndex);
     final String? displayPhotoUrl = _localPhotoUrl;
 
     return SafeArea(
@@ -1400,11 +1403,11 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
                 padding: EdgeInsets.symmetric(horizontal: 8.w),
                 child: Row(
                   children: [
-                    Expanded(child: _buildInactiveItem(layoutTabs[0], displayPhotoUrl)),
-                    Expanded(child: _buildInactiveItem(layoutTabs[1], displayPhotoUrl)),
-                    SizedBox(width: 72.w),
-                    Expanded(child: _buildInactiveItem(layoutTabs[3], displayPhotoUrl)),
-                    Expanded(child: _buildInactiveItem(layoutTabs[4], displayPhotoUrl)),
+                    Expanded(child: _buildBottomTab(0, Icons.menu_book_rounded, 'Academic', activeModuleIndex == 0, displayPhotoUrl, 7)),
+                    Expanded(child: _buildBottomTab(1, Icons.qr_code_scanner_rounded, 'QR Scanner', activeModuleIndex == 1, displayPhotoUrl, 5)),
+                    SizedBox(width: 72.w), // Space for center floating button
+                    Expanded(child: _buildBottomTab(3, Icons.event_available_rounded, 'Attendance', activeModuleIndex == 3, displayPhotoUrl, 3)),
+                    Expanded(child: _buildBottomTab(4, Icons.person_rounded, 'My Profile', activeModuleIndex == 4, displayPhotoUrl, 13)),
                   ],
                 ),
               ),
@@ -1413,7 +1416,7 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
               bottom: 12.h,
               child: ScaleTransition(
                 scale: _scaleAnimation,
-                child: _buildCenterActiveButton(layoutTabs[2], displayPhotoUrl),
+                child: _buildCenterActiveButton(activeModuleIndex == 2),
               ),
             ),
           ],
@@ -1422,14 +1425,15 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
     );
   }
 
-  Widget _buildInactiveItem(TabItem item, String? photoUrl) {
-    final bool isProfile = item.index == 4;
+  Widget _buildBottomTab(int index, IconData icon, String label, bool isActive, String? photoUrl, int targetIndex) {
+    final bool isProfile = index == 4;
+    final Color color = isActive ? const Color(0xFF0056C6) : const Color(0xFF94A3B8);
 
     return Semantics(
-      label: 'Navigate to ${item.label}',
+      label: 'Navigate to $label',
       button: true,
       child: InkWell(
-        onTap: () => MainScreen.navigateTo(context, item.targetScreenIndex),
+        onTap: () => MainScreen.navigateTo(context, targetIndex),
         borderRadius: BorderRadius.circular(20.r),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: 48.h),
@@ -1443,29 +1447,34 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
                   Container(
                     width: 22.w,
                     height: 22.h,
-                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: isActive ? Border.all(color: const Color(0xFF0056C6), width: 1.5.w) : null,
+                    ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(11.r),
                       child: ColorFiltered(
-                        colorFilter: const ColorFilter.matrix([
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0,      0,      0,      1, 0,
-                        ]),
+                        colorFilter: isActive
+                            ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
+                            : const ColorFilter.matrix([
+                                0.2126, 0.7152, 0.0722, 0, 0,
+                                0.2126, 0.7152, 0.0722, 0, 0,
+                                0.2126, 0.7152, 0.0722, 0, 0,
+                                0,      0,      0,      1, 0,
+                              ]),
                         child: _renderProfileAvatar(photoUrl, width: 20, height: 20),
                       ),
                     ),
                   )
                 else
-                  Icon(item.icon, size: 22.sp, color: const Color(0xFF94A3B8)),
+                  Icon(icon, size: 22.sp, color: color),
                 SizedBox(height: 3.h),
                 Text(
-                  item.index == 1 ? getAcademicTabConfig(widget.activeIndex).label : item.label,
+                  label,
                   style: GoogleFonts.inter(
                     fontSize: 10.sp,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                    color: color,
                   ),
                 ),
               ],
@@ -1476,53 +1485,33 @@ class _TeacherBottomNavigationState extends State<TeacherBottomNavigation> with 
     );
   }
 
-  Widget _buildCenterActiveButton(TabItem item, String? photoUrl) {
-    final bool isProfile = item.index == 4;
-
-    return Semantics(
-      label: '${item.label} screen active',
-      selected: true,
+  Widget _buildCenterActiveButton(bool isActive) {
+    return GestureDetector(
+      onTap: () => MainScreen.navigateTo(context, 0),
       child: Container(
         width: 58.w,
         height: 58.h,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: const LinearGradient(
-            colors: [Color(0xFF0D7DDC), Color(0xFF1E40AF)],
+            colors: [Color(0xFF2F80ED), Color(0xFF0056C6)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           border: Border.all(color: Colors.white, width: 3.5.w),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0D7DDC).withOpacity(0.35),
+              color: const Color(0xFF0056C6).withOpacity(isActive ? 0.45 : 0.25),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => MainScreen.navigateTo(context, item.targetScreenIndex),
-            child: Center(
-              child: isProfile
-                  ? Container(
-                      width: 36.w,
-                      height: 36.h,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18.r),
-                        child: _renderProfileAvatar(photoUrl, width: 36, height: 36),
-                      ),
-                    )
-                  : Icon(
-                      item.index == 1 ? getAcademicTabConfig(widget.activeIndex).icon : item.icon,
-                      size: 26.sp,
-                      color: Colors.white,
-                    ),
-            ),
+        child: Center(
+          child: Icon(
+            Icons.grid_view_rounded,
+            size: 26.sp,
+            color: Colors.white,
           ),
         ),
       ),
@@ -1596,3 +1585,123 @@ class StudentNavigationScaffold extends StatelessWidget {
     );
   }
 }
+
+class GraduationCap3D extends StatelessWidget {
+  final double size;
+  const GraduationCap3D({super.key, this.size = 28});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: const GraduationCap3DPainter(),
+      ),
+    );
+  }
+}
+
+class GraduationCap3DPainter extends CustomPainter {
+  const GraduationCap3DPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+
+    // Draw 3D shadow
+    final Path shadowPath = Path();
+    shadowPath.moveTo(w * 0.5, h * 0.85);
+    shadowPath.quadraticBezierTo(w * 0.8, h * 0.9, w * 0.8, h * 0.7);
+    shadowPath.lineTo(w * 0.8, h * 0.55);
+    shadowPath.lineTo(w * 0.5, h * 0.7);
+    shadowPath.lineTo(w * 0.2, h * 0.55);
+    shadowPath.lineTo(w * 0.2, h * 0.7);
+    shadowPath.quadraticBezierTo(w * 0.2, h * 0.9, w * 0.5, h * 0.85);
+    shadowPath.close();
+
+    final Paint shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.12)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    canvas.drawPath(shadowPath, shadowPaint);
+
+    // Draw the cap base (skirt)
+    final Path basePath = Path();
+    basePath.moveTo(w * 0.25, h * 0.52);
+    basePath.lineTo(w * 0.5, h * 0.68);
+    basePath.lineTo(w * 0.75, h * 0.52);
+    basePath.lineTo(w * 0.75, h * 0.65);
+    basePath.quadraticBezierTo(w * 0.5, h * 0.82, w * 0.25, h * 0.65);
+    basePath.close();
+
+    final Paint basePaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF1E3A8A), Color(0xFF172554)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(w * 0.25, h * 0.52, w * 0.5, h * 0.3));
+    canvas.drawPath(basePath, basePaint);
+
+    // Highlight on cap base
+    final Path baseHighlight = Path();
+    baseHighlight.moveTo(w * 0.25, h * 0.52);
+    baseHighlight.lineTo(w * 0.5, h * 0.68);
+    baseHighlight.lineTo(w * 0.75, h * 0.52);
+    final Paint highlightPaint = Paint()
+      ..color = Colors.white.withOpacity(0.15)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawPath(baseHighlight, highlightPaint);
+
+    // Draw diamond top (tilted)
+    final Path topPath = Path();
+    topPath.moveTo(w * 0.5, h * 0.15); // Top vertex
+    topPath.lineTo(w * 0.9, h * 0.4);  // Right vertex
+    topPath.lineTo(w * 0.5, h * 0.62); // Bottom vertex
+    topPath.lineTo(w * 0.1, h * 0.4);  // Left vertex
+    topPath.close();
+
+    final Paint topPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(w * 0.1, h * 0.15, w * 0.8, h * 0.47));
+    canvas.drawPath(topPath, topPaint);
+
+    // Diamond top outline/gloss
+    final Paint topOutline = Paint()
+      ..color = const Color(0xFF60A5FA).withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    canvas.drawPath(topPath, topOutline);
+
+    // Tassel button in center
+    final Paint buttonPaint = Paint()
+      ..color = const Color(0xFF93C5FD)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(w * 0.5, h * 0.385), 2.0, buttonPaint);
+
+    // Tassel string hanging down
+    final Path tasselPath = Path();
+    tasselPath.moveTo(w * 0.5, h * 0.385);
+    tasselPath.quadraticBezierTo(w * 0.3, h * 0.32, w * 0.16, h * 0.52);
+    
+    final Paint tasselPaint = Paint()
+      ..color = const Color(0xFF60A5FA)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawPath(tasselPath, tasselPaint);
+
+    // Tassel band/fringe at end
+    final Paint tasselEnd = Paint()
+      ..color = const Color(0xFF3B82F6)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(w * 0.16, h * 0.52), 2.2, tasselEnd);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
