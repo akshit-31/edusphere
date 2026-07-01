@@ -1,4 +1,5 @@
 import 'api_service.dart';
+import 'package:dio/dio.dart';
 
 class AttendanceService {
   AttendanceService._privateConstructor();
@@ -106,10 +107,65 @@ class AttendanceService {
     String slotId,
     List<Map<String, dynamic>> attendanceData,
   ) async {
-    final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
-      'attendanceData': attendanceData,
-    });
-    return response as Map<String, dynamic>;
+    try {
+      final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
+        'attendanceData': attendanceData,
+      });
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      bool isUniqueConstraintError = e.toString().toLowerCase().contains('unique constraint') ||
+          e.toString().toLowerCase().contains('studentid,date');
+      
+      if (e is DioException) {
+        final res = e.response;
+        if (res != null && res.data != null) {
+          final dataStr = res.data.toString().toLowerCase();
+          if (dataStr.contains('unique constraint') || dataStr.contains('studentid,date')) {
+            isUniqueConstraintError = true;
+          }
+        }
+      }
+      
+      if (isUniqueConstraintError) {
+        try {
+          // Self-healing fallback: fetch slot info and perform a bulk upsert instead
+          final slotData = await getSlotWithStudents(slotId);
+          final slot = slotData['slot'] as Map<String, dynamic>?;
+          if (slot != null) {
+            final String? classId = slot['classId']?.toString();
+            final String? sectionId = slot['sectionId']?.toString();
+            final String? date = slot['date']?.toString();
+            
+            if (classId != null && date != null) {
+              // Format date string to yyyy-MM-dd
+              String formattedDate = date;
+              try {
+                final parsedDate = DateTime.parse(date);
+                formattedDate = "${parsedDate.year}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}";
+              } catch (_) {}
+
+              final response = await ApiService.instance.post('attendance/bulk', body: {
+                'classId': classId,
+                'sectionId': sectionId,
+                'date': formattedDate,
+                'students': attendanceData.map((a) => {
+                  'studentId': a['entityId'],
+                  'status': a['status'],
+                }).toList(),
+              });
+              return {
+                'success': true,
+                'message': 'Attendance updated successfully via fallback',
+                'count': attendanceData.length,
+              };
+            }
+          }
+        } catch (fallbackErr) {
+          rethrow;
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> deleteSlot(String slotId) async {
