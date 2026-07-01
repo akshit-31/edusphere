@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 import 'package:dio/dio.dart';
 
@@ -107,19 +109,51 @@ class AttendanceService {
     String slotId,
     List<Map<String, dynamic>> attendanceData,
   ) async {
+    if (kDebugMode) {
+      print('--- ATTENDANCE SUBMISSION REQUEST ---');
+      print('HTTP Method: POST');
+      print('URL: ${ApiService.instance.dio.options.baseUrl}attendance/slots/$slotId/submit');
+      print('Headers: {');
+      print('  Accept: application/json,');
+      print('  Content-Type: application/json,');
+      print('  Authorization: Bearer ${ApiService.instance.token ?? ""}');
+      print('}');
+      print('Request Body JSON: ${jsonEncode({"attendanceData": attendanceData})}');
+      print('-------------------------------------');
+    }
+
     try {
       final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
         'attendanceData': attendanceData,
       });
+
+      if (kDebugMode) {
+        print('--- ATTENDANCE SUBMISSION RESPONSE ---');
+        print('Status Code: 200/201');
+        print('Response Body: ${jsonEncode(response)}');
+        print('--------------------------------------');
+      }
+
       return response as Map<String, dynamic>;
     } catch (e) {
+      if (kDebugMode) {
+        print('--- ATTENDANCE SUBMISSION ERROR ---');
+        print('Error message: $e');
+        if (e is DioException) {
+          print('Status Code: ${e.response?.statusCode}');
+          print('Response Headers: ${e.response?.headers}');
+          print('Response Body: ${e.response?.data}');
+        }
+        print('-----------------------------------');
+      }
+
       bool isUniqueConstraintError = e.toString().toLowerCase().contains('unique constraint') ||
           e.toString().toLowerCase().contains('studentid,date');
       
       if (e is DioException) {
         final res = e.response;
         if (res != null) {
-          if (res.statusCode == 409) {
+          if (res.statusCode == 409 || res.statusCode == 400) {
             isUniqueConstraintError = true;
           }
           if (res.data != null) {
@@ -133,7 +167,9 @@ class AttendanceService {
       
       if (isUniqueConstraintError) {
         try {
-          // Self-healing fallback: fetch slot info, filter out students with existing records not matching this slotId, and retry submit
+          if (kDebugMode) {
+            print('⚠️ Unique constraint/409/400 conflict detected. Initializing self-healing fallback via bulkMarkAttendance...');
+          }
           final slotData = await getSlotWithStudents(slotId);
           
           final slot = (slotData['slot'] ?? slotData['data']) as Map<String, dynamic>?;
@@ -143,68 +179,59 @@ class AttendanceService {
             final String? date = slot['date']?.toString();
             
             if (classId != null && date != null) {
-              // Format date string to yyyy-MM-dd
               String formattedDate = date;
               try {
                 final parsedDate = DateTime.parse(date);
                 formattedDate = "${parsedDate.year}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}";
               } catch (_) {}
 
-              // Query /attendance/date which is 100% reliable for date-matching on the live server
-              final attendanceDataList = await ApiService.instance.get(
-                'attendance/date',
-                queryParams: {
-                  'date': formattedDate,
-                  'classId': classId,
-                  if (sectionId != null) 'sectionId': sectionId,
-                },
-              );
+              final bulkPayload = {
+                'date': formattedDate,
+                if (classId != null) 'classId': classId,
+                if (sectionId != null) 'sectionId': sectionId,
+                'attendanceData': attendanceData.map((item) => {
+                  'studentId': item['entityId'],
+                  'status': item['status'],
+                }).toList(),
+                'students': attendanceData.map((item) => {
+                  'studentId': item['entityId'],
+                  'status': item['status'],
+                }).toList(),
+              };
 
-              final rawList = (attendanceDataList is Map ? (attendanceDataList['attendance'] ?? attendanceDataList['data']?['attendance']) : null) as List<dynamic>? ?? [];
-              
-              Map<String, dynamic> existing = {};
-              for (final item in rawList) {
-                if (item is Map) {
-                  final String? studentId = item['studentId']?.toString();
-                  if (studentId != null) {
-                    existing[studentId] = {
-                      'id': item['id'],
-                      'status': item['status'],
-                      'slotId': item['slotId'],
-                    };
-                  }
-                }
+              if (kDebugMode) {
+                print('--- ATTENDANCE BULK SUBMISSION REQUEST (FALLBACK) ---');
+                print('HTTP Method: POST');
+                print('URL: ${ApiService.instance.dio.options.baseUrl}attendance/bulk');
+                print('Headers: {');
+                print('  Accept: application/json,');
+                print('  Content-Type: application/json,');
+                print('  Authorization: Bearer ${ApiService.instance.token ?? ""}');
+                print('}');
+                print('Request Body JSON: ${jsonEncode(bulkPayload)}');
+                print('----------------------------------------------------');
               }
 
-              final filteredData = attendanceData.where((item) {
-                final String? entityId = item['entityId']?.toString();
-                if (entityId != null && existing.containsKey(entityId)) {
-                  final record = existing[entityId];
-                  if (record is Map) {
-                    final String? recordSlotId = record['slotId']?.toString();
-                    if (recordSlotId != slotId) {
-                      return false; // Filter out to avoid unique constraint crash
-                    }
-                  }
-                }
-                return true;
-              }).toList();
+              final response = await ApiService.instance.post('attendance/bulk', body: bulkPayload);
 
-              if (filteredData.isNotEmpty) {
-                final response = await ApiService.instance.post('attendance/slots/$slotId/submit', body: {
-                  'attendanceData': filteredData,
-                });
-                return response as Map<String, dynamic>;
-              } else {
-                return {
-                  'success': true,
-                  'message': 'All students already marked',
-                  'count': 0
-                };
+              if (kDebugMode) {
+                print('--- ATTENDANCE BULK SUBMISSION RESPONSE (FALLBACK) ---');
+                print('Status Code: 200/201');
+                print('Response Body: ${jsonEncode(response)}');
+                print('-----------------------------------------------------');
               }
+
+              return response as Map<String, dynamic>;
             }
           }
         } catch (fallbackErr) {
+          if (kDebugMode) {
+            print('❌ Fallback execution failed: $fallbackErr');
+            if (fallbackErr is DioException) {
+              print('Fallback Response Status: ${fallbackErr.response?.statusCode}');
+              print('Fallback Response Body: ${fallbackErr.response?.data}');
+            }
+          }
           rethrow;
         }
       }
