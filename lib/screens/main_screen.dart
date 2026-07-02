@@ -177,6 +177,10 @@ class _MainScreenState extends State<MainScreen> {
           return 'Services';
         case 10:
           return 'My Profile';
+        case 11:
+          return 'Attendance';
+        case 12:
+          return 'Library';
         default:
           return 'Dashboard';
       }
@@ -612,6 +616,7 @@ class _MainScreenState extends State<MainScreen> {
               },
             ),
             const AttendanceScreen(showAppBar: false, showBackButton: false),
+            DigitalLibraryScreen(theme: _theme, showAppBar: false), // Index 12: Library
           ];
 
     return Scaffold(
@@ -770,6 +775,13 @@ class _MainScreenState extends State<MainScreen> {
                         selected: _idx == 10,
                         color: _theme.primary,
                         onTap: () => _navigateTo(10)),
+                    SizedBox(height: 8.h),
+                    _SidebarItem(
+                        icon: Icons.local_library_rounded,
+                        label: 'Library',
+                        selected: _idx == 12,
+                        color: _theme.primary,
+                        onTap: () => _navigateTo(12)),
                   ] else if (widget.role == 'teacher') ...[
                     _SidebarItem(
                         icon: Icons.dashboard_rounded,
@@ -1737,6 +1749,13 @@ class _EduSphereDrawerState extends State<EduSphereDrawer> {
                               inactiveIcon: inactiveIcon,
                               inactiveText: inactiveText,
                               onTap: () => MainScreen.navigateTo(context, 10)),
+                          _drawerItem(
+                              icon: Icons.local_library_rounded,
+                              label: 'Library',
+                              activeBlue: activeBlue,
+                              inactiveIcon: inactiveIcon,
+                              inactiveText: inactiveText,
+                              onTap: () => MainScreen.navigateTo(context, 12)),
                         ],
                 ),
               ),

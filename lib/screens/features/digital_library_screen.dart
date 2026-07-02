@@ -11,6 +11,7 @@ import 'package:edusphere/theme/typography.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import '../main_screen.dart';
+import '../../widgets/premium_dialog.dart';
 
 class DigitalLibraryScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -29,6 +30,8 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
   int _activeTab = 0; // 0 = Browse Catalog, 1 = My Issues, 2 = Waitlist
   bool _isLoading = true;
   String _teacherId = '';
+  String _studentId = '';
+  String _role = '';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -82,10 +85,12 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
+      _role = prefs.getString('user_role') ?? '';
       _teacherId = prefs.getString('teacher_id') ?? '';
+      _studentId = prefs.getString('student_id') ?? '';
       await _loadAllData();
     } catch (e) {
-      debugPrint('Error loading teacher credentials: $e');
+      debugPrint('Error loading credentials: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -103,9 +108,13 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
         _books = List<Map<String, dynamic>>.from(booksRes['data']);
       }
 
-      if (_teacherId.isNotEmpty) {
+      final isStudent = _role == 'student';
+      final activeId = isStudent ? _studentId : _teacherId;
+
+      if (activeId.isNotEmpty) {
         // 2. Fetch Issues
-        final issuesRes = await ApiService.instance.get('library/issues', queryParams: {'teacherId': _teacherId});
+        final queryParams = isStudent ? {'studentId': activeId} : {'teacherId': activeId};
+        final issuesRes = await ApiService.instance.get('library/issues', queryParams: queryParams);
         if (issuesRes['success'] == true && issuesRes['data'] != null) {
           _issues = List<Map<String, dynamic>>.from(issuesRes['data']);
           _activeIssuesCount = _issues.where((i) => i['status'] == 'ISSUED').length;
@@ -115,8 +124,11 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
         final reservationsRes = await ApiService.instance.get('library/reservations');
         if (reservationsRes['success'] == true && reservationsRes['data'] != null) {
           final List<Map<String, dynamic>> allReservations = List<Map<String, dynamic>>.from(reservationsRes['data']);
-          // Filter locally by teacherId & pending status
-          _reservations = allReservations.where((res) => res['teacherId'] == _teacherId && res['status'] == 'PENDING').toList();
+          // Filter locally by active ID & pending status
+          _reservations = allReservations.where((res) {
+            final matchesUser = isStudent ? (res['studentId'] == activeId) : (res['teacherId'] == activeId);
+            return matchesUser && res['status'] == 'PENDING';
+          }).toList();
           _waitlistCount = _reservations.length;
         }
       }
@@ -133,17 +145,21 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
   }
 
   Future<void> _reserveBook(String bookId) async {
-    if (_teacherId.isEmpty) {
-      showToast(context, 'Invalid teacher profile', isError: true);
+    final isStudent = _role == 'student';
+    final activeId = isStudent ? _studentId : _teacherId;
+
+    if (activeId.isEmpty) {
+      showToast(context, 'Invalid user profile', isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService.instance.post('library/reserve', body: {
+      final body = {
         'bookId': bookId,
-        'teacherId': _teacherId,
-      });
+        if (isStudent) 'studentId': activeId else 'teacherId': activeId,
+      };
+      final res = await ApiService.instance.post('library/reserve', body: body);
 
       if (res['success'] == true) {
         showToast(context, 'Added to waitlist successfully');
@@ -177,46 +193,23 @@ class _DigitalLibraryScreenState extends State<DigitalLibraryScreen> {
     }
   }
 
-  void _confirmCancelReservation(Map<String, dynamic> reservation) {
-    showDialog(
+  void _confirmCancelReservation(Map<String, dynamic> reservation) async {
+    final book = reservation['book'] ?? {};
+    final title = book['title'] ?? 'Unknown Book';
+    final confirmed = await showPremiumConfirmationDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        title: Text(
-          'Cancel Reservation',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: AppColors.textDark),
-        ),
-        content: Text(
-          'Are you sure you want to cancel this reservation? You will lose your spot on the waitlist.',
-          style: AppTypography.small.copyWith(color: AppColors.textMedium),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: Text(
-              'No, Keep',
-              style: GoogleFonts.inter(color: AppColors.textMedium, fontWeight: FontWeight.w600),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogCtx);
-              _cancelReservation(reservation['id']);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
-            ),
-            child: Text(
-              'Yes, Cancel',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
+      title: 'Cancel Reservation',
+      description: 'Are you sure you want to cancel your reservation for "$title"? You will lose your spot on the waitlist.',
+      actionLabel: 'Cancel',
+      actionIcon: Icons.cancel_rounded,
+      actionColor: AppColors.error,
+      headerIcon: Icons.bookmark_remove_rounded,
+      headerBgColor: AppColors.error.withOpacity(0.1),
+      headerIconColor: AppColors.error,
     );
+    if (confirmed == true && mounted) {
+      _cancelReservation(reservation['id']);
+    }
   }
 
   String _formatDate(String? dateStr) {

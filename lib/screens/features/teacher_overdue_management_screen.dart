@@ -9,6 +9,7 @@ import '../../widgets/teacher_scaffold.dart';
 import 'package:edusphere/theme/typography.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
+import '../../widgets/premium_dialog.dart';
 
 class TeacherOverdueManagementScreen extends StatefulWidget {
   final RoleTheme theme;
@@ -110,67 +111,16 @@ class _TeacherOverdueManagementScreenState
         ? '$firstName $lastName'.trim() 
         : (student['name'] ?? 'Unknown Student');
 
-    final bool? confirm = await showDialog<bool>(
+    final bool? confirm = await showPremiumConfirmationDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
-        title: Text(
-          'Return & Pay Fine',
-          style: AppTypography.bodyLarge.copyWith(color: AppColors.textDark),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Return "$title" for $studentName and settle the fine?',
-              style: AppTypography.small.copyWith(color: AppColors.textMedium),
-            ),
-            SizedBox(height: 14.h),
-            Container(
-              padding: EdgeInsets.all(12.r),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.monetization_on_rounded,
-                      color: AppColors.error, size: 20.sp),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: Text(
-                      'Fine: ₹${fineAmount.toStringAsFixed(2)} ($daysOverdue days overdue)',
-                      style:
-                          AppTypography.small.copyWith(color: AppColors.error),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700, color: AppColors.textMedium)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r)),
-            ),
-            child: Text('Pay & Return',
-                style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-        ],
-      ),
+      title: 'Return & Pay Fine',
+      description: 'Return "$title" for $studentName and settle the fine?\n\nFine: ₹${fineAmount.toStringAsFixed(2)} ($daysOverdue days overdue)',
+      actionLabel: 'Pay & Return',
+      actionIcon: Icons.monetization_on_rounded,
+      actionColor: AppColors.success,
+      headerIcon: Icons.library_add_check_rounded,
+      headerBgColor: AppColors.success.withOpacity(0.1),
+      headerIconColor: AppColors.success,
     );
 
     if (confirm != true) return;
